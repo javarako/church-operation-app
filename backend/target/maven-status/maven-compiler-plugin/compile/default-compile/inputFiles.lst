@@ -3,6 +3,8 @@
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/config/SecurityConfig.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/dto/ApiError.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/dto/ChangePasswordRequest.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/dto/FinancialTransactionRequest.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/dto/FinancialTransactionResponse.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/dto/LoginRequest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/dto/LoginResponse.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/dto/MemberRequest.java
@@ -24,12 +26,14 @@
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/repo/ReferenceDataRepository.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/rest/AuthController.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/rest/ChurchInformationController.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/rest/FinanceController.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/rest/MemberController.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/rest/OfferingController.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/rest/ReferenceDataController.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/AuthService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/AuthTokenService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/BootstrapAdminRunner.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/FinancialTransactionService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/MemberService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/OfferingService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/ReferenceDataBootstrapRunner.java
