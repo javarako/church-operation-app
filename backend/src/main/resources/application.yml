@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: church-operation
+  mongodb:
+    uri: ${SPRING_MONGODB_URI:mongodb://localhost:27017/church_operations}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+church:
+  information:
+    name: ${CHURCH_NAME:church name --- IGNORE ---}
+    address: ${CHURCH_ADDRESS:church address --- IGNORE ---}
+    contact-info: ${CHURCH_CONTACT_INFO:contact info --- IGNORE ---}
+    treasurer-name: ${CHURCH_TREASURER_NAME:treasurer name --- IGNORE ---}
+  branding:
+    banner-path: /branding/church-banner.png
+    log-path: /branding/church_logo.png

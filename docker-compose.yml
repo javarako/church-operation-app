@@ -1,0 +1,32 @@
+services:
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_MONGODB_URI: mongodb://mongo:27017/church_operations
+      CHURCH_NAME: Capstone Presbyterian Church
+      CHURCH_ADDRESS: 111 Cactus Ave, North York, ON M2R 2V1
+      CHURCH_CONTACT_INFO: lovecapstone@gmail.com
+      CHURCH_TREASURER_NAME: Treasurer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongo
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:
