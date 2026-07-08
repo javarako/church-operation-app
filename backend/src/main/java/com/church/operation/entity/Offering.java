@@ -26,6 +26,9 @@ public class Offering {
     private String incomeTransactionId;
     private String createdBy;
     private Instant createdAt;
+    private boolean deleted = false;
+    private String deletedBy;
+    private Instant deletedAt;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -55,4 +58,10 @@ public class Offering {
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
+    public String getDeletedBy() { return deletedBy; }
+    public void setDeletedBy(String deletedBy) { this.deletedBy = deletedBy; }
+    public Instant getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
 }

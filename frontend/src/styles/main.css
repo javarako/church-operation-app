@@ -240,6 +240,21 @@ tbody tr {
   color: #1a7f37;
 }
 
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.row-actions button,
+.actions button.secondary {
+  min-height: 32px;
+  border: 1px solid #c8d0d9;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: white;
+  color: #22577a;
+}
+
 .profile-form {
   max-width: 860px;
 }

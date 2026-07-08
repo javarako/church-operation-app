@@ -1,4 +1,4 @@
-import { getJson, postJson } from './http';
+import { deleteJson, getJson, postJson, putJson } from './http';
 
 export type GivingType = 'MEMBER' | 'ANONYMOUS' | 'GROUP';
 
@@ -35,4 +35,12 @@ export function listOfferings() {
 
 export function createOffering(payload: OfferingPayload) {
   return postJson<OfferingPayload, Offering>('/api/offerings', payload);
+}
+
+export function updateOffering(id: string, payload: OfferingPayload) {
+  return putJson<OfferingPayload, Offering>(`/api/offerings/${id}`, payload);
+}
+
+export function deleteOffering(id: string) {
+  return deleteJson<Offering>(`/api/offerings/${id}`);
 }

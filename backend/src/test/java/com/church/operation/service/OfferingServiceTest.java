@@ -164,8 +164,99 @@ class OfferingServiceTest {
             .hasMessage("Payment method was not found.");
     }
 
+    @Test
+    void updatesOfferingAndLinkedIncomeTransaction() {
+        Member actor = member("treasurer-id", "treasurer@example.com", Role.TREASURER);
+        Offering existing = existingOffering();
+        FinancialTransaction transaction = linkedTransaction(existing);
+        OfferingRequest request = new OfferingRequest(
+            GivingType.GROUP,
+            null,
+            "Youth Group",
+            LocalDate.of(2026, 7, 9),
+            LocalDate.of(2026, 7, 12),
+            "MISSION",
+            new BigDecimal("40.00"),
+            "CHEQUE",
+            "Updated memo"
+        );
+
+        when(offeringRepository.findById("offering-id")).thenReturn(Optional.of(existing));
+        when(financialTransactionRepository.findById("txn-id")).thenReturn(Optional.of(transaction));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "MISSION"))
+            .thenReturn(Optional.of(activeReference("MISSION")));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CHEQUE"))
+            .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CHEQUE")));
+        when(offeringRepository.save(any(Offering.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(financialTransactionRepository.save(any(FinancialTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Offering updated = service().updateOffering(actor, "offering-id", request);
+
+        assertThat(updated.getGivingType()).isEqualTo(GivingType.GROUP);
+        assertThat(updated.getGiverDisplayName()).isEqualTo("Youth Group");
+        assertThat(updated.getFundCategory()).isEqualTo("MISSION");
+        assertThat(updated.getPaymentMethod()).isEqualTo("CHEQUE");
+        verify(financialTransactionRepository).save(argThat(saved ->
+            saved.getTransactionDate().equals(LocalDate.of(2026, 7, 9))
+                && saved.getAmount().compareTo(new BigDecimal("40.00")) == 0
+                && "MISSION".equals(saved.getCategory())
+                && "Updated memo".equals(saved.getMemo())
+        ));
+    }
+
+    @Test
+    void softDeletesOfferingAndKeepsLinkedIncomeTraceable() {
+        Member actor = member("treasurer-id", "treasurer@example.com", Role.TREASURER);
+        Offering existing = existingOffering();
+        FinancialTransaction transaction = linkedTransaction(existing);
+
+        when(offeringRepository.findById("offering-id")).thenReturn(Optional.of(existing));
+        when(financialTransactionRepository.findById("txn-id")).thenReturn(Optional.of(transaction));
+        when(offeringRepository.save(any(Offering.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(financialTransactionRepository.save(any(FinancialTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Offering deleted = service().deleteOffering(actor, "offering-id");
+
+        assertThat(deleted.isDeleted()).isTrue();
+        assertThat(deleted.getDeletedBy()).isEqualTo("treasurer-id");
+        assertThat(deleted.getDeletedAt()).isNotNull();
+        verify(financialTransactionRepository).save(argThat(saved ->
+            saved.getAmount().compareTo(BigDecimal.ZERO) == 0
+                && saved.getMemo().contains("Cancelled offering")
+        ));
+    }
+
     private OfferingService service() {
         return new OfferingService(offeringRepository, financialTransactionRepository, memberRepository, referenceDataRepository);
+    }
+
+    private Offering existingOffering() {
+        Offering offering = new Offering();
+        offering.setId("offering-id");
+        offering.setGivingType(GivingType.ANONYMOUS);
+        offering.setGiverLabel("Anonymous");
+        offering.setGiverDisplayName("Anonymous");
+        offering.setOfferingDate(LocalDate.of(2026, 7, 8));
+        offering.setOfferingSunday(LocalDate.of(2026, 7, 12));
+        offering.setFundCategory("TITHE");
+        offering.setAmount(new BigDecimal("25.00"));
+        offering.setPaymentMethod("CASH");
+        offering.setMemo("Sunday offering");
+        offering.setIncomeTransactionId("txn-id");
+        return offering;
+    }
+
+    private FinancialTransaction linkedTransaction(Offering offering) {
+        FinancialTransaction transaction = new FinancialTransaction();
+        transaction.setId(offering.getIncomeTransactionId());
+        transaction.setType(FinancialTransactionType.INCOME);
+        transaction.setTransactionDate(offering.getOfferingDate());
+        transaction.setAmount(offering.getAmount());
+        transaction.setCategory(offering.getFundCategory());
+        transaction.setSourceType(FinancialSourceType.OFFERING);
+        transaction.setSourceId(offering.getId());
+        transaction.setMemo(offering.getMemo());
+        return transaction;
     }
 
     private OfferingRequest request(GivingType givingType, String memberId, String giverLabel) {

@@ -44,6 +44,7 @@
                 <th>Amount</th>
                 <th>Payment</th>
                 <th>Linked income</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -55,6 +56,10 @@
                 <td>{{ formatMoney(offering.amount) }}</td>
                 <td>{{ offering.paymentMethod || '-' }}</td>
                 <td>{{ offering.incomeTransactionId ? 'Created' : '-' }}</td>
+                <td class="row-actions">
+                  <button type="button" @click="editOffering(offering)">Edit</button>
+                  <button type="button" class="secondary" @click="deleteSelectedOffering(offering)">Delete</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -62,7 +67,7 @@
       </section>
 
       <form class="panel form-grid" @submit.prevent="saveOffering">
-        <h3>Record Offering</h3>
+        <h3>{{ editingOfferingId ? 'Edit Offering' : 'Record Offering' }}</h3>
         <p v-if="formError" class="error wide">{{ formError }}</p>
 
         <label>
@@ -135,7 +140,8 @@
         </label>
 
         <div class="actions wide">
-          <button type="submit">Save offering</button>
+          <button type="submit">{{ editingOfferingId ? 'Save changes' : 'Save offering' }}</button>
+          <button v-if="editingOfferingId" type="button" class="secondary" @click="resetForm">Cancel</button>
           <span v-if="savedMessage">{{ savedMessage }}</span>
         </div>
       </form>
@@ -145,7 +151,15 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { createOffering, listOfferings, type GivingType, type Offering, type OfferingPayload } from '../api/offerings';
+import {
+  createOffering,
+  deleteOffering,
+  listOfferings,
+  updateOffering,
+  type GivingType,
+  type Offering,
+  type OfferingPayload,
+} from '../api/offerings';
 import { listMembers, type MemberRecord } from '../api/members';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 
@@ -170,6 +184,7 @@ const memberSearch = ref('');
 const error = ref('');
 const formError = ref('');
 const savedMessage = ref('');
+const editingOfferingId = ref('');
 
 const filters = reactive({
   fundCategory: '',
@@ -271,12 +286,55 @@ async function saveOffering() {
       payload.giverLabel = form.giverLabel.trim();
     }
 
-    await createOffering(payload);
+    const wasEditing = Boolean(editingOfferingId.value);
+    if (wasEditing) {
+      await updateOffering(editingOfferingId.value, payload);
+    } else {
+      await createOffering(payload);
+    }
     await loadOfferings();
     resetForm();
-    savedMessage.value = 'Saved';
+    savedMessage.value = wasEditing ? 'Updated' : 'Saved';
   } catch (err) {
     formError.value = err instanceof Error ? err.message : 'Could not save offering.';
+  }
+}
+
+function editOffering(offering: Offering) {
+  formError.value = '';
+  savedMessage.value = '';
+  editingOfferingId.value = offering.id;
+  form.givingType = offering.givingType;
+  form.memberId = offering.memberId ?? '';
+  form.giverLabel = offering.giverLabel ?? '';
+  form.offeringDate = offering.offeringDate;
+  form.offeringSunday = offering.offeringSunday;
+  form.fundCategory = offering.fundCategory;
+  form.amount = Number(offering.amount);
+  form.paymentMethod = offering.paymentMethod ?? '';
+  form.memo = offering.memo ?? '';
+  if (offering.givingType === 'MEMBER') {
+    memberSearch.value = offering.giverDisplayName ?? '';
+    void loadMembers();
+  }
+}
+
+async function deleteSelectedOffering(offering: Offering) {
+  const confirmed = window.confirm(`Delete offering from ${offering.giverDisplayName || offering.giverLabel || 'giver'}?`);
+  if (!confirmed) {
+    return;
+  }
+  error.value = '';
+  savedMessage.value = '';
+  try {
+    await deleteOffering(offering.id);
+    await loadOfferings();
+    if (editingOfferingId.value === offering.id) {
+      resetForm();
+    }
+    savedMessage.value = 'Deleted';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete offering.';
   }
 }
 
@@ -293,6 +351,7 @@ function syncOfferingSunday() {
 function resetForm() {
   formError.value = '';
   savedMessage.value = '';
+  editingOfferingId.value = '';
   form.givingType = 'MEMBER';
   form.memberId = '';
   form.giverLabel = '';

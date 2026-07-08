@@ -18,6 +18,12 @@ export async function putJson<TRequest, TResponse>(path: string, body: TRequest)
   });
 }
 
+export async function deleteJson<TResponse>(path: string): Promise<TResponse> {
+  return requestJson<TResponse>(path, {
+    method: 'DELETE',
+  });
+}
+
 async function requestJson<TResponse>(path: string, init: RequestInit = {}): Promise<TResponse> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');

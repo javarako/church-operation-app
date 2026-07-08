@@ -43,7 +43,7 @@ public class OfferingService {
 
     public List<Offering> listOfferings(Member actor) {
         requireOfferingAccess(actor, false);
-        return offeringRepository.findAllByOrderByOfferingDateDescCreatedAtDesc();
+        return offeringRepository.findByDeletedFalseOrderByOfferingDateDescCreatedAtDesc();
     }
 
     public Offering createOffering(Member actor, OfferingRequest request) {
@@ -70,6 +70,65 @@ public class OfferingService {
         FinancialTransaction savedTransaction = financialTransactionRepository.save(transaction);
         savedOffering.setIncomeTransactionId(savedTransaction.getId());
         return offeringRepository.save(savedOffering);
+    }
+
+    public Offering updateOffering(Member actor, String id, OfferingRequest request) {
+        requireOfferingAccess(actor, true);
+        validateRequest(request);
+        Offering offering = findActiveOffering(id);
+        applyOfferingFields(offering, request);
+        Offering savedOffering = offeringRepository.save(offering);
+        syncLinkedIncomeTransaction(savedOffering);
+        return savedOffering;
+    }
+
+    public Offering deleteOffering(Member actor, String id) {
+        requireOfferingAccess(actor, true);
+        Offering offering = findActiveOffering(id);
+        offering.setDeleted(true);
+        offering.setDeletedBy(actor.getId());
+        offering.setDeletedAt(Instant.now());
+        Offering savedOffering = offeringRepository.save(offering);
+        cancelLinkedIncomeTransaction(savedOffering);
+        return savedOffering;
+    }
+
+    private Offering findActiveOffering(String id) {
+        return offeringRepository.findById(id)
+            .filter(offering -> !offering.isDeleted())
+            .orElseThrow(() -> new IllegalArgumentException("Offering was not found."));
+    }
+
+    private void applyOfferingFields(Offering offering, OfferingRequest request) {
+        offering.setGivingType(request.givingType());
+        offering.setOfferingDate(request.offeringDate());
+        offering.setOfferingSunday(resolveOfferingSunday(request.offeringDate(), request.offeringSunday()));
+        offering.setAmount(request.amount());
+        offering.setMemo(trimToNull(request.memo()));
+        applyGiver(offering, request);
+        offering.setFundCategory(normalizeFundCategory(request.fundCategory()));
+        offering.setPaymentMethod(normalizePaymentMethod(request.paymentMethod()));
+    }
+
+    private void syncLinkedIncomeTransaction(Offering offering) {
+        FinancialTransaction transaction = financialTransactionRepository.findById(offering.getIncomeTransactionId())
+            .orElseThrow(() -> new IllegalArgumentException("Linked income transaction was not found."));
+        transaction.setTransactionDate(offering.getOfferingDate());
+        transaction.setAmount(offering.getAmount());
+        transaction.setCategory(offering.getFundCategory());
+        transaction.setMemo(offering.getMemo());
+        financialTransactionRepository.save(transaction);
+    }
+
+    private void cancelLinkedIncomeTransaction(Offering offering) {
+        if (offering.getIncomeTransactionId() == null) {
+            return;
+        }
+        financialTransactionRepository.findById(offering.getIncomeTransactionId()).ifPresent(transaction -> {
+            transaction.setAmount(BigDecimal.ZERO);
+            transaction.setMemo("Cancelled offering: " + (offering.getMemo() == null ? offering.getId() : offering.getMemo()));
+            financialTransactionRepository.save(transaction);
+        });
     }
 
     private void validateRequest(OfferingRequest request) {
