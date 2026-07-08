@@ -14,6 +14,7 @@ public class ReferenceData {
     private ReferenceDataType type;
     private String code;
     private String label;
+    private String parentCode;
     private int sortOrder;
     private boolean active = true;
 
@@ -25,6 +26,8 @@ public class ReferenceData {
     public void setCode(String code) { this.code = code; }
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
+    public String getParentCode() { return parentCode; }
+    public void setParentCode(String parentCode) { this.parentCode = parentCode; }
     public int getSortOrder() { return sortOrder; }
     public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
     public boolean isActive() { return active; }

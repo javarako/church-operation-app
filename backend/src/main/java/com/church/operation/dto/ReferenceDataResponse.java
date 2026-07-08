@@ -8,6 +8,7 @@ public record ReferenceDataResponse(
     ReferenceDataType type,
     String code,
     String label,
+    String parentCode,
     int sortOrder,
     boolean active
 ) {
@@ -17,6 +18,7 @@ public record ReferenceDataResponse(
             referenceData.getType(),
             referenceData.getCode(),
             referenceData.getLabel(),
+            referenceData.getParentCode(),
             referenceData.getSortOrder(),
             referenceData.isActive()
         );

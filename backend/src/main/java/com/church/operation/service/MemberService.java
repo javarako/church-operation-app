@@ -49,7 +49,7 @@ public class MemberService {
     }
 
     public List<Member> listMembers(Member actor, String search) {
-        requireMembershipManager(actor);
+        requireMemberReadAccess(actor);
         String normalizedSearch = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
         return memberRepository.findAll().stream()
             .filter(member -> matchesSearch(member, normalizedSearch))
@@ -187,6 +187,12 @@ public class MemberService {
     private void requireMembershipManager(Member actor) {
         if (!isMembershipManager(actor)) {
             throw new SecurityException("You do not have permission to manage members.");
+        }
+    }
+
+    private void requireMemberReadAccess(Member actor) {
+        if (!isMembershipManager(actor) && !hasRole(actor, Role.TREASURER) && !hasRole(actor, Role.PASTOR) && !hasRole(actor, Role.VIEWER)) {
+            throw new SecurityException("You do not have permission to view members.");
         }
     }
 

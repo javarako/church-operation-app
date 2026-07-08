@@ -137,6 +137,10 @@ textarea {
   margin-bottom: 14px;
 }
 
+.offering-toolbar {
+  grid-template-columns: minmax(150px, 1fr) minmax(140px, 0.7fr) auto;
+}
+
 .toolbar input,
 .form-grid input,
 .form-grid select,
@@ -150,6 +154,18 @@ textarea {
 
 .table-wrap {
   overflow-x: auto;
+}
+
+.summary-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 14px;
+  color: #344054;
+}
+
+.summary-strip strong {
+  color: #1f2933;
 }
 
 table {
@@ -236,5 +252,9 @@ tbody tr {
 
   .sidebar {
     position: static;
+  }
+
+  .offering-toolbar {
+    grid-template-columns: 1fr;
   }
 }

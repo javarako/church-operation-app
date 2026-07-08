@@ -125,11 +125,11 @@
         </fieldset>
         <label class="check-row">
           <input v-model="form.active" type="checkbox" />
-          Active
+          Login enabled
         </label>
         <label class="check-row">
           <input v-model="form.locked" type="checkbox" />
-          Locked
+          Login locked
         </label>
         <label class="wide">
           Notes
@@ -193,8 +193,8 @@ async function loadReferenceData() {
       listReferenceData('GROUP_CODE'),
       listReferenceData('MEMBERSHIP_STATUS'),
     ]);
-    groupCodeOptions.value = groups;
-    membershipStatusOptions.value = statuses;
+    groupCodeOptions.value = groups.filter((option) => option.active);
+    membershipStatusOptions.value = statuses.filter((option) => option.active);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load reference data.';
   }

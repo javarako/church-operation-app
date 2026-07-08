@@ -5,7 +5,9 @@ import LoginView from '../views/LoginView.vue';
 import ChangePasswordView from '../views/ChangePasswordView.vue';
 import DashboardView from '../views/DashboardView.vue';
 import MembersView from '../views/MembersView.vue';
+import OfferingsView from '../views/OfferingsView.vue';
 import ProfileView from '../views/ProfileView.vue';
+import ReferenceDataView from '../views/ReferenceDataView.vue';
 
 const protectedPlaceholder = {
   template: '<section><h2>{{ title }}</h2></section>',
@@ -17,10 +19,10 @@ const routes: RouteRecordRaw[] = [
   { path: '/change-password', component: ChangePasswordView },
   { path: '/', component: DashboardView, meta: { roles: staffRoles } },
   { path: '/members', component: MembersView, meta: { roles: membershipRoles } },
-  { path: '/offerings', component: protectedPlaceholder, props: { title: 'Offerings' }, meta: { roles: financeRoles } },
+  { path: '/offerings', component: OfferingsView, meta: { roles: financeRoles } },
   { path: '/finance', component: protectedPlaceholder, props: { title: 'Finance' }, meta: { roles: financeRoles } },
   { path: '/budgets', component: protectedPlaceholder, props: { title: 'Budgets' }, meta: { roles: financeRoles } },
-  { path: '/reference-data', component: protectedPlaceholder, props: { title: 'Reference Data' }, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
+  { path: '/reference-data', component: ReferenceDataView, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
   { path: '/reports', component: protectedPlaceholder, props: { title: 'Reports' }, meta: { roles: reportRoles } },
   { path: '/profile', component: ProfileView, meta: { roles: selfServiceRoles } },
 ];

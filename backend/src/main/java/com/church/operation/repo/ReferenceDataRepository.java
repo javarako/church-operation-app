@@ -9,6 +9,8 @@ import java.util.Optional;
 
 public interface ReferenceDataRepository extends MongoRepository<ReferenceData, String> {
     boolean existsByTypeAndCode(ReferenceDataType type, String code);
+    List<ReferenceData> findByTypeOrderBySortOrderAscLabelAsc(ReferenceDataType type);
     List<ReferenceData> findByTypeAndActiveTrueOrderBySortOrderAscLabelAsc(ReferenceDataType type);
+    List<ReferenceData> findByTypeAndParentCodeAndActiveTrueOrderBySortOrderAscLabelAsc(ReferenceDataType type, String parentCode);
     Optional<ReferenceData> findByTypeAndCode(ReferenceDataType type, String code);
 }

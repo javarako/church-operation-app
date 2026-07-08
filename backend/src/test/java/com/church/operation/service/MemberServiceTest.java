@@ -211,6 +211,20 @@ class MemberServiceTest {
         assertThat(members).containsExactly(match);
     }
 
+    @Test
+    void treasurerCanListMembersForOfferingLookup() {
+        Member actor = member("treasurer-id", "treasurer@example.com", Role.TREASURER);
+        Member giver = member("giver-id", "giver@example.com", Role.MEMBER);
+
+        when(memberRepository.findAll()).thenReturn(List.of(giver));
+
+        MemberService service = new MemberService(memberRepository);
+
+        List<Member> members = service.listMembers(actor, "giver");
+
+        assertThat(members).containsExactly(giver);
+    }
+
     private Member member(String id, String primaryEmail, Role role) {
         Member member = new Member();
         member.setId(id);
