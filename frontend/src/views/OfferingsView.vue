@@ -69,7 +69,7 @@
                     aria-label="Delete offering"
                     @click.stop="deleteSelectedOffering(offering)"
                   >
-                    ×
+                    &#128465;
                   </button>
                 </td>
               </tr>
