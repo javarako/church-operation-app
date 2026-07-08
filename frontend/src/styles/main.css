@@ -242,17 +242,28 @@ tbody tr {
 
 .row-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
 }
 
-.row-actions button,
+.icon-button,
 .actions button.secondary {
   min-height: 32px;
   border: 1px solid #c8d0d9;
   border-radius: 6px;
-  padding: 0 10px;
   background: white;
   color: #22577a;
+}
+
+.icon-button {
+  width: 32px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.icon-button.danger {
+  color: #b42318;
 }
 
 .profile-form {

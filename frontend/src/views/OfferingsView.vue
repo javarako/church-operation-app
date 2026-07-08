@@ -44,11 +44,16 @@
                 <th>Amount</th>
                 <th>Payment</th>
                 <th>Linked income</th>
-                <th>Actions</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="offering in filteredOfferings" :key="offering.id">
+              <tr
+                v-for="offering in filteredOfferings"
+                :key="offering.id"
+                :class="{ selected: editingOfferingId === offering.id }"
+                @click="selectOffering(offering)"
+              >
                 <td>{{ offering.offeringDate }}</td>
                 <td>{{ offering.offeringSunday }}</td>
                 <td>{{ offering.giverDisplayName || offering.giverLabel || '-' }}</td>
@@ -57,8 +62,15 @@
                 <td>{{ offering.paymentMethod || '-' }}</td>
                 <td>{{ offering.incomeTransactionId ? 'Created' : '-' }}</td>
                 <td class="row-actions">
-                  <button type="button" @click="editOffering(offering)">Edit</button>
-                  <button type="button" class="secondary" @click="deleteSelectedOffering(offering)">Delete</button>
+                  <button
+                    type="button"
+                    class="icon-button danger"
+                    title="Delete offering"
+                    aria-label="Delete offering"
+                    @click.stop="deleteSelectedOffering(offering)"
+                  >
+                    ×
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -300,7 +312,7 @@ async function saveOffering() {
   }
 }
 
-function editOffering(offering: Offering) {
+function selectOffering(offering: Offering) {
   formError.value = '';
   savedMessage.value = '';
   editingOfferingId.value = offering.id;
