@@ -63,6 +63,7 @@
 
       <form class="panel form-grid" @submit.prevent="saveOffering">
         <h3>Record Offering</h3>
+        <p v-if="formError" class="error wide">{{ formError }}</p>
 
         <label>
           Giving type
@@ -161,6 +162,7 @@ const fundOptions = ref<ReferenceDataOption[]>([]);
 const members = ref<MemberRecord[]>([]);
 const memberSearch = ref('');
 const error = ref('');
+const formError = ref('');
 const savedMessage = ref('');
 
 const filters = reactive({
@@ -198,8 +200,10 @@ onMounted(async () => {
 
 async function loadOfferings() {
   error.value = '';
+  savedMessage.value = '';
   try {
     offerings.value = await listOfferings();
+    savedMessage.value = 'Refreshed';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offerings.';
   }
@@ -208,6 +212,9 @@ async function loadOfferings() {
 async function loadFunds() {
   try {
     fundOptions.value = await listReferenceData('OFFERING_FUND_CATEGORY');
+    if (!form.fundCategory) {
+      form.fundCategory = fundOptions.value[0]?.code ?? '';
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
   }
@@ -225,7 +232,7 @@ async function loadMembers() {
 }
 
 async function saveOffering() {
-  error.value = '';
+  formError.value = '';
   savedMessage.value = '';
   try {
     if (form.amount === null) {
@@ -252,7 +259,7 @@ async function saveOffering() {
     resetForm();
     savedMessage.value = 'Saved';
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not save offering.';
+    formError.value = err instanceof Error ? err.message : 'Could not save offering.';
   }
 }
 
@@ -267,6 +274,8 @@ function syncOfferingSunday() {
 }
 
 function resetForm() {
+  formError.value = '';
+  savedMessage.value = '';
   form.givingType = 'MEMBER';
   form.memberId = '';
   form.giverLabel = '';
