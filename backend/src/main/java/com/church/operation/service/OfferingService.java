@@ -58,12 +58,12 @@ public class OfferingService {
         offering.setOfferingDate(request.offeringDate());
         offering.setOfferingSunday(offeringSunday);
         offering.setAmount(request.amount());
-        offering.setPaymentMethod(trimToNull(request.paymentMethod()));
         offering.setMemo(trimToNull(request.memo()));
         offering.setCreatedBy(actor.getId());
         offering.setCreatedAt(now);
         applyGiver(offering, request);
         offering.setFundCategory(normalizeFundCategory(request.fundCategory()));
+        offering.setPaymentMethod(normalizePaymentMethod(request.paymentMethod()));
 
         Offering savedOffering = offeringRepository.save(offering);
         FinancialTransaction transaction = createIncomeTransaction(savedOffering, actor, now);
@@ -134,6 +134,18 @@ public class OfferingService {
         referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, normalized)
             .filter(referenceData -> referenceData.isActive())
             .orElseThrow(() -> new IllegalArgumentException("Offering fund/category was not found."));
+        return normalized;
+    }
+
+    private String normalizePaymentMethod(String paymentMethod) {
+        String normalized = trimToNull(paymentMethod);
+        if (normalized == null) {
+            throw new IllegalArgumentException("Payment method is required.");
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, normalized)
+            .filter(referenceData -> referenceData.isActive())
+            .orElseThrow(() -> new IllegalArgumentException("Payment method was not found."));
         return normalized;
     }
 

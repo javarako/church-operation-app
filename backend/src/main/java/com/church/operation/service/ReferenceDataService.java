@@ -36,6 +36,11 @@ public class ReferenceDataService {
         seed(ReferenceDataType.OFFERING_FUND_CATEGORY, "MISSION", "Mission", 30);
         seed(ReferenceDataType.OFFERING_FUND_CATEGORY, "BUILDING", "Building", 40);
 
+        seed(ReferenceDataType.PAYMENT_METHOD, "CASH", "Cash", 10);
+        seed(ReferenceDataType.PAYMENT_METHOD, "CHEQUE", "Cheque", 20);
+        seed(ReferenceDataType.PAYMENT_METHOD, "E_TRANSFER", "E-Transfer", 30);
+        seed(ReferenceDataType.PAYMENT_METHOD, "CREDIT_CARD", "Credit Card", 40);
+
         seed(ReferenceDataType.FINANCIAL_CATEGORY, "OFFICE", "Office", 10);
         seed(ReferenceDataType.FINANCIAL_CATEGORY, "MINISTRY", "Ministry", 20);
         seed(ReferenceDataType.FINANCIAL_CATEGORY, "FACILITY", "Facility", 30);

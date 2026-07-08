@@ -52,6 +52,8 @@ class OfferingServiceTest {
         when(memberRepository.findById("member-id")).thenReturn(Optional.of(giver));
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
             .thenReturn(Optional.of(activeReference("TITHE")));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
+            .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CASH")));
         saveOfferingWithId();
         saveTransactionWithId();
 
@@ -76,6 +78,8 @@ class OfferingServiceTest {
 
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
             .thenReturn(Optional.of(activeReference("TITHE")));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
+            .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CASH")));
         saveOfferingWithId();
         saveTransactionWithId();
 
@@ -134,6 +138,8 @@ class OfferingServiceTest {
 
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
             .thenReturn(Optional.of(activeReference("TITHE")));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
+            .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CASH")));
         saveOfferingWithId();
         saveTransactionWithId();
 
@@ -141,6 +147,21 @@ class OfferingServiceTest {
 
         assertThat(saved.getOfferingDate()).isEqualTo(LocalDate.of(2026, 7, 8));
         assertThat(saved.getOfferingSunday()).isEqualTo(LocalDate.of(2026, 7, 12));
+    }
+
+    @Test
+    void rejectsUnknownPaymentMethod() {
+        Member actor = member("admin-id", "admin", Role.ADMIN);
+        OfferingRequest request = request(GivingType.ANONYMOUS, null, "Anonymous");
+
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
+            .thenReturn(Optional.of(activeReference("TITHE")));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().createOffering(actor, request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Payment method was not found.");
     }
 
     private OfferingService service() {
@@ -171,8 +192,12 @@ class OfferingServiceTest {
     }
 
     private ReferenceData activeReference(String code) {
+        return activeReference(ReferenceDataType.OFFERING_FUND_CATEGORY, code);
+    }
+
+    private ReferenceData activeReference(ReferenceDataType type, String code) {
         ReferenceData referenceData = new ReferenceData();
-        referenceData.setType(ReferenceDataType.OFFERING_FUND_CATEGORY);
+        referenceData.setType(type);
         referenceData.setCode(code);
         referenceData.setLabel(code);
         referenceData.setActive(true);

@@ -121,7 +121,12 @@
 
         <label>
           Payment method
-          <input v-model="form.paymentMethod" placeholder="Cash, cheque, e-transfer" />
+          <select v-model="form.paymentMethod" required>
+            <option value="">Select payment</option>
+            <option v-for="method in paymentMethodOptions" :key="method.code" :value="method.code">
+              {{ method.label }}
+            </option>
+          </select>
         </label>
 
         <label class="wide">
@@ -159,6 +164,7 @@ interface OfferingForm {
 const today = new Date().toISOString().slice(0, 10);
 const offerings = ref<Offering[]>([]);
 const fundOptions = ref<ReferenceDataOption[]>([]);
+const paymentMethodOptions = ref<ReferenceDataOption[]>([]);
 const members = ref<MemberRecord[]>([]);
 const memberSearch = ref('');
 const error = ref('');
@@ -195,7 +201,7 @@ const filteredTotal = computed(() =>
 );
 
 onMounted(async () => {
-  await Promise.all([loadOfferings(), loadFunds(), loadMembers()]);
+  await Promise.all([loadOfferings(), loadFunds(), loadPaymentMethods(), loadMembers()]);
 });
 
 async function loadOfferings() {
@@ -217,6 +223,17 @@ async function loadFunds() {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
+  }
+}
+
+async function loadPaymentMethods() {
+  try {
+    paymentMethodOptions.value = await listReferenceData('PAYMENT_METHOD');
+    if (!form.paymentMethod) {
+      form.paymentMethod = paymentMethodOptions.value[0]?.code ?? '';
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load payment methods.';
   }
 }
 
@@ -283,7 +300,7 @@ function resetForm() {
   form.offeringSunday = calculateComingSunday(today);
   form.fundCategory = fundOptions.value[0]?.code ?? '';
   form.amount = null;
-  form.paymentMethod = '';
+  form.paymentMethod = paymentMethodOptions.value[0]?.code ?? '';
   form.memo = '';
   memberSearch.value = '';
   void loadMembers();

@@ -36,9 +36,10 @@ class ReferenceDataServiceTest {
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.GROUP_CODE, "ADULT");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.MEMBERSHIP_STATUS, "ACTIVE");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE");
+        verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.FINANCIAL_CATEGORY, "OFFICE");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.FINANCIAL_SUB_CATEGORY, "SUPPLIES");
-        verify(referenceDataRepository, org.mockito.Mockito.times(25)).save(any(ReferenceData.class));
+        verify(referenceDataRepository, org.mockito.Mockito.times(29)).save(any(ReferenceData.class));
     }
 
     @Test

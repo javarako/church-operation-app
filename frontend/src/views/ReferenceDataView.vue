@@ -117,6 +117,7 @@ const typeOptions: Array<{ type: ReferenceDataType; label: string }> = [
   { type: 'GROUP_CODE', label: 'Group code' },
   { type: 'MEMBERSHIP_STATUS', label: 'Membership status' },
   { type: 'OFFERING_FUND_CATEGORY', label: 'Offering fund/category' },
+  { type: 'PAYMENT_METHOD', label: 'Payment method' },
   { type: 'FINANCIAL_CATEGORY', label: 'Financial category' },
   { type: 'FINANCIAL_SUB_CATEGORY', label: 'Financial sub-category' },
 ];
