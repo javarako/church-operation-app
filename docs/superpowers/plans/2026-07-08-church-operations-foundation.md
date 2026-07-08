@@ -1815,11 +1815,12 @@ If the workspace is not a git repository, skip the commit and record that in the
 After this foundation plan is complete, create and execute these separate plans:
 
 1. Membership and reference data management.
-2. Offering management and automatic income transaction creation.
-3. Finance expenses, approvals, cheque clearing, attachments, and audit entries.
-4. Fiscal-year budgets and budget maintenance UI.
-5. Reports: weekly offering status, member offering summary, official tax return extraction, and financial budget report.
-6. Member self-service profile and offering history.
+2. Finance/offering reference data expansion with parent-linked financial sub-categories: `docs/superpowers/plans/2026-07-08-reference-data-finance-offering-expansion.md`.
+3. Offering management and automatic income transaction creation.
+4. Finance expenses, approvals, cheque clearing, attachments, and audit entries.
+5. Fiscal-year budgets and budget maintenance UI.
+6. Reports: weekly offering status, member offering summary, official tax return extraction, and financial budget report.
+7. Member self-service profile and offering history.
 
 ## Self-Review
 

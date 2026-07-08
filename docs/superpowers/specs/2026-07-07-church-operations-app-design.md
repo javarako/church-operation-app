@@ -93,7 +93,7 @@ Offering records include:
 - Memo.
 - Created-by user.
 
-An offering can be linked to a member or recorded as anonymous/group giving. Each offering automatically creates an income financial transaction.
+An offering can be linked to a member or recorded as anonymous/group giving. Each offering automatically creates an income financial transaction. Offering fund/category is controlled by reference data type `OFFERING_FUND_CATEGORY`.
 
 ### Financial Transaction
 
@@ -103,7 +103,7 @@ Financial transaction records include:
 - Date.
 - Amount.
 - Category.
-- Sub-category.
+- Sub-category, filtered by the selected category.
 - HST-included flag.
 - Cheque number.
 - Cheque-cleared flag.
@@ -114,7 +114,7 @@ Financial transaction records include:
 - Source reference, such as the offering that generated an income record.
 - Created-by user.
 
-Income generated from offerings is linked back to the source offering. Expenses are entered separately.
+Income generated from offerings is linked back to the source offering. Expenses are entered separately. Financial category is controlled by reference data type `FINANCIAL_CATEGORY`. Financial sub-category is controlled by reference data type `FINANCIAL_SUB_CATEGORY` and must reference a parent financial category by `parentCode`.
 
 ### Budget
 
@@ -123,24 +123,25 @@ Budget records include:
 - Fiscal year.
 - Budget type: offering income or expense.
 - Fund/category for offering income budgets.
-- Category and sub-category for expense budgets.
+- Category and sub-category for expense budgets, where sub-category is filtered by the selected category.
 - Budget.
 - Notes.
 - Created/updated-by user.
 
-Before each new fiscal year, Treasurer or Admin users enter estimated offering budgets by fund/category and expense budgets by category/sub-category.
+Before each new fiscal year, Treasurer or Admin users enter estimated offering budgets by fund/category and expense budgets by category/sub-category. Expense sub-category choices are filtered by the selected financial category.
 
 ### Reference Data
 
 Reference data records maintain controlled lists used by forms and reports:
 
-- Membership status.
-- Group code.
-- Offering fund/category.
-- Expense category.
-- Expense sub-category.
+- `MEMBERSHIP_STATUS`: member status values such as `ACTIVE`, `INACTIVE`, `VISITOR`, and `TRANSFERRED`.
+- `GROUP_CODE`: member group values such as `ADULT`, `YOUTH`, `CHILDREN`, and `SENIOR`.
+- `OFFERING_FUND_CATEGORY`: offering fund/category values such as `TITHE`, `THANKSGIVING`, `MISSION`, and `BUILDING`.
+- `FINANCIAL_CATEGORY`: financial transaction category values such as `OFFICE`, `MINISTRY`, `FACILITY`, and `MISSIONS`.
+- `FINANCIAL_SUB_CATEGORY`: financial transaction sub-category values linked to one `FINANCIAL_CATEGORY` through `parentCode`, such as `OFFICE` -> `SUPPLIES`, `FACILITY` -> `UTILITIES`, and `MINISTRY` -> `EVENT`.
 
 Reference data has maintenance screens so common lists can be managed without code changes.
+Reference data records include type, code, label, sort order, active flag, and optional parent code. `parentCode` is required for `FINANCIAL_SUB_CATEGORY` and must point to an active or inactive `FINANCIAL_CATEGORY` code so historic records remain interpretable even if a category is later deactivated.
 
 ### Attachments
 
@@ -194,13 +195,13 @@ Treasurer and Admin users can maintain expense transactions, attach evidence, re
 Before a new fiscal year starts, Treasurer or Admin users enter:
 
 - Offering income budgets by fund/category.
-- Expense budgets by category/sub-category.
+- Expense budgets by category/sub-category, with sub-categories filtered by the selected financial category.
 
 Reports compare actual income and expenses against the fiscal-year budgets.
 
 ### Reference Data Management
 
-Admin users can maintain all reference data. Membership users can maintain membership-related reference data. Treasurer users can maintain finance and offering reference data.
+Admin users can maintain all reference data. Membership users can maintain membership-related reference data. Treasurer users can maintain finance and offering reference data. The reference data maintenance screen must support parent category selection for `FINANCIAL_SUB_CATEGORY`; the financial transaction and budget screens must use that parent relationship to filter sub-category dropdowns after a category is selected.
 
 ### Member Self-Service
 

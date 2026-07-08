@@ -192,6 +192,7 @@ Legend for role access shorthand: **A**=ADMIN, **T**=TREASURER, **P**=PASTOR, **
 
 **Layout**
 - Form: Date, Amount, Category, Sub-category, HST Included (checkbox), Cheque Number, Payable To, Memo
+- Sub-category dropdown is disabled until a category is selected, then filtered to active sub-categories whose parent category matches the selected category.
 - Evidence Attachment uploader (drag/drop or file picker)
 - Approval section (only visible/editable if user has approval rights): Approve toggle, Treasurer name (auto-filled from session)
 
@@ -230,13 +231,15 @@ Legend for role access shorthand: **A**=ADMIN, **T**=TREASURER, **P**=PASTOR, **
   - Membership Status *(A, M)*
   - Group Code *(A, M)*
   - Offering Fund/Category *(A, T)*
-  - Expense Category *(A, T)*
-  - Expense Sub-category *(A, T)*
-- Each list: simple table (Code, Label, Active/Inactive, Order) + Add/Edit/Deactivate
+  - Financial Category *(A, T)*
+  - Financial Sub-category *(A, T)*
+- Each list: simple table (Code, Label, Parent Category when applicable, Active/Inactive, Order) + Add/Edit/Deactivate
+- Financial Sub-category editor includes a required Parent Category dropdown sourced from Financial Category.
 - Deactivate rather than hard delete (preserves referential integrity with existing records) — confirm dialog explains this
 
 **Behavior**
 - Attempting to deactivate a value in use shows a warning with count of records referencing it, but allows it (future records just won't offer it)
+- Financial transaction and budget forms filter Financial Sub-category by the selected Financial Category using the reference data parent relationship.
 
 ---
 
