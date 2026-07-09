@@ -8,12 +8,12 @@ import org.springframework.data.mongodb.repository.Query;
 import java.util.List;
 
 public interface BudgetRepository extends MongoRepository<Budget, String> {
-    @Query(value = "{ 'fiscalYear' : ?0, 'deleted' : { $ne : true } }", sort = "{ 'budgetType' : 1, 'category' : 1, 'subCategory' : 1 }")
+    @Query(value = "{ 'fiscalYear' : ?0, 'deleted' : false }", sort = "{ 'budgetType' : 1, 'category' : 1, 'subCategory' : 1 }")
     List<Budget> findActiveByFiscalYear(int fiscalYear);
 
-    @Query("{ 'fiscalYear' : ?0, 'budgetType' : ?1, 'category' : ?2, 'subCategory' : ?3, 'deleted' : { $ne : true } }")
+    @Query("{ 'fiscalYear' : ?0, 'budgetType' : ?1, 'category' : ?2, 'subCategory' : ?3, 'deleted' : false }")
     List<Budget> findActiveDuplicates(int fiscalYear, BudgetType budgetType, String category, String subCategory);
 
-    @Query("{ 'fiscalYear' : ?0, 'budgetType' : 'CARRY_OVER', 'deleted' : { $ne : true } }")
+    @Query("{ 'fiscalYear' : ?0, 'budgetType' : 'CARRY_OVER', 'deleted' : false }")
     List<Budget> findActiveCarryOver(int fiscalYear);
 }

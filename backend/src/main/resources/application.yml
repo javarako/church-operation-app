@@ -3,6 +3,9 @@ spring:
     name: church-operation
   mongodb:
     uri: ${SPRING_MONGODB_URI:mongodb://localhost:27017/church_operations}
+  data:
+    mongodb:
+      auto-index-creation: true
 
 server:
   port: 8080
