@@ -2,12 +2,28 @@ package com.church.operation.entity;
 
 import com.church.operation.util.BudgetType;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 
 @Document("budgets")
+@CompoundIndexes({
+    @CompoundIndex(
+        name = "active_carry_over_budget_unique",
+        def = "{'fiscalYear': 1, 'budgetType': 1}",
+        unique = true,
+        partialFilter = "{'deleted': false, 'budgetType': 'CARRY_OVER'}"
+    ),
+    @CompoundIndex(
+        name = "active_category_budget_unique",
+        def = "{'fiscalYear': 1, 'budgetType': 1, 'category': 1, 'subCategory': 1}",
+        unique = true,
+        partialFilter = "{'deleted': false, 'budgetType': {'$in': ['OFFERING_INCOME', 'EXPENSE']}}"
+    )
+})
 public class Budget {
     @Id
     private String id;

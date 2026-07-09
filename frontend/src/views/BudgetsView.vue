@@ -206,7 +206,7 @@ async function loadBudgets() {
 
 async function loadOfferingFunds() {
   try {
-    offeringFundOptions.value = await listReferenceData('OFFERING_FUND_CATEGORY');
+    offeringFundOptions.value = (await listReferenceData('OFFERING_FUND_CATEGORY')).filter((option) => option.active);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
   }
@@ -214,7 +214,7 @@ async function loadOfferingFunds() {
 
 async function loadFinancialCategories() {
   try {
-    financialCategoryOptions.value = await listReferenceData('FINANCIAL_CATEGORY');
+    financialCategoryOptions.value = (await listReferenceData('FINANCIAL_CATEGORY')).filter((option) => option.active);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load financial categories.';
   }
