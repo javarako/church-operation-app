@@ -10,11 +10,7 @@ import MembersView from '../views/MembersView.vue';
 import OfferingsView from '../views/OfferingsView.vue';
 import ProfileView from '../views/ProfileView.vue';
 import ReferenceDataView from '../views/ReferenceDataView.vue';
-
-const protectedPlaceholder = {
-  template: '<section><h2>{{ title }}</h2></section>',
-  props: ['title'],
-};
+import ReportsView from '../views/ReportsView.vue';
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -25,7 +21,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/finance', component: FinanceView, meta: { roles: financeRoles } },
   { path: '/budgets', component: BudgetsView, meta: { roles: financeRoles } },
   { path: '/reference-data', component: ReferenceDataView, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
-  { path: '/reports', component: protectedPlaceholder, props: { title: 'Reports' }, meta: { roles: reportRoles } },
+  { path: '/reports', component: ReportsView, meta: { roles: reportRoles } },
   { path: '/profile', component: ProfileView, meta: { roles: selfServiceRoles } },
 ];
 
