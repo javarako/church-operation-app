@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/vue';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import DashboardView from './DashboardView.vue';
 import { authState } from '../auth/authStore';
@@ -36,6 +36,7 @@ function router() {
       { path: '/budgets', component: { template: '<span>Budgets</span>' } },
       { path: '/reference-data', component: { template: '<span>Reference Data</span>' } },
       { path: '/reports', component: { template: '<span>Reports</span>' } },
+      { path: '/profile', component: { template: '<span>Profile</span>' } },
     ],
   });
 }
@@ -159,11 +160,12 @@ describe('DashboardView', () => {
     expect(screen.getByText('Membership')).toBeTruthy();
     expect(screen.getByText('Total Members')).toBeTruthy();
     expect(screen.getByText('Recent Finance Activity')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Members' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Offerings' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Finance' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Budgets' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Reports' })).toBeTruthy();
+    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
+    expect(quickLinks.getByRole('link', { name: 'Members' })).toBeTruthy();
+    expect(quickLinks.getByRole('link', { name: 'Offerings' })).toBeTruthy();
+    expect(quickLinks.getByRole('link', { name: 'Finance' })).toBeTruthy();
+    expect(quickLinks.getByRole('link', { name: 'Budgets' })).toBeTruthy();
+    expect(quickLinks.getByRole('link', { name: 'Reports' })).toBeTruthy();
   });
 
   it('hides membership summary from treasurer', async () => {
@@ -178,9 +180,10 @@ describe('DashboardView', () => {
     await renderDashboard();
 
     expect(await screen.findByText('Recent Finance Activity')).toBeTruthy();
+    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
     expect(screen.queryByText('Membership')).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Members' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Offerings' })).toBeTruthy();
+    expect(quickLinks.queryByRole('link', { name: 'Members' })).toBeNull();
+    expect(quickLinks.getByRole('link', { name: 'Offerings' })).toBeTruthy();
   });
 
   it('shows membership user member summary without finance summary', async () => {
@@ -195,10 +198,11 @@ describe('DashboardView', () => {
     await renderDashboard();
 
     expect(await screen.findByText('Membership')).toBeTruthy();
+    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
     expect(screen.queryByText('Recent Finance Activity')).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Finance' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Members' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Reference Data' })).toBeTruthy();
+    expect(quickLinks.queryByRole('link', { name: 'Finance' })).toBeNull();
+    expect(quickLinks.getByRole('link', { name: 'Members' })).toBeTruthy();
+    expect(quickLinks.getByRole('link', { name: 'Reference Data' })).toBeTruthy();
   });
 
   it('shows viewer read-only report content only', async () => {
@@ -213,11 +217,12 @@ describe('DashboardView', () => {
     await renderDashboard();
 
     expect(await screen.findByText('This Week')).toBeTruthy();
+    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
     expect(screen.getByText('Fiscal Snapshot')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Reports' })).toBeTruthy();
+    expect(quickLinks.getByRole('link', { name: 'Reports' })).toBeTruthy();
     expect(screen.queryByText('Membership')).toBeNull();
     expect(screen.queryByText('Recent Finance Activity')).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Offerings' })).toBeNull();
+    expect(quickLinks.queryByRole('link', { name: 'Offerings' })).toBeNull();
   });
 
   it('shows a section error without hiding other sections', async () => {
