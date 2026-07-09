@@ -56,31 +56,66 @@ textarea {
 .layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 
 .sidebar {
   display: grid;
   align-content: start;
-  gap: 8px;
-  padding: 20px;
-  background: #123047;
+  gap: 18px;
+  padding: 18px 14px;
+  background: linear-gradient(180deg, #023544 0%, #052d3b 55%, #082636 100%);
   color: white;
+}
+
+.sidebar-brand {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 8px 8px 18px;
+}
+
+.sidebar-brand img,
+.sidebar-logo-fallback {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.sidebar-logo-fallback {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 8px;
+  color: white;
+  font-weight: 700;
+}
+
+.sidebar h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  text-align: center;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 8px;
 }
 
 .sidebar a {
   color: white;
   text-decoration: none;
-  padding: 10px 12px;
+  padding: 11px 12px;
   border-radius: 6px;
 }
 
 .sidebar a.router-link-active {
-  background: #22577a;
+  background: linear-gradient(90deg, #048f93, #087d8f);
 }
 
 .content {
-  padding: 28px;
+  min-width: 0;
+  padding: 20px;
 }
 
 .workspace {
