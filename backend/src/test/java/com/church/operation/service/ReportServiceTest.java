@@ -106,6 +106,49 @@ class ReportServiceTest {
     }
 
     @Test
+    void memberSummaryFiltersAndSortsByOfferingNumber() {
+        Member actor = member("pastor-id", Role.PASTOR);
+        Member memberTwo = member("member-2", Role.MEMBER);
+        memberTwo.setDisplayName("Ben Kim");
+        memberTwo.setPrimaryEmail("ben@example.com");
+        memberTwo.setOfferingNumber("200");
+        Member memberOne = member("member-1", Role.MEMBER);
+        memberOne.setDisplayName("Ada Wong");
+        memberOne.setPrimaryEmail("ada@example.com");
+        memberOne.setOfferingNumber("100");
+        when(memberRepository.findAll()).thenReturn(List.of(memberTwo, memberOne));
+        when(offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 12, 31)
+        )).thenReturn(List.of(
+            offering("1", GivingType.MEMBER, "member-2", "Ben Kim", LocalDate.of(2026, 2, 4), LocalDate.of(2026, 2, 8), "TITHE", "CASH", "20.00"),
+            offering("2", GivingType.MEMBER, "member-1", "Ada Wong", LocalDate.of(2026, 1, 4), LocalDate.of(2026, 1, 4), "TITHE", "CASH", "10.00")
+        ));
+
+        List<MemberOfferingSummaryReportRow> rows = service().memberOfferings(
+            actor,
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 12, 31),
+            null,
+            "TITHE"
+        );
+
+        assertThat(rows).extracting(MemberOfferingSummaryReportRow::offeringNumber)
+            .containsExactly("100", "200");
+
+        List<MemberOfferingSummaryReportRow> filteredRows = service().memberOfferings(
+            actor,
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 12, 31),
+            "200",
+            "TITHE"
+        );
+
+        assertThat(filteredRows).extracting(MemberOfferingSummaryReportRow::memberName)
+            .containsExactly("Ben Kim");
+    }
+
+    @Test
     void viewerCannotExtractOfficialTaxReport() {
         Member actor = member("viewer-id", Role.VIEWER);
 
@@ -130,7 +173,7 @@ class ReportServiceTest {
             offering("1", GivingType.MEMBER, "member-1", "Ada Wong", LocalDate.of(2026, 6, 15), LocalDate.of(2026, 6, 21), "TITHE", "CASH", "120.00")
         ));
 
-        List<OfficialTaxReportRow> rows = service().officialTaxReturn(actor, 2026, "member-1");
+        List<OfficialTaxReportRow> rows = service().officialTaxReturn(actor, 2026, "OFF-1");
 
         assertThat(rows).containsExactly(
             new OfficialTaxReportRow(
@@ -149,6 +192,38 @@ class ReportServiceTest {
                 new BigDecimal("120.00")
             )
         );
+    }
+
+    @Test
+    void taxReportFiltersAndSortsByOfferingNumberThenGivingDate() {
+        Member actor = member("treasurer-id", Role.TREASURER);
+        Member memberTwo = member("member-2", Role.MEMBER);
+        memberTwo.setDisplayName("Ben Kim");
+        memberTwo.setPrimaryEmail("ben@example.com");
+        memberTwo.setOfferingNumber("200");
+        Member memberOne = member("member-1", Role.MEMBER);
+        memberOne.setDisplayName("Ada Wong");
+        memberOne.setPrimaryEmail("ada@example.com");
+        memberOne.setOfferingNumber("100");
+        when(memberRepository.findAll()).thenReturn(List.of(memberTwo, memberOne));
+        when(offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 12, 31)
+        )).thenReturn(List.of(
+            offering("1", GivingType.MEMBER, "member-2", "Ben Kim", LocalDate.of(2026, 3, 10), LocalDate.of(2026, 3, 15), "TITHE", "CASH", "20.00"),
+            offering("2", GivingType.MEMBER, "member-1", "Ada Wong", LocalDate.of(2026, 2, 10), LocalDate.of(2026, 2, 15), "TITHE", "CASH", "10.00"),
+            offering("3", GivingType.MEMBER, "member-1", "Ada Wong", LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 11), "MISSION", "CASH", "15.00")
+        ));
+
+        List<OfficialTaxReportRow> rows = service().officialTaxReturn(actor, 2026, null);
+
+        assertThat(rows).extracting(row -> row.offeringNumber() + ":" + row.givingDate())
+            .containsExactly("100:2026-01-10", "100:2026-02-10", "200:2026-03-10");
+
+        List<OfficialTaxReportRow> filteredRows = service().officialTaxReturn(actor, 2026, "200");
+
+        assertThat(filteredRows).extracting(OfficialTaxReportRow::memberName)
+            .containsExactly("Ben Kim");
     }
 
     @Test

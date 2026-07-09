@@ -41,19 +41,19 @@ public class ReportController {
         Authentication authentication,
         @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
         @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
-        @RequestParam(value = "memberId", required = false) String memberId,
+        @RequestParam(value = "offeringNumber", required = false) String offeringNumber,
         @RequestParam(value = "fundCategory", required = false) String fundCategory
     ) {
-        return reportService.memberOfferings(actor(authentication), start, end, memberId, fundCategory);
+        return reportService.memberOfferings(actor(authentication), start, end, offeringNumber, fundCategory);
     }
 
     @GetMapping("/tax-return")
     List<OfficialTaxReportRow> taxReturn(
         Authentication authentication,
         @RequestParam("taxYear") int taxYear,
-        @RequestParam(value = "memberId", required = false) String memberId
+        @RequestParam(value = "offeringNumber", required = false) String offeringNumber
     ) {
-        return reportService.officialTaxReturn(actor(authentication), taxYear, memberId);
+        return reportService.officialTaxReturn(actor(authentication), taxYear, offeringNumber);
     }
 
     @GetMapping("/financial-budget")

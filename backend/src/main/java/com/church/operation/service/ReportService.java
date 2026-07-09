@@ -103,7 +103,7 @@ public class ReportService {
         Member actor,
         LocalDate start,
         LocalDate end,
-        String memberId,
+        String offeringNumber,
         String fundCategory
     ) {
         requireReportAccess(actor);
@@ -119,19 +119,18 @@ public class ReportService {
             if (offering.getGivingType() != GivingType.MEMBER) {
                 continue;
             }
-            if (!matches(offering.getMemberId(), memberId) || !matches(offering.getFundCategory(), fundCategory)) {
+            Member member = membersById.get(offering.getMemberId());
+            if (!matches(member != null ? member.getOfferingNumber() : null, offeringNumber) || !matches(offering.getFundCategory(), fundCategory)) {
                 continue;
             }
-
-            Member member = membersById.get(offering.getMemberId());
             String memberName = member != null && member.getDisplayName() != null ? member.getDisplayName() : offering.getGiverDisplayName();
             String primaryEmail = member != null ? member.getPrimaryEmail() : null;
-            String offeringNumber = member != null ? member.getOfferingNumber() : null;
+            String memberOfferingNumber = member != null ? member.getOfferingNumber() : null;
             MemberOfferingKey key = new MemberOfferingKey(
                 offering.getMemberId(),
                 memberName,
                 primaryEmail,
-                offeringNumber,
+                memberOfferingNumber,
                 offering.getFundCategory()
             );
             grouped.computeIfAbsent(key, ignored -> new Summary()).add(offering.getAmount());
@@ -147,10 +146,14 @@ public class ReportService {
                 entry.getValue().count(),
                 entry.getValue().total()
             ))
+            .sorted(Comparator
+                .comparing(MemberOfferingSummaryReportRow::offeringNumber, Comparator.nullsLast(String::compareTo))
+                .thenComparing(MemberOfferingSummaryReportRow::memberName, Comparator.nullsLast(String::compareTo))
+                .thenComparing(MemberOfferingSummaryReportRow::fundCategory, Comparator.nullsLast(String::compareTo)))
             .toList();
     }
 
-    public List<OfficialTaxReportRow> officialTaxReturn(Member actor, int taxYear, String memberId) {
+    public List<OfficialTaxReportRow> officialTaxReturn(Member actor, int taxYear, String offeringNumber) {
         requireTaxAccess(actor);
         validateYear(taxYear, "Tax year is required.");
 
@@ -164,9 +167,11 @@ public class ReportService {
         ChurchInformationProperties.Information information = churchInformationProperties.information();
         return offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(start, end).stream()
             .filter(offering -> offering.getGivingType() == GivingType.MEMBER)
-            .filter(offering -> matches(offering.getMemberId(), memberId))
             .map(offering -> {
                 Member member = membersById.get(offering.getMemberId());
+                if (!matches(member != null ? member.getOfferingNumber() : null, offeringNumber)) {
+                    return null;
+                }
                 String memberName = member != null && member.getDisplayName() != null ? member.getDisplayName() : offering.getGiverDisplayName();
                 return new OfficialTaxReportRow(
                     information.name(),
@@ -184,6 +189,11 @@ public class ReportService {
                     offering.getAmount()
                 );
             })
+            .filter(Objects::nonNull)
+            .sorted(Comparator
+                .comparing(OfficialTaxReportRow::offeringNumber, Comparator.nullsLast(String::compareTo))
+                .thenComparing(OfficialTaxReportRow::givingDate, Comparator.nullsLast(LocalDate::compareTo))
+                .thenComparing(OfficialTaxReportRow::memberName, Comparator.nullsLast(String::compareTo)))
             .toList();
     }
 

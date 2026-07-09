@@ -15,7 +15,7 @@
           type="button"
           role="tab"
           :aria-selected="report.id === activeVisibleReportId"
-          :class="{ secondary: report.id !== activeVisibleReportId }"
+          :class="{ secondary: report.id !== activeVisibleReportId, 'active-report-tab': report.id === activeVisibleReportId }"
           @click="selectTab(report.id)"
         >
           {{ report.label }}
@@ -46,12 +46,22 @@
 
           <label>
             Fund/category
-            <input v-model="weeklyFilters.fundCategory" placeholder="All funds" />
+            <select v-model="weeklyFilters.fundCategory">
+              <option value="">All funds</option>
+              <option v-for="option in offeringFundOptions" :key="option.id" :value="option.code">
+                {{ option.label }}
+              </option>
+            </select>
           </label>
 
           <label>
             Payment method
-            <input v-model="weeklyFilters.paymentMethod" placeholder="All methods" />
+            <select v-model="weeklyFilters.paymentMethod">
+              <option value="">All methods</option>
+              <option v-for="option in paymentMethodOptions" :key="option.id" :value="option.code">
+                {{ option.label }}
+              </option>
+            </select>
           </label>
         </template>
 
@@ -67,13 +77,18 @@
           </label>
 
           <label>
-            Member ID
-            <input v-model="memberFilters.memberId" placeholder="All members" />
+            Offering number
+            <input v-model="memberFilters.offeringNumber" placeholder="All offering numbers" />
           </label>
 
           <label>
             Fund/category
-            <input v-model="memberFilters.fundCategory" placeholder="All funds" />
+            <select v-model="memberFilters.fundCategory">
+              <option value="">All funds</option>
+              <option v-for="option in offeringFundOptions" :key="option.id" :value="option.code">
+                {{ option.label }}
+              </option>
+            </select>
           </label>
         </template>
 
@@ -84,8 +99,8 @@
           </label>
 
           <label>
-            Member ID
-            <input v-model="taxFilters.memberId" placeholder="All members" />
+            Offering number
+            <input v-model="taxFilters.offeringNumber" placeholder="All offering numbers" />
           </label>
         </template>
 
@@ -142,9 +157,9 @@
         <table v-else-if="activeVisibleReportId === 'member-offerings'">
           <thead>
             <tr>
+              <th>Offering number</th>
               <th>Member</th>
               <th>Email</th>
-              <th>Offering number</th>
               <th>Fund/category</th>
               <th>Count</th>
               <th>Total</th>
@@ -152,9 +167,9 @@
           </thead>
           <tbody>
             <tr v-for="row in memberRows" :key="`${row.memberId}-${row.fundCategory}`">
+              <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.memberName }}</td>
               <td>{{ row.primaryEmail }}</td>
-              <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.fundCategory }}</td>
               <td>{{ row.count }}</td>
               <td>{{ formatMoney(row.totalAmount) }}</td>
@@ -168,10 +183,10 @@
         <table v-else-if="activeVisibleReportId === 'tax-return'">
           <thead>
             <tr>
+              <th>Offering number</th>
               <th>Giving date</th>
               <th>Member</th>
               <th>Email</th>
-              <th>Offering number</th>
               <th>Address</th>
               <th>Fund/category</th>
               <th>Amount</th>
@@ -179,10 +194,10 @@
           </thead>
           <tbody>
             <tr v-for="row in taxRows" :key="`${row.memberId}-${row.givingDate}-${row.fundCategory}-${row.amount}`">
+              <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.givingDate }}</td>
               <td>{{ row.memberName }}</td>
               <td>{{ row.primaryEmail }}</td>
-              <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.memberAddress || '-' }}</td>
               <td>{{ row.fundCategory }}</td>
               <td>{{ formatMoney(row.amount) }}</td>
@@ -238,6 +253,7 @@ import {
   type OfficialTaxReportRow,
   type WeeklyOfferingReportRow,
 } from '../api/reports';
+import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import { authState, type Role } from '../auth/authStore';
 
 interface ReportTab {
@@ -281,6 +297,8 @@ const weeklyRows = ref<WeeklyOfferingReportRow[]>([]);
 const memberRows = ref<MemberOfferingSummaryReportRow[]>([]);
 const taxRows = ref<OfficialTaxReportRow[]>([]);
 const financialRows = ref<FinancialBudgetReportRow[]>([]);
+const offeringFundOptions = ref<ReferenceDataOption[]>([]);
+const paymentMethodOptions = ref<ReferenceDataOption[]>([]);
 const loading = ref(false);
 const error = ref('');
 
@@ -294,13 +312,13 @@ const weeklyFilters = reactive({
 const memberFilters = reactive({
   start: startOfYear(now),
   end: isoDate(now),
-  memberId: '',
+  offeringNumber: '',
   fundCategory: '',
 });
 
 const taxFilters = reactive({
   taxYear: now.getFullYear(),
-  memberId: '',
+  offeringNumber: '',
 });
 
 const financialFilters = reactive({
@@ -354,8 +372,22 @@ const activeSummary = computed(() => {
 });
 
 onMounted(() => {
+  void loadReferenceOptions();
   void runActiveReport();
 });
+
+async function loadReferenceOptions() {
+  try {
+    const [funds, paymentMethods] = await Promise.all([
+      listReferenceData('OFFERING_FUND_CATEGORY'),
+      listReferenceData('PAYMENT_METHOD'),
+    ]);
+    offeringFundOptions.value = activeSortedOptions(funds);
+    paymentMethodOptions.value = activeSortedOptions(paymentMethods);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load report filter options.';
+  }
+}
 
 function hasOfficialTaxAccess() {
   const roles = authState.currentUser?.roles ?? [];
@@ -422,11 +454,11 @@ function exportActiveReport() {
   if (activeVisibleReportId.value === 'member-offerings') {
     exportCsv(
       'member-offering-summary.csv',
-      ['Member', 'Email', 'Offering number', 'Fund/category', 'Count', 'Total'],
+      ['Offering number', 'Member', 'Email', 'Fund/category', 'Count', 'Total'],
       memberRows.value.map((row) => [
+        row.offeringNumber,
         row.memberName,
         row.primaryEmail,
-        row.offeringNumber,
         row.fundCategory,
         row.count,
         row.totalAmount,
@@ -449,10 +481,10 @@ function exportActiveReport() {
         'Church contact info',
         'Treasurer name',
         'Tax year',
+        'Offering number',
         'Giving date',
         'Member',
         'Email',
-        'Offering number',
         'Address',
         'Fund/category',
         'Amount',
@@ -463,10 +495,10 @@ function exportActiveReport() {
         row.churchContactInfo,
         row.treasurerName,
         row.taxYear,
+        row.offeringNumber,
         row.givingDate,
         row.memberName,
         row.primaryEmail,
-        row.offeringNumber,
         row.memberAddress,
         row.fundCategory,
         row.amount,
@@ -503,9 +535,15 @@ function validateActiveFilters() {
 
 function validateDateRange(start: string, end: string) {
   if (start && end && end < start) {
-    return 'End date cannot be before start date.';
+    return 'Start date must be before or equal to end date.';
   }
   return '';
+}
+
+function activeSortedOptions(options: ReferenceDataOption[]) {
+  return options
+    .filter((option) => option.active)
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label));
 }
 
 function exportCsv(filename: string, headers: string[], rows: Array<Array<string | number | undefined>>) {
@@ -555,6 +593,11 @@ function startOfYear(value: Date) {
   justify-content: start;
 }
 
+.reports-toolbar button.active-report-tab {
+  background: #22577a;
+  color: white;
+}
+
 .reports-header {
   display: flex;
   align-items: flex-start;
@@ -581,7 +624,8 @@ function startOfYear(value: Date) {
   color: #344054;
 }
 
-.report-filters input {
+.report-filters input,
+.report-filters select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #c8d0d9;

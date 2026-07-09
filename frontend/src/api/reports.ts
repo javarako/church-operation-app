@@ -58,13 +58,13 @@ interface WeeklyOfferingReportFilters {
 interface MemberOfferingSummaryReportFilters {
   start: string;
   end: string;
-  memberId?: string;
+  offeringNumber?: string;
   fundCategory?: string;
 }
 
 interface OfficialTaxReportFilters {
   taxYear: number;
-  memberId?: string;
+  offeringNumber?: string;
 }
 
 interface FinancialBudgetReportFilters {

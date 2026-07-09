@@ -8,6 +8,7 @@ import {
   listOfficialTaxReport,
   listWeeklyOfferingReport,
 } from '../api/reports';
+import { listReferenceData } from '../api/referenceData';
 
 vi.mock('../api/reports', () => ({
   listWeeklyOfferingReport: vi.fn().mockResolvedValue([]),
@@ -16,10 +17,15 @@ vi.mock('../api/reports', () => ({
   listFinancialBudgetReport: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('../api/referenceData', () => ({
+  listReferenceData: vi.fn().mockResolvedValue([]),
+}));
+
 const weeklyReportMock = vi.mocked(listWeeklyOfferingReport);
 const memberReportMock = vi.mocked(listMemberOfferingSummaryReport);
 const taxReportMock = vi.mocked(listOfficialTaxReport);
 const financialReportMock = vi.mocked(listFinancialBudgetReport);
+const referenceDataMock = vi.mocked(listReferenceData);
 
 function readBlobText(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
@@ -40,6 +46,21 @@ describe('ReportsView', () => {
     memberReportMock.mockResolvedValue([]);
     taxReportMock.mockResolvedValue([]);
     financialReportMock.mockResolvedValue([]);
+    referenceDataMock.mockImplementation((type) => {
+      if (type === 'OFFERING_FUND_CATEGORY') {
+        return Promise.resolve([
+          { id: 'fund-1', type, code: 'TITHE', label: 'Tithe', sortOrder: 1, active: true },
+          { id: 'fund-2', type, code: 'MISSION', label: 'Mission', sortOrder: 2, active: true },
+        ]);
+      }
+      if (type === 'PAYMENT_METHOD') {
+        return Promise.resolve([
+          { id: 'payment-1', type, code: 'CASH', label: 'Cash', sortOrder: 1, active: true },
+          { id: 'payment-2', type, code: 'CHEQUE', label: 'Cheque', sortOrder: 2, active: true },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
   });
 
   afterEach(() => {
@@ -81,12 +102,43 @@ describe('ReportsView', () => {
     const taxTab = screen.getByRole('tab', { name: /official tax/i });
 
     expect(weeklyTab.getAttribute('aria-selected')).toBe('true');
+    expect(weeklyTab.classList.contains('active-report-tab')).toBe(true);
     expect(taxTab.getAttribute('aria-selected')).toBe('false');
 
     await fireEvent.click(taxTab);
 
     expect(taxTab.getAttribute('aria-selected')).toBe('true');
+    expect(taxTab.classList.contains('active-report-tab')).toBe(true);
     expect(weeklyTab.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('uses reference data dropdowns for weekly fund and payment filters', async () => {
+    authState.currentUser = {
+      primaryEmail: 'admin@example.com',
+      displayName: 'Admin',
+      roles: ['ADMIN'],
+      mustChangePassword: false,
+      token: 'token',
+    };
+
+    render(ReportsView);
+
+    const fundSelect = await screen.findByLabelText('Fund/category');
+    const paymentSelect = await screen.findByLabelText('Payment method');
+
+    expect(fundSelect.tagName).toBe('SELECT');
+    expect(paymentSelect.tagName).toBe('SELECT');
+
+    await fireEvent.update(fundSelect, 'TITHE');
+    await fireEvent.update(paymentSelect, 'CASH');
+    await fireEvent.click(screen.getByRole('button', { name: /run report/i }));
+
+    expect(weeklyReportMock).toHaveBeenLastCalledWith({
+      start: expect.any(String),
+      end: expect.any(String),
+      fundCategory: 'TITHE',
+      paymentMethod: 'CASH',
+    });
   });
 
   it('exports weekly csv from the loaded report rows', async () => {
@@ -233,8 +285,86 @@ describe('ReportsView', () => {
 
     expect(csvBlob).toBeDefined();
     await expect(readBlobText(csvBlob as Blob)).resolves.toContain(
-      '"Grace Church","1 Main St","555-0100","Pat Doe","2026","2026-01-12","Alex Smith","alex@example.com","42","99 King St","General","500"',
+      '"Grace Church","1 Main St","555-0100","Pat Doe","2026","42","2026-01-12","Alex Smith","alex@example.com","99 King St","General","500"',
     );
+  });
+
+  it('uses offering number criteria and first column for member summaries', async () => {
+    authState.currentUser = {
+      primaryEmail: 'viewer@example.com',
+      displayName: 'Viewer',
+      roles: ['VIEWER'],
+      mustChangePassword: false,
+      token: 'token',
+    };
+
+    memberReportMock.mockResolvedValue([
+      {
+        memberId: 'member-1',
+        memberName: 'Alex Smith',
+        primaryEmail: 'alex@example.com',
+        offeringNumber: '100',
+        fundCategory: 'TITHE',
+        count: 1,
+        totalAmount: 25,
+      },
+    ]);
+
+    render(ReportsView);
+
+    await fireEvent.click(screen.getByRole('tab', { name: /member offerings/i }));
+    await fireEvent.update(screen.getByLabelText('Offering number'), '100');
+    await fireEvent.click(screen.getByRole('button', { name: /run report/i }));
+
+    expect(memberReportMock).toHaveBeenLastCalledWith({
+      start: expect.any(String),
+      end: expect.any(String),
+      offeringNumber: '100',
+      fundCategory: '',
+    });
+    expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Offering number');
+    expect(await screen.findByText('Alex Smith')).toBeTruthy();
+  });
+
+  it('uses offering number criteria and first column for official tax reports', async () => {
+    authState.currentUser = {
+      primaryEmail: 'treasurer@example.com',
+      displayName: 'Treasurer',
+      roles: ['TREASURER'],
+      mustChangePassword: false,
+      token: 'token',
+    };
+
+    taxReportMock.mockResolvedValue([
+      {
+        churchName: 'Grace Church',
+        churchAddress: '1 Main St',
+        churchContactInfo: '555-0100',
+        treasurerName: 'Pat Doe',
+        taxYear: 2026,
+        memberId: 'member-1',
+        memberName: 'Alex Smith',
+        primaryEmail: 'alex@example.com',
+        offeringNumber: '100',
+        memberAddress: '99 King St',
+        givingDate: '2026-01-12',
+        fundCategory: 'General',
+        amount: 500,
+      },
+    ]);
+
+    render(ReportsView);
+
+    await fireEvent.click(screen.getByRole('tab', { name: /official tax/i }));
+    await fireEvent.update(screen.getByLabelText('Offering number'), '100');
+    await fireEvent.click(screen.getByRole('button', { name: /run report/i }));
+
+    expect(taxReportMock).toHaveBeenLastCalledWith({
+      taxYear: expect.any(Number),
+      offeringNumber: '100',
+    });
+    expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Offering number');
+    expect(await screen.findByText('Alex Smith')).toBeTruthy();
   });
 
   it('shows a form error and skips weekly api calls when end date is before start date', async () => {
@@ -254,7 +384,7 @@ describe('ReportsView', () => {
     await fireEvent.update(dateInputs[1], '2026-07-01');
     await fireEvent.click(screen.getByRole('button', { name: /run report/i }));
 
-    expect(screen.getByText('End date cannot be before start date.')).toBeTruthy();
+    expect(screen.getByText('Start date must be before or equal to end date.')).toBeTruthy();
     expect(weeklyReportMock).not.toHaveBeenCalled();
   });
 
@@ -277,7 +407,7 @@ describe('ReportsView', () => {
     await fireEvent.update(dateInputs[1], '2026-08-01');
     await fireEvent.click(screen.getByRole('button', { name: /run report/i }));
 
-    expect(screen.getByText('End date cannot be before start date.')).toBeTruthy();
+    expect(screen.getByText('Start date must be before or equal to end date.')).toBeTruthy();
     expect(memberReportMock).not.toHaveBeenCalled();
   });
 });
