@@ -13,6 +13,8 @@
           v-for="report in visibleReportTabs"
           :key="report.id"
           type="button"
+          role="tab"
+          :aria-selected="report.id === activeVisibleReportId"
           :class="{ secondary: report.id !== activeVisibleReportId }"
           @click="selectTab(report.id)"
         >
@@ -492,7 +494,10 @@ function sum(values: number[]) {
 }
 
 function isoDate(value: Date) {
-  return value.toISOString().slice(0, 10);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function startOfYear(value: Date) {
