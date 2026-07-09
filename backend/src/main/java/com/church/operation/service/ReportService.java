@@ -82,6 +82,11 @@ public class ReportService {
         }
 
         return grouped.entrySet().stream()
+            .sorted(Comparator
+                .comparing((Map.Entry<WeeklyOfferingKey, Summary> entry) -> entry.getKey().offeringSunday())
+                .thenComparing(entry -> entry.getKey().fundCategory(), Comparator.nullsFirst(String::compareTo))
+                .thenComparing(entry -> entry.getKey().givingType(), Comparator.nullsFirst(Enum::compareTo))
+                .thenComparing(entry -> entry.getKey().paymentMethod(), Comparator.nullsFirst(String::compareTo)))
             .map(entry -> new WeeklyOfferingReportRow(
                 entry.getKey().offeringSunday(),
                 entry.getKey().fundCategory(),
@@ -146,6 +151,7 @@ public class ReportService {
 
     public List<OfficialTaxReportRow> officialTaxReturn(Member actor, int taxYear, String memberId) {
         requireTaxAccess(actor);
+        validateYear(taxYear, "Tax year is required.");
 
         LocalDate start = LocalDate.of(taxYear, 1, 1);
         LocalDate end = LocalDate.of(taxYear, 12, 31);
@@ -182,6 +188,7 @@ public class ReportService {
 
     public List<FinancialBudgetReportRow> financialBudget(Member actor, int fiscalYear) {
         requireReportAccess(actor);
+        validateYear(fiscalYear, "Fiscal year is required.");
 
         LocalDate start = LocalDate.of(fiscalYear, fiscalYearProperties.startMonth(), 1);
         LocalDate end = start.plusYears(1).minusDays(1);
@@ -268,6 +275,12 @@ public class ReportService {
     private void validateRange(LocalDate start, LocalDate end) {
         if (start == null || end == null || end.isBefore(start)) {
             throw new IllegalArgumentException("A valid date range is required.");
+        }
+    }
+
+    private void validateYear(int year, String message) {
+        if (year <= 0) {
+            throw new IllegalArgumentException(message);
         }
     }
 

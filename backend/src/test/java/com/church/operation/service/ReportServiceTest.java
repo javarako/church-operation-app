@@ -213,6 +213,55 @@ class ReportServiceTest {
         assertThat(endCaptor.getValue()).isEqualTo(LocalDate.of(2026, 12, 31));
     }
 
+    @Test
+    void taxReportRejectsInvalidTaxYear() {
+        Member actor = member("treasurer-id", Role.TREASURER);
+
+        assertThatThrownBy(() -> service().officialTaxReturn(actor, 0, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Tax year is required.");
+    }
+
+    @Test
+    void financialReportUsesActiveTransactionsWithinFiscalYearRange() {
+        Member actor = member("viewer-id", Role.VIEWER);
+        when(budgetRepository.findActiveByFiscalYear(2026)).thenReturn(List.of(
+            budget(BudgetType.OFFERING_INCOME, "TITHE", null, "1000.00"),
+            budget(BudgetType.EXPENSE, "UTILITIES", null, "400.00")
+        ));
+        when(financialTransactionRepository.findActiveByTransactionDateBetween(
+            LocalDate.of(2026, 4, 1),
+            LocalDate.of(2027, 3, 31)
+        )).thenReturn(List.of(
+            transaction(FinancialTransactionType.INCOME, FinancialSourceType.OFFERING, "TITHE", null, "750.00")
+        ));
+
+        List<FinancialBudgetReportRow> rows = service().financialBudget(actor, 2026);
+
+        ArgumentCaptor<LocalDate> startCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        ArgumentCaptor<LocalDate> endCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        verify(financialTransactionRepository).findActiveByTransactionDateBetween(
+            startCaptor.capture(),
+            endCaptor.capture()
+        );
+
+        assertThat(startCaptor.getValue()).isEqualTo(LocalDate.of(2026, 4, 1));
+        assertThat(endCaptor.getValue()).isEqualTo(LocalDate.of(2027, 3, 31));
+        assertThat(rows).containsExactly(
+            new FinancialBudgetReportRow(2026, BudgetType.OFFERING_INCOME, "TITHE", null, new BigDecimal("1000.00"), new BigDecimal("750.00"), new BigDecimal("-250.00")),
+            new FinancialBudgetReportRow(2026, BudgetType.EXPENSE, "UTILITIES", null, new BigDecimal("400.00"), BigDecimal.ZERO, new BigDecimal("-400.00"))
+        );
+    }
+
+    @Test
+    void financialReportRejectsInvalidFiscalYear() {
+        Member actor = member("viewer-id", Role.VIEWER);
+
+        assertThatThrownBy(() -> service().financialBudget(actor, 0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Fiscal year is required.");
+    }
+
     private ReportService service() {
         return new ReportService(
             offeringRepository,
