@@ -26,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -210,29 +211,54 @@ public class ReportService {
             actuals.merge(key, transaction.getAmount(), BigDecimal::add);
         }
 
-        return budgets.stream()
-            .sorted(Comparator
-                .comparing(Budget::getBudgetType)
-                .thenComparing(Budget::getCategory, Comparator.nullsFirst(String::compareTo))
-                .thenComparing(Budget::getSubCategory, Comparator.nullsFirst(String::compareTo)))
-            .map(budget -> {
-                BigDecimal planned = budget.getBudget() != null ? budget.getBudget() : BigDecimal.ZERO;
-                BigDecimal actual = budget.getBudgetType() == BudgetType.CARRY_OVER
-                    ? BigDecimal.ZERO
-                    : actuals.getOrDefault(
-                        new BudgetActualKey(budget.getBudgetType(), budget.getCategory(), budget.getSubCategory()),
-                        BigDecimal.ZERO
+        Map<BudgetActualKey, Budget> budgetsByKey = new LinkedHashMap<>();
+        List<Budget> carryOverBudgets = budgets.stream()
+            .filter(budget -> budget.getBudgetType() == BudgetType.CARRY_OVER)
+            .toList();
+
+        for (Budget budget : budgets) {
+            if (budget.getBudgetType() == BudgetType.CARRY_OVER) {
+                continue;
+            }
+            budgetsByKey.put(new BudgetActualKey(budget.getBudgetType(), budget.getCategory(), budget.getSubCategory()), budget);
+        }
+
+        LinkedHashSet<BudgetActualKey> rowKeys = new LinkedHashSet<>(budgetsByKey.keySet());
+        rowKeys.addAll(actuals.keySet());
+
+        return Stream.concat(
+                carryOverBudgets.stream()
+                    .map(budget -> {
+                        BigDecimal planned = budget.getBudget() != null ? budget.getBudget() : BigDecimal.ZERO;
+                        return new FinancialBudgetReportRow(
+                            fiscalYear,
+                            budget.getBudgetType(),
+                            budget.getCategory(),
+                            budget.getSubCategory(),
+                            planned,
+                            BigDecimal.ZERO,
+                            BigDecimal.ZERO.subtract(planned)
+                        );
+                    }),
+                rowKeys.stream().map(key -> {
+                    Budget budget = budgetsByKey.get(key);
+                    BigDecimal planned = budget != null && budget.getBudget() != null ? budget.getBudget() : BigDecimal.ZERO;
+                    BigDecimal actual = actuals.getOrDefault(key, BigDecimal.ZERO);
+                    return new FinancialBudgetReportRow(
+                        fiscalYear,
+                        key.budgetType(),
+                        key.category(),
+                        key.subCategory(),
+                        planned,
+                        actual,
+                        actual.subtract(planned)
                     );
-                return new FinancialBudgetReportRow(
-                    fiscalYear,
-                    budget.getBudgetType(),
-                    budget.getCategory(),
-                    budget.getSubCategory(),
-                    planned,
-                    actual,
-                    actual.subtract(planned)
-                );
-            })
+                })
+            )
+            .sorted(Comparator
+                .comparing(FinancialBudgetReportRow::budgetType)
+                .thenComparing(FinancialBudgetReportRow::category, Comparator.nullsFirst(String::compareTo))
+                .thenComparing(FinancialBudgetReportRow::subCategory, Comparator.nullsFirst(String::compareTo)))
             .toList();
     }
 

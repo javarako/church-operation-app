@@ -369,6 +369,13 @@ function selectTab(tabId: ReportTab['id']) {
 
 async function runActiveReport() {
   error.value = '';
+
+  const validationError = validateActiveFilters();
+  if (validationError) {
+    error.value = validationError;
+    return;
+  }
+
   loading.value = true;
 
   try {
@@ -436,8 +443,26 @@ function exportActiveReport() {
 
     exportCsv(
       'official-tax-return.csv',
-      ['Giving date', 'Member', 'Email', 'Offering number', 'Address', 'Fund/category', 'Amount'],
+      [
+        'Church name',
+        'Church address',
+        'Church contact info',
+        'Treasurer name',
+        'Tax year',
+        'Giving date',
+        'Member',
+        'Email',
+        'Offering number',
+        'Address',
+        'Fund/category',
+        'Amount',
+      ],
       taxRows.value.map((row) => [
+        row.churchName,
+        row.churchAddress,
+        row.churchContactInfo,
+        row.treasurerName,
+        row.taxYear,
         row.givingDate,
         row.memberName,
         row.primaryEmail,
@@ -462,6 +487,25 @@ function exportActiveReport() {
       row.variance,
     ]),
   );
+}
+
+function validateActiveFilters() {
+  if (activeVisibleReportId.value === 'weekly-offerings') {
+    return validateDateRange(weeklyFilters.start, weeklyFilters.end);
+  }
+
+  if (activeVisibleReportId.value === 'member-offerings') {
+    return validateDateRange(memberFilters.start, memberFilters.end);
+  }
+
+  return '';
+}
+
+function validateDateRange(start: string, end: string) {
+  if (start && end && end < start) {
+    return 'End date cannot be before start date.';
+  }
+  return '';
 }
 
 function exportCsv(filename: string, headers: string[], rows: Array<Array<string | number | undefined>>) {
