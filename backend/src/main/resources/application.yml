@@ -14,6 +14,8 @@ management:
         include: health
 
 church:
+  fiscal-year:
+    start-month: ${CHURCH_FISCAL_YEAR_START_MONTH:1}
   information:
     name: ${CHURCH_NAME:church name --- IGNORE ---}
     address: ${CHURCH_ADDRESS:church address --- IGNORE ---}
