@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="com.church.operation.service.FinancialTransactionServiceTest" time="0.043" tests="11" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="com.church.operation.service.ReportServiceTest" time="0.07" tests="11" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="25"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -56,15 +56,15 @@
     <property name="sun.io.unicode.encoding" value="UnicodeBig"/>
     <property name="java.class.version" value="69.0"/>
   </properties>
-  <testcase name="hidesCancelledOfferingIncomeFromFinanceList" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.03"/>
-  <testcase name="rejectsUnknownCategory" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="softDeletesManualExpense" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="rejectsViewerCreatingExpense" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="rejectsMissingTransactionDate" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="updatesManualExpense" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="rejectsDeleteForOfferingGeneratedIncome" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="rejectsUpdateForOfferingGeneratedIncome" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="treasurerCreatesManualExpense" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.002"/>
-  <testcase name="rejectsExpenseSubCategoryOutsideSelectedCategory" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
-  <testcase name="viewerCanListTransactionsReadOnly" classname="com.church.operation.service.FinancialTransactionServiceTest" time="0.001"/>
+  <testcase name="financialReportUsesActiveTransactionsWithinFiscalYearRange" classname="com.church.operation.service.ReportServiceTest" time="0.054"/>
+  <testcase name="financialReportRejectsInvalidFiscalYear" classname="com.church.operation.service.ReportServiceTest" time="0.0"/>
+  <testcase name="weeklyOfferingReportGroupsActiveOfferings" classname="com.church.operation.service.ReportServiceTest" time="0.002"/>
+  <testcase name="financialReportIncludesActualsWithoutMatchingBudgetRows" classname="com.church.operation.service.ReportServiceTest" time="0.001"/>
+  <testcase name="taxReportUsesCalendarYearRangeArguments" classname="com.church.operation.service.ReportServiceTest" time="0.002"/>
+  <testcase name="viewerCannotExtractOfficialTaxReport" classname="com.church.operation.service.ReportServiceTest" time="0.001"/>
+  <testcase name="financialReportUsesConfiguredFiscalYearRange" classname="com.church.operation.service.ReportServiceTest" time="0.001"/>
+  <testcase name="financialReportIncludesCarryOverBudget" classname="com.church.operation.service.ReportServiceTest" time="0.001"/>
+  <testcase name="taxReportRejectsInvalidTaxYear" classname="com.church.operation.service.ReportServiceTest" time="0.0"/>
+  <testcase name="taxReportUsesCalendarYearRange" classname="com.church.operation.service.ReportServiceTest" time="0.002"/>
+  <testcase name="memberSummaryExcludesAnonymousAndGroupOfferings" classname="com.church.operation.service.ReportServiceTest" time="0.002"/>
 </testsuite>

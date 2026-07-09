@@ -6,7 +6,7 @@
   - `backend/src/test/java/com/church/operation/service/ReportServiceTest.java`
   - `frontend/src/views/ReportsView.vue`
   - `frontend/src/views/ReportsView.test.ts`
-- Commit hash: `32330de83becd169e22579428b6bf39003bb7052`
+- Commit hash: `1a14cf8243ce29f95d6f6f6efd1e57cc6ce3c5ea`
 
 ### Commands and results
 
