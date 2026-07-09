@@ -1,0 +1,334 @@
+package com.church.operation.service;
+
+import com.church.operation.config.ChurchInformationProperties;
+import com.church.operation.config.FiscalYearProperties;
+import com.church.operation.dto.FinancialBudgetReportRow;
+import com.church.operation.dto.MemberOfferingSummaryReportRow;
+import com.church.operation.dto.OfficialTaxReportRow;
+import com.church.operation.dto.WeeklyOfferingReportRow;
+import com.church.operation.entity.Address;
+import com.church.operation.entity.Budget;
+import com.church.operation.entity.FinancialTransaction;
+import com.church.operation.entity.Member;
+import com.church.operation.entity.Offering;
+import com.church.operation.repo.BudgetRepository;
+import com.church.operation.repo.FinancialTransactionRepository;
+import com.church.operation.repo.MemberRepository;
+import com.church.operation.repo.OfferingRepository;
+import com.church.operation.util.BudgetType;
+import com.church.operation.util.FinancialSourceType;
+import com.church.operation.util.FinancialTransactionType;
+import com.church.operation.util.GivingType;
+import com.church.operation.util.Role;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
+
+@Service
+public class ReportService {
+    private final OfferingRepository offeringRepository;
+    private final MemberRepository memberRepository;
+    private final FinancialTransactionRepository financialTransactionRepository;
+    private final BudgetRepository budgetRepository;
+    private final ChurchInformationProperties churchInformationProperties;
+    private final FiscalYearProperties fiscalYearProperties;
+
+    public ReportService(
+        OfferingRepository offeringRepository,
+        MemberRepository memberRepository,
+        FinancialTransactionRepository financialTransactionRepository,
+        BudgetRepository budgetRepository,
+        ChurchInformationProperties churchInformationProperties,
+        FiscalYearProperties fiscalYearProperties
+    ) {
+        this.offeringRepository = offeringRepository;
+        this.memberRepository = memberRepository;
+        this.financialTransactionRepository = financialTransactionRepository;
+        this.budgetRepository = budgetRepository;
+        this.churchInformationProperties = churchInformationProperties;
+        this.fiscalYearProperties = fiscalYearProperties;
+    }
+
+    public List<WeeklyOfferingReportRow> weeklyOfferings(
+        Member actor,
+        LocalDate start,
+        LocalDate end,
+        String fundCategory,
+        String paymentMethod
+    ) {
+        requireReportAccess(actor);
+        validateRange(start, end);
+
+        Map<WeeklyOfferingKey, Summary> grouped = new LinkedHashMap<>();
+        for (Offering offering : offeringRepository.findByDeletedFalseAndOfferingSundayBetweenOrderByOfferingSundayAscFundCategoryAscPaymentMethodAsc(start, end)) {
+            if (!matches(offering.getFundCategory(), fundCategory) || !matches(offering.getPaymentMethod(), paymentMethod)) {
+                continue;
+            }
+
+            WeeklyOfferingKey key = new WeeklyOfferingKey(
+                offering.getOfferingSunday(),
+                offering.getFundCategory(),
+                offering.getGivingType(),
+                offering.getPaymentMethod()
+            );
+            grouped.computeIfAbsent(key, ignored -> new Summary()).add(offering.getAmount());
+        }
+
+        return grouped.entrySet().stream()
+            .map(entry -> new WeeklyOfferingReportRow(
+                entry.getKey().offeringSunday(),
+                entry.getKey().fundCategory(),
+                entry.getKey().givingType(),
+                entry.getKey().paymentMethod(),
+                entry.getValue().count(),
+                entry.getValue().total()
+            ))
+            .toList();
+    }
+
+    public List<MemberOfferingSummaryReportRow> memberOfferings(
+        Member actor,
+        LocalDate start,
+        LocalDate end,
+        String memberId,
+        String fundCategory
+    ) {
+        requireReportAccess(actor);
+        validateRange(start, end);
+
+        Map<String, Member> membersById = new LinkedHashMap<>();
+        for (Member member : memberRepository.findAll()) {
+            membersById.put(member.getId(), member);
+        }
+
+        Map<MemberOfferingKey, Summary> grouped = new LinkedHashMap<>();
+        for (Offering offering : offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(start, end)) {
+            if (offering.getGivingType() != GivingType.MEMBER) {
+                continue;
+            }
+            if (!matches(offering.getMemberId(), memberId) || !matches(offering.getFundCategory(), fundCategory)) {
+                continue;
+            }
+
+            Member member = membersById.get(offering.getMemberId());
+            String memberName = member != null && member.getDisplayName() != null ? member.getDisplayName() : offering.getGiverDisplayName();
+            String primaryEmail = member != null ? member.getPrimaryEmail() : null;
+            String offeringNumber = member != null ? member.getOfferingNumber() : null;
+            MemberOfferingKey key = new MemberOfferingKey(
+                offering.getMemberId(),
+                memberName,
+                primaryEmail,
+                offeringNumber,
+                offering.getFundCategory()
+            );
+            grouped.computeIfAbsent(key, ignored -> new Summary()).add(offering.getAmount());
+        }
+
+        return grouped.entrySet().stream()
+            .map(entry -> new MemberOfferingSummaryReportRow(
+                entry.getKey().memberId(),
+                entry.getKey().memberName(),
+                entry.getKey().primaryEmail(),
+                entry.getKey().offeringNumber(),
+                entry.getKey().fundCategory(),
+                entry.getValue().count(),
+                entry.getValue().total()
+            ))
+            .toList();
+    }
+
+    public List<OfficialTaxReportRow> officialTaxReturn(Member actor, int taxYear, String memberId) {
+        requireTaxAccess(actor);
+
+        LocalDate start = LocalDate.of(taxYear, 1, 1);
+        LocalDate end = LocalDate.of(taxYear, 12, 31);
+        Map<String, Member> membersById = new LinkedHashMap<>();
+        for (Member member : memberRepository.findAll()) {
+            membersById.put(member.getId(), member);
+        }
+
+        ChurchInformationProperties.Information information = churchInformationProperties.information();
+        return offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(start, end).stream()
+            .filter(offering -> offering.getGivingType() == GivingType.MEMBER)
+            .filter(offering -> matches(offering.getMemberId(), memberId))
+            .map(offering -> {
+                Member member = membersById.get(offering.getMemberId());
+                String memberName = member != null && member.getDisplayName() != null ? member.getDisplayName() : offering.getGiverDisplayName();
+                return new OfficialTaxReportRow(
+                    information.name(),
+                    information.address(),
+                    information.contactInfo(),
+                    information.treasurerName(),
+                    taxYear,
+                    offering.getMemberId(),
+                    memberName,
+                    member != null ? member.getPrimaryEmail() : null,
+                    member != null ? member.getOfferingNumber() : null,
+                    member != null ? formatAddress(member.getMailingAddress()) : null,
+                    offering.getOfferingDate(),
+                    offering.getFundCategory(),
+                    offering.getAmount()
+                );
+            })
+            .toList();
+    }
+
+    public List<FinancialBudgetReportRow> financialBudget(Member actor, int fiscalYear) {
+        requireReportAccess(actor);
+
+        LocalDate start = LocalDate.of(fiscalYear, fiscalYearProperties.startMonth(), 1);
+        LocalDate end = start.plusYears(1).minusDays(1);
+        List<Budget> budgets = budgetRepository.findActiveByFiscalYear(fiscalYear);
+        List<FinancialTransaction> transactions = financialTransactionRepository.findActiveByTransactionDateBetween(start, end);
+
+        Map<BudgetActualKey, BigDecimal> actuals = new LinkedHashMap<>();
+        for (FinancialTransaction transaction : transactions) {
+            if (transaction.getAmount() == null || transaction.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            BudgetType budgetType = mapBudgetType(transaction);
+            if (budgetType == null) {
+                continue;
+            }
+
+            BudgetActualKey key = new BudgetActualKey(budgetType, transaction.getCategory(), transaction.getSubCategory());
+            actuals.merge(key, transaction.getAmount(), BigDecimal::add);
+        }
+
+        return budgets.stream()
+            .sorted(Comparator
+                .comparing(Budget::getBudgetType)
+                .thenComparing(Budget::getCategory, Comparator.nullsFirst(String::compareTo))
+                .thenComparing(Budget::getSubCategory, Comparator.nullsFirst(String::compareTo)))
+            .map(budget -> {
+                BigDecimal planned = budget.getBudget() != null ? budget.getBudget() : BigDecimal.ZERO;
+                BigDecimal actual = budget.getBudgetType() == BudgetType.CARRY_OVER
+                    ? BigDecimal.ZERO
+                    : actuals.getOrDefault(
+                        new BudgetActualKey(budget.getBudgetType(), budget.getCategory(), budget.getSubCategory()),
+                        BigDecimal.ZERO
+                    );
+                return new FinancialBudgetReportRow(
+                    fiscalYear,
+                    budget.getBudgetType(),
+                    budget.getCategory(),
+                    budget.getSubCategory(),
+                    planned,
+                    actual,
+                    actual.subtract(planned)
+                );
+            })
+            .toList();
+    }
+
+    private BudgetType mapBudgetType(FinancialTransaction transaction) {
+        if (transaction.getType() == FinancialTransactionType.INCOME) {
+            return transaction.getSourceType() == FinancialSourceType.OFFERING ? BudgetType.OFFERING_INCOME : null;
+        }
+        if (transaction.getType() == FinancialTransactionType.EXPENSE) {
+            return BudgetType.EXPENSE;
+        }
+        return null;
+    }
+
+    private void requireReportAccess(Member actor) {
+        if (hasAnyRole(actor, Role.ADMIN, Role.TREASURER, Role.PASTOR, Role.VIEWER)) {
+            return;
+        }
+        throw new SecurityException("You do not have permission to view reports.");
+    }
+
+    private void requireTaxAccess(Member actor) {
+        if (hasAnyRole(actor, Role.ADMIN, Role.TREASURER)) {
+            return;
+        }
+        throw new SecurityException("You do not have permission to extract official tax reports.");
+    }
+
+    private boolean hasAnyRole(Member actor, Role... roles) {
+        if (actor == null || actor.getRoles() == null) {
+            return false;
+        }
+        for (Role role : roles) {
+            if (actor.getRoles().contains(role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void validateRange(LocalDate start, LocalDate end) {
+        if (start == null || end == null || end.isBefore(start)) {
+            throw new IllegalArgumentException("A valid date range is required.");
+        }
+    }
+
+    private boolean matches(String value, String filter) {
+        return filter == null || filter.isBlank() || Objects.equals(value, filter);
+    }
+
+    private String formatAddress(Address address) {
+        if (address == null) {
+            return null;
+        }
+        return Stream.of(
+                address.addressLine1(),
+                address.addressLine2(),
+                address.city(),
+                address.provinceState(),
+                address.postalZipCode(),
+                address.country()
+            )
+            .filter(value -> value != null && !value.isBlank())
+            .reduce((left, right) -> left + ", " + right)
+            .orElse(null);
+    }
+
+    private record WeeklyOfferingKey(
+        LocalDate offeringSunday,
+        String fundCategory,
+        GivingType givingType,
+        String paymentMethod
+    ) {
+    }
+
+    private record MemberOfferingKey(
+        String memberId,
+        String memberName,
+        String primaryEmail,
+        String offeringNumber,
+        String fundCategory
+    ) {
+    }
+
+    private record BudgetActualKey(BudgetType budgetType, String category, String subCategory) {
+    }
+
+    private static final class Summary {
+        private long count;
+        private BigDecimal total = BigDecimal.ZERO;
+
+        void add(BigDecimal amount) {
+            count++;
+            if (amount != null) {
+                total = total.add(amount);
+            }
+        }
+
+        long count() {
+            return count;
+        }
+
+        BigDecimal total() {
+            return total;
+        }
+    }
+}
