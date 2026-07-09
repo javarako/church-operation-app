@@ -10,6 +10,7 @@ This slice includes:
 
 - Budget list API and Vue screen.
 - Fiscal year selector.
+- One carry-over amount row from the previous fiscal year.
 - Offering income budgets by offering fund/category.
 - Expense budgets by financial category and optional financial sub-category.
 - Budget field named `budget`.
@@ -17,7 +18,7 @@ This slice includes:
 - Same list/detail editing pattern as Members, Offerings, and Finance: clicking a row loads it into the form and highlights it.
 - Trash-bin icon for budget delete.
 - Reference-data validation for offering fund/category, financial category, and financial sub-category.
-- Duplicate protection for fiscal year, budget type, category, and sub-category.
+- Duplicate protection for fiscal year, budget type, category, and sub-category, including only one carry-over row per fiscal year.
 
 This slice does not include:
 
@@ -55,7 +56,7 @@ Fields:
 
 - `id`
 - `fiscalYear`
-- `budgetType`: `OFFERING_INCOME` or `EXPENSE`
+- `budgetType`: `CARRY_OVER`, `OFFERING_INCOME`, or `EXPENSE`
 - `category`
 - `subCategory`
 - `budget`
@@ -73,11 +74,12 @@ Validation:
 - Fiscal year is required and must be reasonable for planning, using `2000` to `2100`.
 - Budget type is required.
 - Budget must be zero or greater.
-- Category is required.
+- For `CARRY_OVER`, category and sub-category are ignored. Only one active carry-over row is allowed per fiscal year.
+- For `OFFERING_INCOME` and `EXPENSE`, category is required.
 - For `OFFERING_INCOME`, category must match active `OFFERING_FUND_CATEGORY` reference data, and sub-category is ignored.
 - For `EXPENSE`, category must match active `FINANCIAL_CATEGORY` reference data.
 - For `EXPENSE`, sub-category is optional, but when present it must match active `FINANCIAL_SUB_CATEGORY` with `parentCode` equal to the selected category.
-- Active budgets must be unique by fiscal year, budget type, category, and sub-category.
+- Active offering and expense budgets must be unique by fiscal year, budget type, category, and sub-category.
 
 ## Backend Flow
 
@@ -102,7 +104,7 @@ Returns non-deleted budgets for the selected fiscal year.
 
 `POST /api/budgets`
 
-Creates an offering income or expense budget.
+Creates a carry-over, offering income, or expense budget.
 
 ### Update Budget
 
@@ -145,9 +147,10 @@ Table columns:
 
 Form behavior:
 
-- Budget type dropdown: `Offering income` or `Expense`.
+- Budget type dropdown: `Carry over`, `Offering income`, or `Expense`.
 - Fiscal year numeric input.
 - Budget numeric input.
+- For `CARRY_OVER`, category and sub-category controls are hidden or disabled, and the row represents the amount carried over from the previous fiscal year.
 - For `OFFERING_INCOME`, category dropdown loads active `OFFERING_FUND_CATEGORY`.
 - For `EXPENSE`, category dropdown loads active `FINANCIAL_CATEGORY`.
 - For `EXPENSE`, sub-category dropdown loads active `FINANCIAL_SUB_CATEGORY?parentCode=<category>` after a category is selected.
@@ -160,6 +163,7 @@ Backend tests:
 
 - Admin/Treasurer can list budgets for a fiscal year.
 - Viewer cannot maintain budgets.
+- Carry-over budget allows one active row per fiscal year.
 - Offering income budget validates active offering fund/category.
 - Expense budget validates active financial category.
 - Expense budget rejects a sub-category outside the selected category.
