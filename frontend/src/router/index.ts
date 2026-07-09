@@ -5,6 +5,7 @@ import LoginView from '../views/LoginView.vue';
 import ChangePasswordView from '../views/ChangePasswordView.vue';
 import DashboardView from '../views/DashboardView.vue';
 import FinanceView from '../views/FinanceView.vue';
+import BudgetsView from '../views/BudgetsView.vue';
 import MembersView from '../views/MembersView.vue';
 import OfferingsView from '../views/OfferingsView.vue';
 import ProfileView from '../views/ProfileView.vue';
@@ -22,7 +23,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/members', component: MembersView, meta: { roles: membershipRoles } },
   { path: '/offerings', component: OfferingsView, meta: { roles: financeRoles } },
   { path: '/finance', component: FinanceView, meta: { roles: financeRoles } },
-  { path: '/budgets', component: protectedPlaceholder, props: { title: 'Budgets' }, meta: { roles: financeRoles } },
+  { path: '/budgets', component: BudgetsView, meta: { roles: financeRoles } },
   { path: '/reference-data', component: ReferenceDataView, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
   { path: '/reports', component: protectedPlaceholder, props: { title: 'Reports' }, meta: { roles: reportRoles } },
   { path: '/profile', component: ProfileView, meta: { roles: selfServiceRoles } },
