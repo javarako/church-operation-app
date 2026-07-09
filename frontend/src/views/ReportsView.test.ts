@@ -103,13 +103,17 @@ describe('ReportsView', () => {
 
     expect(weeklyTab.getAttribute('aria-selected')).toBe('true');
     expect(weeklyTab.classList.contains('active-report-tab')).toBe(true);
+    expect(weeklyTab.classList.contains('inactive-report-tab')).toBe(false);
     expect(taxTab.getAttribute('aria-selected')).toBe('false');
+    expect(taxTab.classList.contains('inactive-report-tab')).toBe(true);
 
     await fireEvent.click(taxTab);
 
     expect(taxTab.getAttribute('aria-selected')).toBe('true');
     expect(taxTab.classList.contains('active-report-tab')).toBe(true);
+    expect(taxTab.classList.contains('inactive-report-tab')).toBe(false);
     expect(weeklyTab.getAttribute('aria-selected')).toBe('false');
+    expect(weeklyTab.classList.contains('inactive-report-tab')).toBe(true);
   });
 
   it('uses reference data dropdowns for weekly fund and payment filters', async () => {

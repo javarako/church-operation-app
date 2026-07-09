@@ -17,7 +17,6 @@
           />
           <select v-model="filters.budgetType">
             <option value="">All types</option>
-            <option value="CARRY_OVER">Carry over</option>
             <option value="OFFERING_INCOME">Offering income</option>
             <option value="EXPENSE">Expense</option>
           </select>
@@ -76,7 +75,6 @@
         <label>
           Budget type
           <select v-model="form.budgetType" @change="handleBudgetTypeChange">
-            <option value="CARRY_OVER">Carry over</option>
             <option value="OFFERING_INCOME">Offering income</option>
             <option value="EXPENSE">Expense</option>
           </select>
@@ -167,7 +165,7 @@ const filters = reactive({
 });
 
 const form = reactive<BudgetForm>({
-  budgetType: 'CARRY_OVER',
+  budgetType: 'OFFERING_INCOME',
   fiscalYear: currentYear,
   category: '',
   subCategory: '',
@@ -342,7 +340,7 @@ function resetForm() {
   formError.value = '';
   savedMessage.value = '';
   editingBudgetId.value = '';
-  form.budgetType = 'CARRY_OVER';
+  form.budgetType = 'OFFERING_INCOME';
   form.fiscalYear = selectedFiscalYear.value;
   form.category = '';
   form.subCategory = '';

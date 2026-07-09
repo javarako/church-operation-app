@@ -15,7 +15,10 @@
           type="button"
           role="tab"
           :aria-selected="report.id === activeVisibleReportId"
-          :class="{ secondary: report.id !== activeVisibleReportId, 'active-report-tab': report.id === activeVisibleReportId }"
+          :class="{
+            'active-report-tab': report.id === activeVisibleReportId,
+            'inactive-report-tab': report.id !== activeVisibleReportId,
+          }"
           @click="selectTab(report.id)"
         >
           {{ report.label }}
@@ -596,6 +599,12 @@ function startOfYear(value: Date) {
 .reports-toolbar button.active-report-tab {
   background: #22577a;
   color: white;
+}
+
+.reports-toolbar button.inactive-report-tab {
+  border: 1px solid #c8d0d9;
+  background: white;
+  color: #22577a;
 }
 
 .reports-header {
