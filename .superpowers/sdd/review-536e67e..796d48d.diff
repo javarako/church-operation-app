@@ -1,0 +1,97 @@
+# Review package: 536e67e..796d48d
+
+## Commits
+796d48d Add frontend budgets API and route
+
+## Files changed
+ frontend/src/api/budgets.ts  | 38 ++++++++++++++++++++++++++++++++++++++
+ frontend/src/router/index.ts |  3 ++-
+ 2 files changed, 40 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/frontend/src/api/budgets.ts b/frontend/src/api/budgets.ts
+new file mode 100644
+index 0000000..b4b5dc4
+--- /dev/null
++++ b/frontend/src/api/budgets.ts
+@@ -0,0 +1,38 @@
++import { deleteJson, getJson, postJson, putJson } from './http';
++
++export type BudgetType = 'CARRY_OVER' | 'OFFERING_INCOME' | 'EXPENSE';
++
++export interface Budget {
++  id: string;
++  fiscalYear: number;
++  budgetType: BudgetType;
++  category?: string;
++  subCategory?: string;
++  budget: number;
++  memo?: string;
++}
++
++export interface BudgetPayload {
++  fiscalYear: number;
++  budgetType: BudgetType;
++  category?: string;
++  subCategory?: string;
++  budget: number;
++  memo?: string;
++}
++
++export function listBudgets(fiscalYear: number) {
++  return getJson<Budget[]>(`/api/budgets?fiscalYear=${encodeURIComponent(String(fiscalYear))}`);
++}
++
++export function createBudget(payload: BudgetPayload) {
++  return postJson<BudgetPayload, Budget>('/api/budgets', payload);
++}
++
++export function updateBudget(id: string, payload: BudgetPayload) {
++  return putJson<BudgetPayload, Budget>(`/api/budgets/${id}`, payload);
++}
++
++export function deleteBudget(id: string) {
++  return deleteJson<Budget>(`/api/budgets/${id}`);
++}
+diff --git a/frontend/src/router/index.ts b/frontend/src/router/index.ts
+index f06d0dc..41cbd79 100644
+--- a/frontend/src/router/index.ts
++++ b/frontend/src/router/index.ts
+@@ -1,35 +1,36 @@
+ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+ import { authState, canAccessRoute, type Role } from '../auth/authStore';
+ import { financeRoles, membershipRoles, reportRoles, selfServiceRoles, staffRoles } from '../auth/roles';
+ import LoginView from '../views/LoginView.vue';
+ import ChangePasswordView from '../views/ChangePasswordView.vue';
+ import DashboardView from '../views/DashboardView.vue';
+ import FinanceView from '../views/FinanceView.vue';
++import BudgetsView from '../views/BudgetsView.vue';
+ import MembersView from '../views/MembersView.vue';
+ import OfferingsView from '../views/OfferingsView.vue';
+ import ProfileView from '../views/ProfileView.vue';
+ import ReferenceDataView from '../views/ReferenceDataView.vue';
+ 
+ const protectedPlaceholder = {
+   template: '<section><h2>{{ title }}</h2></section>',
+   props: ['title'],
+ };
+ 
+ const routes: RouteRecordRaw[] = [
+   { path: '/login', component: LoginView },
+   { path: '/change-password', component: ChangePasswordView },
+   { path: '/', component: DashboardView, meta: { roles: staffRoles } },
+   { path: '/members', component: MembersView, meta: { roles: membershipRoles } },
+   { path: '/offerings', component: OfferingsView, meta: { roles: financeRoles } },
+   { path: '/finance', component: FinanceView, meta: { roles: financeRoles } },
+-  { path: '/budgets', component: protectedPlaceholder, props: { title: 'Budgets' }, meta: { roles: financeRoles } },
++  { path: '/budgets', component: BudgetsView, meta: { roles: financeRoles } },
+   { path: '/reference-data', component: ReferenceDataView, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
+   { path: '/reports', component: protectedPlaceholder, props: { title: 'Reports' }, meta: { roles: reportRoles } },
+   { path: '/profile', component: ProfileView, meta: { roles: selfServiceRoles } },
+ ];
+ 
+ export const router = createRouter({
+   history: createWebHistory(),
+   routes,
+ });
+ 

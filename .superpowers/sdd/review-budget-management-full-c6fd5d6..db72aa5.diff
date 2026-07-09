@@ -1,0 +1,1103 @@
+# Review package: c6fd5d6..db72aa5
+
+## Commits
+db72aa5 Add budget management view
+796d48d Add frontend budgets API and route
+536e67e Add budget REST controller
+db2c8f5 Add budget service
+ef030d5 Add budget DTOs and service tests
+7181f0e Add budget domain model
+
+## Files changed
+ .superpowers/sdd/task-1-report.md                  |  13 +
+ .../com/church/operation/dto/BudgetRequest.java    |  15 +
+ .../com/church/operation/dto/BudgetResponse.java   |  37 ++
+ .../java/com/church/operation/entity/Budget.java   |  57 +++
+ .../church/operation/repo/BudgetRepository.java    |  19 +
+ .../church/operation/rest/BudgetController.java    |  54 +++
+ .../church/operation/service/BudgetService.java    | 185 ++++++++++
+ .../java/com/church/operation/util/BudgetType.java |   7 +
+ .../operation/service/BudgetServiceTest.java       | 160 +++++++++
+ frontend/src/api/budgets.ts                        |  38 ++
+ frontend/src/router/index.ts                       |   3 +-
+ frontend/src/views/BudgetsView.vue                 | 384 +++++++++++++++++++++
+ 12 files changed, 971 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/.superpowers/sdd/task-1-report.md b/.superpowers/sdd/task-1-report.md
+new file mode 100644
+index 0000000..3ab9ffe
+--- /dev/null
++++ b/.superpowers/sdd/task-1-report.md
+@@ -0,0 +1,13 @@
++# Task 1 Report: Add Budget Domain Model
++
++## Completed
++- Added `BudgetType` with the required values: `CARRY_OVER`, `OFFERING_INCOME`, `EXPENSE`.
++- Added `Budget` in `com.church.operation.entity` with the required fields and standard getters/setters.
++- Added `BudgetRepository` with the three required Mongo query methods.
++
++## Verification
++- Ran: `cd backend && mvn test -DskipTests`
++- Result: `BUILD SUCCESS`
++
++## Notes
++- No concerns.
+diff --git a/backend/src/main/java/com/church/operation/dto/BudgetRequest.java b/backend/src/main/java/com/church/operation/dto/BudgetRequest.java
+new file mode 100644
+index 0000000..d88c063
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/dto/BudgetRequest.java
+@@ -0,0 +1,15 @@
++package com.church.operation.dto;
++
++import com.church.operation.util.BudgetType;
++
++import java.math.BigDecimal;
++
++public record BudgetRequest(
++    int fiscalYear,
++    BudgetType budgetType,
++    String category,
++    String subCategory,
++    BigDecimal budget,
++    String memo
++) {
++}
+diff --git a/backend/src/main/java/com/church/operation/dto/BudgetResponse.java b/backend/src/main/java/com/church/operation/dto/BudgetResponse.java
+new file mode 100644
+index 0000000..d3a6a35
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/dto/BudgetResponse.java
+@@ -0,0 +1,37 @@
++package com.church.operation.dto;
++
++import com.church.operation.entity.Budget;
++import com.church.operation.util.BudgetType;
++
++import java.math.BigDecimal;
++import java.time.Instant;
++
++public record BudgetResponse(
++    String id,
++    int fiscalYear,
++    BudgetType budgetType,
++    String category,
++    String subCategory,
++    BigDecimal budget,
++    String memo,
++    String createdBy,
++    Instant createdAt,
++    String updatedBy,
++    Instant updatedAt
++) {
++    public static BudgetResponse from(Budget budget) {
++        return new BudgetResponse(
++            budget.getId(),
++            budget.getFiscalYear(),
++            budget.getBudgetType(),
++            budget.getCategory(),
++            budget.getSubCategory(),
++            budget.getBudget(),
++            budget.getMemo(),
++            budget.getCreatedBy(),
++            budget.getCreatedAt(),
++            budget.getUpdatedBy(),
++            budget.getUpdatedAt()
++        );
++    }
++}
+diff --git a/backend/src/main/java/com/church/operation/entity/Budget.java b/backend/src/main/java/com/church/operation/entity/Budget.java
+new file mode 100644
+index 0000000..a2c5a62
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/entity/Budget.java
+@@ -0,0 +1,57 @@
++package com.church.operation.entity;
++
++import com.church.operation.util.BudgetType;
++import org.springframework.data.annotation.Id;
++import org.springframework.data.mongodb.core.mapping.Document;
++
++import java.math.BigDecimal;
++import java.time.Instant;
++
++@Document("budgets")
++public class Budget {
++    @Id
++    private String id;
++
++    private int fiscalYear;
++    private BudgetType budgetType;
++    private String category;
++    private String subCategory;
++    private BigDecimal budget;
++    private String memo;
++    private String createdBy;
++    private Instant createdAt;
++    private String updatedBy;
++    private Instant updatedAt;
++    private boolean deleted = false;
++    private String deletedBy;
++    private Instant deletedAt;
++
++    public String getId() { return id; }
++    public void setId(String id) { this.id = id; }
++    public int getFiscalYear() { return fiscalYear; }
++    public void setFiscalYear(int fiscalYear) { this.fiscalYear = fiscalYear; }
++    public BudgetType getBudgetType() { return budgetType; }
++    public void setBudgetType(BudgetType budgetType) { this.budgetType = budgetType; }
++    public String getCategory() { return category; }
++    public void setCategory(String category) { this.category = category; }
++    public String getSubCategory() { return subCategory; }
++    public void setSubCategory(String subCategory) { this.subCategory = subCategory; }
++    public BigDecimal getBudget() { return budget; }
++    public void setBudget(BigDecimal budget) { this.budget = budget; }
++    public String getMemo() { return memo; }
++    public void setMemo(String memo) { this.memo = memo; }
++    public String getCreatedBy() { return createdBy; }
++    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
++    public Instant getCreatedAt() { return createdAt; }
++    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
++    public String getUpdatedBy() { return updatedBy; }
++    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
++    public Instant getUpdatedAt() { return updatedAt; }
++    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
++    public boolean isDeleted() { return deleted; }
++    public void setDeleted(boolean deleted) { this.deleted = deleted; }
++    public String getDeletedBy() { return deletedBy; }
++    public void setDeletedBy(String deletedBy) { this.deletedBy = deletedBy; }
++    public Instant getDeletedAt() { return deletedAt; }
++    public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
++}
+diff --git a/backend/src/main/java/com/church/operation/repo/BudgetRepository.java b/backend/src/main/java/com/church/operation/repo/BudgetRepository.java
+new file mode 100644
+index 0000000..eb23eb0
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/repo/BudgetRepository.java
+@@ -0,0 +1,19 @@
++package com.church.operation.repo;
++
++import com.church.operation.entity.Budget;
++import com.church.operation.util.BudgetType;
++import org.springframework.data.mongodb.repository.MongoRepository;
++import org.springframework.data.mongodb.repository.Query;
++
++import java.util.List;
++
++public interface BudgetRepository extends MongoRepository<Budget, String> {
++    @Query(value = "{ 'fiscalYear' : ?0, 'deleted' : { $ne : true } }", sort = "{ 'budgetType' : 1, 'category' : 1, 'subCategory' : 1 }")
++    List<Budget> findActiveByFiscalYear(int fiscalYear);
++
++    @Query("{ 'fiscalYear' : ?0, 'budgetType' : ?1, 'category' : ?2, 'subCategory' : ?3, 'deleted' : { $ne : true } }")
++    List<Budget> findActiveDuplicates(int fiscalYear, BudgetType budgetType, String category, String subCategory);
++
++    @Query("{ 'fiscalYear' : ?0, 'budgetType' : 'CARRY_OVER', 'deleted' : { $ne : true } }")
++    List<Budget> findActiveCarryOver(int fiscalYear);
++}
+diff --git a/backend/src/main/java/com/church/operation/rest/BudgetController.java b/backend/src/main/java/com/church/operation/rest/BudgetController.java
+new file mode 100644
+index 0000000..191df78
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/rest/BudgetController.java
+@@ -0,0 +1,54 @@
++package com.church.operation.rest;
++
++import com.church.operation.dto.BudgetRequest;
++import com.church.operation.dto.BudgetResponse;
++import com.church.operation.entity.Member;
++import com.church.operation.service.BudgetService;
++import org.springframework.security.core.Authentication;
++import org.springframework.web.bind.annotation.DeleteMapping;
++import org.springframework.web.bind.annotation.GetMapping;
++import org.springframework.web.bind.annotation.PathVariable;
++import org.springframework.web.bind.annotation.PostMapping;
++import org.springframework.web.bind.annotation.PutMapping;
++import org.springframework.web.bind.annotation.RequestBody;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RequestParam;
++import org.springframework.web.bind.annotation.RestController;
++
++import java.util.List;
++
++@RestController
++@RequestMapping("/api/budgets")
++public class BudgetController {
++    private final BudgetService budgetService;
++
++    public BudgetController(BudgetService budgetService) {
++        this.budgetService = budgetService;
++    }
++
++    @GetMapping
++    List<BudgetResponse> listBudgets(Authentication authentication, @RequestParam("fiscalYear") int fiscalYear) {
++        return budgetService.listBudgets(actor(authentication), fiscalYear).stream()
++            .map(BudgetResponse::from)
++            .toList();
++    }
++
++    @PostMapping
++    BudgetResponse createBudget(Authentication authentication, @RequestBody BudgetRequest request) {
++        return BudgetResponse.from(budgetService.createBudget(actor(authentication), request));
++    }
++
++    @PutMapping("/{id}")
++    BudgetResponse updateBudget(Authentication authentication, @PathVariable("id") String id, @RequestBody BudgetRequest request) {
++        return BudgetResponse.from(budgetService.updateBudget(actor(authentication), id, request));
++    }
++
++    @DeleteMapping("/{id}")
++    BudgetResponse deleteBudget(Authentication authentication, @PathVariable("id") String id) {
++        return BudgetResponse.from(budgetService.deleteBudget(actor(authentication), id));
++    }
++
++    private Member actor(Authentication authentication) {
++        return (Member) authentication.getPrincipal();
++    }
++}
+diff --git a/backend/src/main/java/com/church/operation/service/BudgetService.java b/backend/src/main/java/com/church/operation/service/BudgetService.java
+new file mode 100644
+index 0000000..8843d0f
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/service/BudgetService.java
+@@ -0,0 +1,185 @@
++package com.church.operation.service;
++
++import com.church.operation.dto.BudgetRequest;
++import com.church.operation.entity.Budget;
++import com.church.operation.entity.Member;
++import com.church.operation.entity.ReferenceData;
++import com.church.operation.repo.BudgetRepository;
++import com.church.operation.repo.ReferenceDataRepository;
++import com.church.operation.util.BudgetType;
++import com.church.operation.util.ReferenceDataType;
++import com.church.operation.util.Role;
++import org.springframework.stereotype.Service;
++
++import java.math.BigDecimal;
++import java.time.Instant;
++import java.util.List;
++import java.util.Locale;
++
++@Service
++public class BudgetService {
++    private final BudgetRepository budgetRepository;
++    private final ReferenceDataRepository referenceDataRepository;
++
++    public BudgetService(BudgetRepository budgetRepository, ReferenceDataRepository referenceDataRepository) {
++        this.budgetRepository = budgetRepository;
++        this.referenceDataRepository = referenceDataRepository;
++    }
++
++    public List<Budget> listBudgets(Member actor, int fiscalYear) {
++        requireBudgetAccess(actor);
++        validateFiscalYear(fiscalYear);
++        return budgetRepository.findActiveByFiscalYear(fiscalYear);
++    }
++
++    public Budget createBudget(Member actor, BudgetRequest request) {
++        requireBudgetAccess(actor);
++        validateRequest(request);
++
++        Budget budget = new Budget();
++        budget.setCreatedBy(actor.getId());
++        budget.setCreatedAt(Instant.now());
++        applyBudgetFields(budget, request);
++        return budgetRepository.save(budget);
++    }
++
++    public Budget updateBudget(Member actor, String id, BudgetRequest request) {
++        requireBudgetAccess(actor);
++        validateRequest(request);
++
++        Budget budget = findActiveBudget(id);
++        applyBudgetFields(budget, request);
++        budget.setUpdatedBy(actor.getId());
++        budget.setUpdatedAt(Instant.now());
++        return budgetRepository.save(budget);
++    }
++
++    public Budget deleteBudget(Member actor, String id) {
++        requireBudgetAccess(actor);
++        Budget budget = findActiveBudget(id);
++        budget.setDeleted(true);
++        budget.setDeletedBy(actor.getId());
++        budget.setDeletedAt(Instant.now());
++        return budgetRepository.save(budget);
++    }
++
++    private Budget findActiveBudget(String id) {
++        return budgetRepository.findById(id)
++            .filter(existing -> !existing.isDeleted())
++            .orElseThrow(() -> new IllegalArgumentException("Budget was not found."));
++    }
++
++    private void applyBudgetFields(Budget budget, BudgetRequest request) {
++        budget.setFiscalYear(request.fiscalYear());
++        budget.setBudgetType(request.budgetType());
++        budget.setBudget(request.budget());
++        budget.setMemo(trimToNull(request.memo()));
++
++        if (request.budgetType() == BudgetType.CARRY_OVER) {
++            budget.setCategory(null);
++            budget.setSubCategory(null);
++            ensureUniqueCarryOver(request.fiscalYear(), budget.getId());
++            return;
++        }
++
++        String normalizedCategory = normalizeCategory(request.category());
++        if (request.budgetType() == BudgetType.OFFERING_INCOME) {
++            referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, normalizedCategory)
++                .filter(ReferenceData::isActive)
++                .orElseThrow(() -> new IllegalArgumentException("Offering fund/category was not found."));
++            budget.setCategory(normalizedCategory);
++            budget.setSubCategory(null);
++            ensureUniqueBudget(request.fiscalYear(), BudgetType.OFFERING_INCOME, normalizedCategory, null, budget.getId());
++            return;
++        }
++
++        referenceDataRepository.findByTypeAndCode(ReferenceDataType.FINANCIAL_CATEGORY, normalizedCategory)
++            .filter(ReferenceData::isActive)
++            .orElseThrow(() -> new IllegalArgumentException("Financial category was not found."));
++        String normalizedSubCategory = normalizeSubCategory(normalizedCategory, request.subCategory());
++        budget.setCategory(normalizedCategory);
++        budget.setSubCategory(normalizedSubCategory);
++        ensureUniqueBudget(request.fiscalYear(), BudgetType.EXPENSE, normalizedCategory, normalizedSubCategory, budget.getId());
++    }
++
++    private void validateRequest(BudgetRequest request) {
++        validateFiscalYear(request.fiscalYear());
++        if (request.budgetType() == null) {
++            throw new IllegalArgumentException("Budget type is required.");
++        }
++        if (request.budget() == null || request.budget().compareTo(BigDecimal.ZERO) < 0) {
++            throw new IllegalArgumentException("Budget must be zero or greater.");
++        }
++        if (request.budgetType() != BudgetType.CARRY_OVER && trimToNull(request.category()) == null) {
++            throw new IllegalArgumentException("Budget category is required.");
++        }
++    }
++
++    private void validateFiscalYear(int fiscalYear) {
++        if (fiscalYear == 0) {
++            throw new IllegalArgumentException("Fiscal year is required.");
++        }
++        if (fiscalYear < 2000 || fiscalYear > 2100) {
++            throw new IllegalArgumentException("Fiscal year must be between 2000 and 2100.");
++        }
++    }
++
++    private String normalizeCategory(String category) {
++        String normalized = trimToNull(category);
++        if (normalized == null) {
++            throw new IllegalArgumentException("Budget category is required.");
++        }
++        return normalized.toUpperCase(Locale.ROOT);
++    }
++
++    private String normalizeSubCategory(String category, String subCategory) {
++        String normalized = trimToNull(subCategory);
++        if (normalized == null) {
++            return null;
++        }
++        String normalizedSubCategory = normalized.toUpperCase(Locale.ROOT);
++        referenceDataRepository.findByTypeAndCode(ReferenceDataType.FINANCIAL_SUB_CATEGORY, normalizedSubCategory)
++            .filter(ReferenceData::isActive)
++            .filter(referenceData -> category.equals(referenceData.getParentCode()))
++            .orElseThrow(() -> new IllegalArgumentException("Financial sub-category was not found for the selected category."));
++        return normalizedSubCategory;
++    }
++
++    private void ensureUniqueCarryOver(int fiscalYear, String currentBudgetId) {
++        boolean duplicateExists = budgetRepository.findActiveCarryOver(fiscalYear).stream()
++            .anyMatch(existing -> !sameBudget(existing.getId(), currentBudgetId));
++        if (duplicateExists) {
++            throw new IllegalArgumentException("Carry-over budget already exists for this fiscal year.");
++        }
++    }
++
++    private void ensureUniqueBudget(int fiscalYear, BudgetType budgetType, String category, String subCategory, String currentBudgetId) {
++        boolean duplicateExists = budgetRepository.findActiveDuplicates(fiscalYear, budgetType, category, subCategory).stream()
++            .anyMatch(existing -> !sameBudget(existing.getId(), currentBudgetId));
++        if (duplicateExists) {
++            throw new IllegalArgumentException("Budget already exists for this fiscal year and category.");
++        }
++    }
++
++    private boolean sameBudget(String leftId, String rightId) {
++        return leftId != null && leftId.equals(rightId);
++    }
++
++    private void requireBudgetAccess(Member actor) {
++        if (hasRole(actor, Role.ADMIN) || hasRole(actor, Role.TREASURER)) {
++            return;
++        }
++        throw new SecurityException("You do not have permission to manage budgets.");
++    }
++
++    private boolean hasRole(Member actor, Role role) {
++        return actor != null && actor.getRoles() != null && actor.getRoles().contains(role);
++    }
++
++    private String trimToNull(String value) {
++        if (value == null || value.trim().isEmpty()) {
++            return null;
++        }
++        return value.trim();
++    }
++}
+diff --git a/backend/src/main/java/com/church/operation/util/BudgetType.java b/backend/src/main/java/com/church/operation/util/BudgetType.java
+new file mode 100644
+index 0000000..de3ce94
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/util/BudgetType.java
+@@ -0,0 +1,7 @@
++package com.church.operation.util;
++
++public enum BudgetType {
++    CARRY_OVER,
++    OFFERING_INCOME,
++    EXPENSE
++}
+diff --git a/backend/src/test/java/com/church/operation/service/BudgetServiceTest.java b/backend/src/test/java/com/church/operation/service/BudgetServiceTest.java
+new file mode 100644
+index 0000000..fc1a5d0
+--- /dev/null
++++ b/backend/src/test/java/com/church/operation/service/BudgetServiceTest.java
+@@ -0,0 +1,160 @@
++package com.church.operation.service;
++
++import com.church.operation.dto.BudgetRequest;
++import com.church.operation.entity.Budget;
++import com.church.operation.entity.Member;
++import com.church.operation.entity.ReferenceData;
++import com.church.operation.repo.BudgetRepository;
++import com.church.operation.repo.ReferenceDataRepository;
++import com.church.operation.util.BudgetType;
++import com.church.operation.util.ReferenceDataType;
++import com.church.operation.util.Role;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.extension.ExtendWith;
++import org.mockito.Mock;
++import org.mockito.junit.jupiter.MockitoExtension;
++
++import java.math.BigDecimal;
++import java.time.Instant;
++import java.util.List;
++import java.util.Optional;
++import java.util.Set;
++
++import static org.assertj.core.api.Assertions.assertThat;
++import static org.assertj.core.api.Assertions.assertThatThrownBy;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.when;
++
++@ExtendWith(MockitoExtension.class)
++class BudgetServiceTest {
++    @Mock
++    private BudgetRepository budgetRepository;
++    @Mock
++    private ReferenceDataRepository referenceDataRepository;
++
++    @Test
++    void treasurerCreatesCarryOverBudget() {
++        Member actor = member("treasurer-id", Role.TREASURER);
++        when(budgetRepository.findActiveCarryOver(2026)).thenReturn(List.of());
++        when(budgetRepository.save(any(Budget.class))).thenAnswer(invocation -> invocation.getArgument(0));
++
++        Budget saved = service().createBudget(actor, request(2026, BudgetType.CARRY_OVER, null, null, "1500.00"));
++
++        assertThat(saved.getBudgetType()).isEqualTo(BudgetType.CARRY_OVER);
++        assertThat(saved.getCategory()).isNull();
++        assertThat(saved.getSubCategory()).isNull();
++        assertThat(saved.getBudget()).isEqualByComparingTo("1500.00");
++    }
++
++    @Test
++    void rejectsSecondCarryOverForFiscalYear() {
++        Member actor = member("treasurer-id", Role.TREASURER);
++        Budget existing = existingBudget("carry-1", BudgetType.CARRY_OVER, null, null);
++        when(budgetRepository.findActiveCarryOver(2026)).thenReturn(List.of(existing));
++
++        assertThatThrownBy(() -> service().createBudget(actor, request(2026, BudgetType.CARRY_OVER, null, null, "100.00")))
++            .isInstanceOf(IllegalArgumentException.class)
++            .hasMessage("Carry-over budget already exists for this fiscal year.");
++    }
++
++    @Test
++    void createsOfferingIncomeBudget() {
++        Member actor = member("admin-id", Role.ADMIN);
++        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
++            .thenReturn(Optional.of(activeReference(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE", null)));
++        when(budgetRepository.findActiveDuplicates(2026, BudgetType.OFFERING_INCOME, "TITHE", null)).thenReturn(List.of());
++        when(budgetRepository.save(any(Budget.class))).thenAnswer(invocation -> invocation.getArgument(0));
++
++        Budget saved = service().createBudget(actor, request(2026, BudgetType.OFFERING_INCOME, "TITHE", null, "50000.00"));
++
++        assertThat(saved.getCategory()).isEqualTo("TITHE");
++        assertThat(saved.getSubCategory()).isNull();
++    }
++
++    @Test
++    void createsExpenseBudgetWithFilteredSubCategory() {
++        Member actor = member("treasurer-id", Role.TREASURER);
++        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.FINANCIAL_CATEGORY, "OFFICE"))
++            .thenReturn(Optional.of(activeReference(ReferenceDataType.FINANCIAL_CATEGORY, "OFFICE", null)));
++        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.FINANCIAL_SUB_CATEGORY, "SUPPLIES"))
++            .thenReturn(Optional.of(activeReference(ReferenceDataType.FINANCIAL_SUB_CATEGORY, "SUPPLIES", "OFFICE")));
++        when(budgetRepository.findActiveDuplicates(2026, BudgetType.EXPENSE, "OFFICE", "SUPPLIES")).thenReturn(List.of());
++        when(budgetRepository.save(any(Budget.class))).thenAnswer(invocation -> invocation.getArgument(0));
++
++        Budget saved = service().createBudget(actor, request(2026, BudgetType.EXPENSE, "OFFICE", "SUPPLIES", "2500.00"));
++
++        assertThat(saved.getCategory()).isEqualTo("OFFICE");
++        assertThat(saved.getSubCategory()).isEqualTo("SUPPLIES");
++    }
++
++    @Test
++    void viewerCannotCreateBudget() {
++        Member actor = member("viewer-id", Role.VIEWER);
++
++        assertThatThrownBy(() -> service().createBudget(actor, request(2026, BudgetType.CARRY_OVER, null, null, "100.00")))
++            .isInstanceOf(SecurityException.class)
++            .hasMessage("You do not have permission to manage budgets.");
++    }
++
++    @Test
++    void rejectsDuplicateActiveBudget() {
++        Member actor = member("admin-id", Role.ADMIN);
++        Budget existing = existingBudget("budget-1", BudgetType.OFFERING_INCOME, "TITHE", null);
++        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
++            .thenReturn(Optional.of(activeReference(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE", null)));
++        when(budgetRepository.findActiveDuplicates(2026, BudgetType.OFFERING_INCOME, "TITHE", null)).thenReturn(List.of(existing));
++
++        assertThatThrownBy(() -> service().createBudget(actor, request(2026, BudgetType.OFFERING_INCOME, "TITHE", null, "100.00")))
++            .isInstanceOf(IllegalArgumentException.class)
++            .hasMessage("Budget already exists for this fiscal year and category.");
++    }
++
++    @Test
++    void softDeletesBudget() {
++        Member actor = member("admin-id", Role.ADMIN);
++        Budget existing = existingBudget("budget-1", BudgetType.EXPENSE, "OFFICE", "SUPPLIES");
++        when(budgetRepository.findById("budget-1")).thenReturn(Optional.of(existing));
++        when(budgetRepository.save(any(Budget.class))).thenAnswer(invocation -> invocation.getArgument(0));
++
++        Budget deleted = service().deleteBudget(actor, "budget-1");
++
++        assertThat(deleted.isDeleted()).isTrue();
++        assertThat(deleted.getDeletedBy()).isEqualTo("admin-id");
++        assertThat(deleted.getDeletedAt()).isNotNull();
++    }
++
++    private BudgetService service() {
++        return new BudgetService(budgetRepository, referenceDataRepository);
++    }
++
++    private BudgetRequest request(int fiscalYear, BudgetType budgetType, String category, String subCategory, String budget) {
++        return new BudgetRequest(fiscalYear, budgetType, category, subCategory, new BigDecimal(budget), "Annual budget");
++    }
++
++    private Budget existingBudget(String id, BudgetType budgetType, String category, String subCategory) {
++        Budget budget = new Budget();
++        budget.setId(id);
++        budget.setFiscalYear(2026);
++        budget.setBudgetType(budgetType);
++        budget.setCategory(category);
++        budget.setSubCategory(subCategory);
++        budget.setBudget(new BigDecimal("100.00"));
++        return budget;
++    }
++
++    private ReferenceData activeReference(ReferenceDataType type, String code, String parentCode) {
++        ReferenceData referenceData = new ReferenceData();
++        referenceData.setType(type);
++        referenceData.setCode(code);
++        referenceData.setParentCode(parentCode);
++        referenceData.setActive(true);
++        return referenceData;
++    }
++
++    private Member member(String id, Role role) {
++        Member member = new Member();
++        member.setId(id);
++        member.setRoles(Set.of(role));
++        return member;
++    }
++}
+diff --git a/frontend/src/api/budgets.ts b/frontend/src/api/budgets.ts
+new file mode 100644
+index 0000000..b4b5dc4
+--- /dev/null
++++ b/frontend/src/api/budgets.ts
+@@ -0,0 +1,38 @@
++import { deleteJson, getJson, postJson, putJson } from './http';
++
++export type BudgetType = 'CARRY_OVER' | 'OFFERING_INCOME' | 'EXPENSE';
++
++export interface Budget {
++  id: string;
++  fiscalYear: number;
++  budgetType: BudgetType;
++  category?: string;
++  subCategory?: string;
++  budget: number;
++  memo?: string;
++}
++
++export interface BudgetPayload {
++  fiscalYear: number;
++  budgetType: BudgetType;
++  category?: string;
++  subCategory?: string;
++  budget: number;
++  memo?: string;
++}
++
++export function listBudgets(fiscalYear: number) {
++  return getJson<Budget[]>(`/api/budgets?fiscalYear=${encodeURIComponent(String(fiscalYear))}`);
++}
++
++export function createBudget(payload: BudgetPayload) {
++  return postJson<BudgetPayload, Budget>('/api/budgets', payload);
++}
++
++export function updateBudget(id: string, payload: BudgetPayload) {
++  return putJson<BudgetPayload, Budget>(`/api/budgets/${id}`, payload);
++}
++
++export function deleteBudget(id: string) {
++  return deleteJson<Budget>(`/api/budgets/${id}`);
++}
+diff --git a/frontend/src/router/index.ts b/frontend/src/router/index.ts
+index f06d0dc..41cbd79 100644
+--- a/frontend/src/router/index.ts
++++ b/frontend/src/router/index.ts
+@@ -1,35 +1,36 @@
+ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+ import { authState, canAccessRoute, type Role } from '../auth/authStore';
+ import { financeRoles, membershipRoles, reportRoles, selfServiceRoles, staffRoles } from '../auth/roles';
+ import LoginView from '../views/LoginView.vue';
+ import ChangePasswordView from '../views/ChangePasswordView.vue';
+ import DashboardView from '../views/DashboardView.vue';
+ import FinanceView from '../views/FinanceView.vue';
++import BudgetsView from '../views/BudgetsView.vue';
+ import MembersView from '../views/MembersView.vue';
+ import OfferingsView from '../views/OfferingsView.vue';
+ import ProfileView from '../views/ProfileView.vue';
+ import ReferenceDataView from '../views/ReferenceDataView.vue';
+ 
+ const protectedPlaceholder = {
+   template: '<section><h2>{{ title }}</h2></section>',
+   props: ['title'],
+ };
+ 
+ const routes: RouteRecordRaw[] = [
+   { path: '/login', component: LoginView },
+   { path: '/change-password', component: ChangePasswordView },
+   { path: '/', component: DashboardView, meta: { roles: staffRoles } },
+   { path: '/members', component: MembersView, meta: { roles: membershipRoles } },
+   { path: '/offerings', component: OfferingsView, meta: { roles: financeRoles } },
+   { path: '/finance', component: FinanceView, meta: { roles: financeRoles } },
+-  { path: '/budgets', component: protectedPlaceholder, props: { title: 'Budgets' }, meta: { roles: financeRoles } },
++  { path: '/budgets', component: BudgetsView, meta: { roles: financeRoles } },
+   { path: '/reference-data', component: ReferenceDataView, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
+   { path: '/reports', component: protectedPlaceholder, props: { title: 'Reports' }, meta: { roles: reportRoles } },
+   { path: '/profile', component: ProfileView, meta: { roles: selfServiceRoles } },
+ ];
+ 
+ export const router = createRouter({
+   history: createWebHistory(),
+   routes,
+ });
+ 
+diff --git a/frontend/src/views/BudgetsView.vue b/frontend/src/views/BudgetsView.vue
+new file mode 100644
+index 0000000..d4eba3d
+--- /dev/null
++++ b/frontend/src/views/BudgetsView.vue
+@@ -0,0 +1,384 @@
++<template>
++  <section class="workspace">
++    <header class="page-header">
++      <h2>Budgets</h2>
++      <button type="button" @click="startCreate">Add budget</button>
++    </header>
++
++    <div class="two-column">
++      <section class="panel">
++        <div class="toolbar">
++          <input
++            v-model.number="selectedFiscalYear"
++            type="number"
++            min="2000"
++            max="2100"
++            @change="loadBudgets"
++          />
++          <select v-model="filters.budgetType">
++            <option value="">All types</option>
++            <option value="CARRY_OVER">Carry over</option>
++            <option value="OFFERING_INCOME">Offering income</option>
++            <option value="EXPENSE">Expense</option>
++          </select>
++          <button type="button" @click="loadBudgets">Refresh</button>
++        </div>
++
++        <p v-if="error" class="error">{{ error }}</p>
++
++        <div class="table-wrap">
++          <table>
++            <thead>
++              <tr>
++                <th>Type</th>
++                <th>Fiscal year</th>
++                <th>Category</th>
++                <th>Sub-category</th>
++                <th>Budget</th>
++                <th>Memo</th>
++                <th></th>
++              </tr>
++            </thead>
++            <tbody>
++              <tr
++                v-for="budget in filteredBudgets"
++                :key="budget.id"
++                :class="{ selected: editingBudgetId === budget.id }"
++                @click="selectBudget(budget)"
++              >
++                <td>{{ typeLabel(budget.budgetType) }}</td>
++                <td>{{ budget.fiscalYear }}</td>
++                <td>{{ labelForCategory(budget.budgetType, budget.category) }}</td>
++                <td>{{ labelForSubCategory(budget.subCategory) }}</td>
++                <td>{{ formatMoney(budget.budget) }}</td>
++                <td>{{ budget.memo || '-' }}</td>
++                <td class="row-actions">
++                  <button
++                    type="button"
++                    class="icon-button danger"
++                    title="Delete budget"
++                    aria-label="Delete budget"
++                    @click.stop="deleteSelectedBudget(budget)"
++                  >
++                    &#128465;
++                  </button>
++                </td>
++              </tr>
++            </tbody>
++          </table>
++        </div>
++      </section>
++
++      <form class="panel form-grid" @submit.prevent="saveBudget">
++        <h3>{{ editingBudgetId ? 'Budget Detail' : 'New Budget' }}</h3>
++        <p v-if="formError" class="error wide">{{ formError }}</p>
++
++        <label>
++          Budget type
++          <select v-model="form.budgetType" @change="handleBudgetTypeChange">
++            <option value="CARRY_OVER">Carry over</option>
++            <option value="OFFERING_INCOME">Offering income</option>
++            <option value="EXPENSE">Expense</option>
++          </select>
++        </label>
++
++        <label>
++          Fiscal year
++          <input v-model.number="form.fiscalYear" type="number" min="2000" max="2100" required />
++        </label>
++
++        <label>
++          Budget
++          <input v-model.number="form.budget" type="number" min="0" step="0.01" required />
++        </label>
++
++        <label v-if="showsCategory">
++          Category
++          <select v-model="form.category" :required="showsCategory" @change="handleCategoryChange">
++            <option value="">Select category</option>
++            <option v-for="category in categoryOptions" :key="category.code" :value="category.code">
++              {{ category.label }}
++            </option>
++          </select>
++        </label>
++
++        <label v-if="showsSubCategory">
++          Sub-category
++          <select v-model="form.subCategory">
++            <option value="">No sub-category</option>
++            <option v-for="subCategory in subCategoryOptions" :key="subCategory.code" :value="subCategory.code">
++              {{ subCategory.label }}
++            </option>
++          </select>
++        </label>
++
++        <label class="wide">
++          Memo
++          <textarea v-model="form.memo" rows="3"></textarea>
++        </label>
++
++        <div class="actions wide">
++          <button type="submit">{{ editingBudgetId ? 'Save changes' : 'Save budget' }}</button>
++          <button v-if="editingBudgetId" type="button" class="secondary" @click="resetForm">Cancel</button>
++          <span v-if="savedMessage">{{ savedMessage }}</span>
++        </div>
++      </form>
++    </div>
++  </section>
++</template>
++
++<script setup lang="ts">
++import { computed, onMounted, reactive, ref } from 'vue';
++import {
++  createBudget,
++  deleteBudget,
++  listBudgets,
++  updateBudget,
++  type Budget,
++  type BudgetPayload,
++  type BudgetType,
++} from '../api/budgets';
++import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
++
++interface BudgetForm {
++  budgetType: BudgetType;
++  fiscalYear: number;
++  category: string;
++  subCategory: string;
++  budget: number | null;
++  memo: string;
++}
++
++const currentYear = new Date().getFullYear();
++const budgets = ref<Budget[]>([]);
++const selectedFiscalYear = ref(currentYear);
++const offeringFundOptions = ref<ReferenceDataOption[]>([]);
++const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
++const allFinancialSubCategoryOptions = ref<ReferenceDataOption[]>([]);
++const categoryOptions = ref<ReferenceDataOption[]>([]);
++const subCategoryOptions = ref<ReferenceDataOption[]>([]);
++const error = ref('');
++const formError = ref('');
++const savedMessage = ref('');
++const editingBudgetId = ref('');
++
++const filters = reactive({
++  budgetType: '' as '' | BudgetType,
++});
++
++const form = reactive<BudgetForm>({
++  budgetType: 'CARRY_OVER',
++  fiscalYear: currentYear,
++  category: '',
++  subCategory: '',
++  budget: null,
++  memo: '',
++});
++
++const filteredBudgets = computed(() =>
++  budgets.value.filter((budget) => !filters.budgetType || budget.budgetType === filters.budgetType),
++);
++
++const showsCategory = computed(() => form.budgetType !== 'CARRY_OVER');
++const showsSubCategory = computed(() => form.budgetType === 'EXPENSE');
++
++onMounted(async () => {
++  await Promise.all([
++    loadOfferingFunds(),
++    loadFinancialCategories(),
++    loadAllSubCategoryOptions(),
++    loadBudgets(),
++  ]);
++  await loadCategoryOptions();
++  await loadSubCategoryOptions();
++});
++
++async function loadBudgets() {
++  error.value = '';
++  savedMessage.value = '';
++  try {
++    budgets.value = await listBudgets(selectedFiscalYear.value);
++    savedMessage.value = 'Refreshed';
++  } catch (err) {
++    error.value = err instanceof Error ? err.message : 'Could not load budgets.';
++  }
++}
++
++async function loadOfferingFunds() {
++  try {
++    offeringFundOptions.value = await listReferenceData('OFFERING_FUND_CATEGORY');
++  } catch (err) {
++    error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
++  }
++}
++
++async function loadFinancialCategories() {
++  try {
++    financialCategoryOptions.value = await listReferenceData('FINANCIAL_CATEGORY');
++  } catch (err) {
++    error.value = err instanceof Error ? err.message : 'Could not load financial categories.';
++  }
++}
++
++async function loadAllSubCategoryOptions() {
++  try {
++    allFinancialSubCategoryOptions.value = await listReferenceData('FINANCIAL_SUB_CATEGORY');
++  } catch (err) {
++    error.value = err instanceof Error ? err.message : 'Could not load financial sub-categories.';
++  }
++}
++
++async function loadCategoryOptions() {
++  if (form.budgetType === 'OFFERING_INCOME') {
++    categoryOptions.value = offeringFundOptions.value;
++    return;
++  }
++  if (form.budgetType === 'EXPENSE') {
++    categoryOptions.value = financialCategoryOptions.value;
++    return;
++  }
++  categoryOptions.value = [];
++}
++
++async function loadSubCategoryOptions() {
++  if (form.budgetType !== 'EXPENSE' || !form.category) {
++    subCategoryOptions.value = [];
++    return;
++  }
++  try {
++    subCategoryOptions.value = await listReferenceData('FINANCIAL_SUB_CATEGORY', form.category);
++  } catch (err) {
++    error.value = err instanceof Error ? err.message : 'Could not load financial sub-categories.';
++  }
++}
++
++async function handleBudgetTypeChange() {
++  form.category = '';
++  form.subCategory = '';
++  await loadCategoryOptions();
++  await loadSubCategoryOptions();
++}
++
++async function handleCategoryChange() {
++  form.subCategory = '';
++  await loadSubCategoryOptions();
++}
++
++async function saveBudget() {
++  formError.value = '';
++  savedMessage.value = '';
++  try {
++    if (form.budget === null || Number.isNaN(form.budget)) {
++      throw new Error('Budget is required.');
++    }
++    if (showsCategory.value && !form.category) {
++      throw new Error('Category is required.');
++    }
++
++    const payload: BudgetPayload = {
++      fiscalYear: form.fiscalYear,
++      budgetType: form.budgetType,
++      category: showsCategory.value ? form.category : undefined,
++      subCategory: showsSubCategory.value && form.subCategory ? form.subCategory : undefined,
++      budget: form.budget,
++      memo: form.memo.trim() || undefined,
++    };
++
++    const wasEditing = Boolean(editingBudgetId.value);
++    if (wasEditing) {
++      await updateBudget(editingBudgetId.value, payload);
++    } else {
++      await createBudget(payload);
++    }
++    if (selectedFiscalYear.value !== form.fiscalYear) {
++      selectedFiscalYear.value = form.fiscalYear;
++    }
++    await loadBudgets();
++    resetForm();
++    savedMessage.value = wasEditing ? 'Updated' : 'Saved';
++  } catch (err) {
++    formError.value = err instanceof Error ? err.message : 'Could not save budget.';
++  }
++}
++
++async function selectBudget(budget: Budget) {
++  formError.value = '';
++  savedMessage.value = '';
++  editingBudgetId.value = budget.id;
++  form.budgetType = budget.budgetType;
++  form.fiscalYear = budget.fiscalYear;
++  form.category = budget.category ?? '';
++  form.subCategory = budget.subCategory ?? '';
++  form.budget = Number(budget.budget);
++  form.memo = budget.memo ?? '';
++  await loadCategoryOptions();
++  await loadSubCategoryOptions();
++}
++
++async function deleteSelectedBudget(budget: Budget) {
++  const confirmed = window.confirm(`Delete ${typeLabel(budget.budgetType)} budget for ${budget.fiscalYear}?`);
++  if (!confirmed) {
++    return;
++  }
++  error.value = '';
++  savedMessage.value = '';
++  try {
++    await deleteBudget(budget.id);
++    await loadBudgets();
++    if (editingBudgetId.value === budget.id) {
++      resetForm();
++    }
++    savedMessage.value = 'Deleted';
++  } catch (err) {
++    error.value = err instanceof Error ? err.message : 'Could not delete budget.';
++  }
++}
++
++function startCreate() {
++  resetForm();
++}
++
++function resetForm() {
++  formError.value = '';
++  savedMessage.value = '';
++  editingBudgetId.value = '';
++  form.budgetType = 'CARRY_OVER';
++  form.fiscalYear = selectedFiscalYear.value;
++  form.category = '';
++  form.subCategory = '';
++  form.budget = null;
++  form.memo = '';
++  void loadCategoryOptions();
++  void loadSubCategoryOptions();
++}
++
++function typeLabel(type: BudgetType) {
++  switch (type) {
++    case 'CARRY_OVER':
++      return 'Carry over';
++    case 'OFFERING_INCOME':
++      return 'Offering income';
++    case 'EXPENSE':
++      return 'Expense';
++  }
++}
++
++function formatMoney(value: number) {
++  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
++}
++
++function labelForCategory(type: BudgetType, code?: string) {
++  if (!code) {
++    return '-';
++  }
++  const options = type === 'OFFERING_INCOME' ? offeringFundOptions.value : financialCategoryOptions.value;
++  return options.find((option) => option.code === code)?.label ?? code;
++}
++
++function labelForSubCategory(code?: string) {
++  if (!code) {
++    return '-';
++  }
++  return allFinancialSubCategoryOptions.value.find((option) => option.code === code)?.label ?? code;
++}
++</script>

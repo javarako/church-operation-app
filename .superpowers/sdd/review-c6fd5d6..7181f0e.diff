@@ -1,0 +1,133 @@
+# Review package: c6fd5d6..7181f0e
+
+## Commits
+7181f0e Add budget domain model
+
+## Files changed
+ .superpowers/sdd/task-1-report.md                  | 13 +++++
+ .../java/com/church/operation/entity/Budget.java   | 57 ++++++++++++++++++++++
+ .../church/operation/repo/BudgetRepository.java    | 19 ++++++++
+ .../java/com/church/operation/util/BudgetType.java |  7 +++
+ 4 files changed, 96 insertions(+)
+
+## Diff
+diff --git a/.superpowers/sdd/task-1-report.md b/.superpowers/sdd/task-1-report.md
+new file mode 100644
+index 0000000..3ab9ffe
+--- /dev/null
++++ b/.superpowers/sdd/task-1-report.md
+@@ -0,0 +1,13 @@
++# Task 1 Report: Add Budget Domain Model
++
++## Completed
++- Added `BudgetType` with the required values: `CARRY_OVER`, `OFFERING_INCOME`, `EXPENSE`.
++- Added `Budget` in `com.church.operation.entity` with the required fields and standard getters/setters.
++- Added `BudgetRepository` with the three required Mongo query methods.
++
++## Verification
++- Ran: `cd backend && mvn test -DskipTests`
++- Result: `BUILD SUCCESS`
++
++## Notes
++- No concerns.
+diff --git a/backend/src/main/java/com/church/operation/entity/Budget.java b/backend/src/main/java/com/church/operation/entity/Budget.java
+new file mode 100644
+index 0000000..a2c5a62
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/entity/Budget.java
+@@ -0,0 +1,57 @@
++package com.church.operation.entity;
++
++import com.church.operation.util.BudgetType;
++import org.springframework.data.annotation.Id;
++import org.springframework.data.mongodb.core.mapping.Document;
++
++import java.math.BigDecimal;
++import java.time.Instant;
++
++@Document("budgets")
++public class Budget {
++    @Id
++    private String id;
++
++    private int fiscalYear;
++    private BudgetType budgetType;
++    private String category;
++    private String subCategory;
++    private BigDecimal budget;
++    private String memo;
++    private String createdBy;
++    private Instant createdAt;
++    private String updatedBy;
++    private Instant updatedAt;
++    private boolean deleted = false;
++    private String deletedBy;
++    private Instant deletedAt;
++
++    public String getId() { return id; }
++    public void setId(String id) { this.id = id; }
++    public int getFiscalYear() { return fiscalYear; }
++    public void setFiscalYear(int fiscalYear) { this.fiscalYear = fiscalYear; }
++    public BudgetType getBudgetType() { return budgetType; }
++    public void setBudgetType(BudgetType budgetType) { this.budgetType = budgetType; }
++    public String getCategory() { return category; }
++    public void setCategory(String category) { this.category = category; }
++    public String getSubCategory() { return subCategory; }
++    public void setSubCategory(String subCategory) { this.subCategory = subCategory; }
++    public BigDecimal getBudget() { return budget; }
++    public void setBudget(BigDecimal budget) { this.budget = budget; }
++    public String getMemo() { return memo; }
++    public void setMemo(String memo) { this.memo = memo; }
++    public String getCreatedBy() { return createdBy; }
++    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
++    public Instant getCreatedAt() { return createdAt; }
++    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
++    public String getUpdatedBy() { return updatedBy; }
++    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
++    public Instant getUpdatedAt() { return updatedAt; }
++    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
++    public boolean isDeleted() { return deleted; }
++    public void setDeleted(boolean deleted) { this.deleted = deleted; }
++    public String getDeletedBy() { return deletedBy; }
++    public void setDeletedBy(String deletedBy) { this.deletedBy = deletedBy; }
++    public Instant getDeletedAt() { return deletedAt; }
++    public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
++}
+diff --git a/backend/src/main/java/com/church/operation/repo/BudgetRepository.java b/backend/src/main/java/com/church/operation/repo/BudgetRepository.java
+new file mode 100644
+index 0000000..eb23eb0
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/repo/BudgetRepository.java
+@@ -0,0 +1,19 @@
++package com.church.operation.repo;
++
++import com.church.operation.entity.Budget;
++import com.church.operation.util.BudgetType;
++import org.springframework.data.mongodb.repository.MongoRepository;
++import org.springframework.data.mongodb.repository.Query;
++
++import java.util.List;
++
++public interface BudgetRepository extends MongoRepository<Budget, String> {
++    @Query(value = "{ 'fiscalYear' : ?0, 'deleted' : { $ne : true } }", sort = "{ 'budgetType' : 1, 'category' : 1, 'subCategory' : 1 }")
++    List<Budget> findActiveByFiscalYear(int fiscalYear);
++
++    @Query("{ 'fiscalYear' : ?0, 'budgetType' : ?1, 'category' : ?2, 'subCategory' : ?3, 'deleted' : { $ne : true } }")
++    List<Budget> findActiveDuplicates(int fiscalYear, BudgetType budgetType, String category, String subCategory);
++
++    @Query("{ 'fiscalYear' : ?0, 'budgetType' : 'CARRY_OVER', 'deleted' : { $ne : true } }")
++    List<Budget> findActiveCarryOver(int fiscalYear);
++}
+diff --git a/backend/src/main/java/com/church/operation/util/BudgetType.java b/backend/src/main/java/com/church/operation/util/BudgetType.java
+new file mode 100644
+index 0000000..de3ce94
+--- /dev/null
++++ b/backend/src/main/java/com/church/operation/util/BudgetType.java
+@@ -0,0 +1,7 @@
++package com.church.operation.util;
++
++public enum BudgetType {
++    CARRY_OVER,
++    OFFERING_INCOME,
++    EXPENSE
++}

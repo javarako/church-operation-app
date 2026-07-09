@@ -1,0 +1,7 @@
+Task 1: complete (commits c6fd5d6..7181f0e, review clean)
+Task 2: complete (commits 7181f0e..ef030d5, review approved; RED test verified missing BudgetService)
+Task 3: complete (commits ef030d5..db2c8f5, review approved; minor: broader service path tests could be added later)
+Task 4: complete (commits db2c8f5..536e67e, review clean)
+Task 5: complete (commits 536e67e..796d48d, review clean)
+Task 6: complete (commits 796d48d..db72aa5, review clean)
+Task 7: complete (verification: backend 49/49 passing, frontend build passing, Docker rebuilt, container-internal frontend 200 and backend UP)

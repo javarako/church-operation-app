@@ -1,0 +1,88 @@
+# Review package: db72aa5..d9b868f
+
+## Commits
+d9b868f Fix budget active options and uniqueness
+
+## Files changed
+ .../main/java/com/church/operation/entity/Budget.java    | 16 ++++++++++++++++
+ frontend/src/views/BudgetsView.vue                       |  4 ++--
+ 2 files changed, 18 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/backend/src/main/java/com/church/operation/entity/Budget.java b/backend/src/main/java/com/church/operation/entity/Budget.java
+index a2c5a62..5050632 100644
+--- a/backend/src/main/java/com/church/operation/entity/Budget.java
++++ b/backend/src/main/java/com/church/operation/entity/Budget.java
+@@ -1,20 +1,36 @@
+ package com.church.operation.entity;
+ 
+ import com.church.operation.util.BudgetType;
+ import org.springframework.data.annotation.Id;
++import org.springframework.data.mongodb.core.index.CompoundIndex;
++import org.springframework.data.mongodb.core.index.CompoundIndexes;
+ import org.springframework.data.mongodb.core.mapping.Document;
+ 
+ import java.math.BigDecimal;
+ import java.time.Instant;
+ 
+ @Document("budgets")
++@CompoundIndexes({
++    @CompoundIndex(
++        name = "active_carry_over_budget_unique",
++        def = "{'fiscalYear': 1, 'budgetType': 1}",
++        unique = true,
++        partialFilter = "{'deleted': false, 'budgetType': 'CARRY_OVER'}"
++    ),
++    @CompoundIndex(
++        name = "active_category_budget_unique",
++        def = "{'fiscalYear': 1, 'budgetType': 1, 'category': 1, 'subCategory': 1}",
++        unique = true,
++        partialFilter = "{'deleted': false, 'budgetType': {'$in': ['OFFERING_INCOME', 'EXPENSE']}}"
++    )
++})
+ public class Budget {
+     @Id
+     private String id;
+ 
+     private int fiscalYear;
+     private BudgetType budgetType;
+     private String category;
+     private String subCategory;
+     private BigDecimal budget;
+     private String memo;
+diff --git a/frontend/src/views/BudgetsView.vue b/frontend/src/views/BudgetsView.vue
+index d4eba3d..47703a0 100644
+--- a/frontend/src/views/BudgetsView.vue
++++ b/frontend/src/views/BudgetsView.vue
+@@ -199,29 +199,29 @@ async function loadBudgets() {
+   try {
+     budgets.value = await listBudgets(selectedFiscalYear.value);
+     savedMessage.value = 'Refreshed';
+   } catch (err) {
+     error.value = err instanceof Error ? err.message : 'Could not load budgets.';
+   }
+ }
+ 
+ async function loadOfferingFunds() {
+   try {
+-    offeringFundOptions.value = await listReferenceData('OFFERING_FUND_CATEGORY');
++    offeringFundOptions.value = (await listReferenceData('OFFERING_FUND_CATEGORY')).filter((option) => option.active);
+   } catch (err) {
+     error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
+   }
+ }
+ 
+ async function loadFinancialCategories() {
+   try {
+-    financialCategoryOptions.value = await listReferenceData('FINANCIAL_CATEGORY');
++    financialCategoryOptions.value = (await listReferenceData('FINANCIAL_CATEGORY')).filter((option) => option.active);
+   } catch (err) {
+     error.value = err instanceof Error ? err.message : 'Could not load financial categories.';
+   }
+ }
+ 
+ async function loadAllSubCategoryOptions() {
+   try {
+     allFinancialSubCategoryOptions.value = await listReferenceData('FINANCIAL_SUB_CATEGORY');
+   } catch (err) {
+     error.value = err instanceof Error ? err.message : 'Could not load financial sub-categories.';

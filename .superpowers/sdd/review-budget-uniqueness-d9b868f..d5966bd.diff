@@ -1,0 +1,61 @@
+# Review package: d9b868f..d5966bd
+
+## Commits
+d5966bd Enable budget uniqueness indexes
+
+## Files changed
+ .../src/main/java/com/church/operation/repo/BudgetRepository.java   | 6 +++---
+ backend/src/main/resources/application.yml                          | 3 +++
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/backend/src/main/java/com/church/operation/repo/BudgetRepository.java b/backend/src/main/java/com/church/operation/repo/BudgetRepository.java
+index eb23eb0..19129ac 100644
+--- a/backend/src/main/java/com/church/operation/repo/BudgetRepository.java
++++ b/backend/src/main/java/com/church/operation/repo/BudgetRepository.java
+@@ -1,19 +1,19 @@
+ package com.church.operation.repo;
+ 
+ import com.church.operation.entity.Budget;
+ import com.church.operation.util.BudgetType;
+ import org.springframework.data.mongodb.repository.MongoRepository;
+ import org.springframework.data.mongodb.repository.Query;
+ 
+ import java.util.List;
+ 
+ public interface BudgetRepository extends MongoRepository<Budget, String> {
+-    @Query(value = "{ 'fiscalYear' : ?0, 'deleted' : { $ne : true } }", sort = "{ 'budgetType' : 1, 'category' : 1, 'subCategory' : 1 }")
++    @Query(value = "{ 'fiscalYear' : ?0, 'deleted' : false }", sort = "{ 'budgetType' : 1, 'category' : 1, 'subCategory' : 1 }")
+     List<Budget> findActiveByFiscalYear(int fiscalYear);
+ 
+-    @Query("{ 'fiscalYear' : ?0, 'budgetType' : ?1, 'category' : ?2, 'subCategory' : ?3, 'deleted' : { $ne : true } }")
++    @Query("{ 'fiscalYear' : ?0, 'budgetType' : ?1, 'category' : ?2, 'subCategory' : ?3, 'deleted' : false }")
+     List<Budget> findActiveDuplicates(int fiscalYear, BudgetType budgetType, String category, String subCategory);
+ 
+-    @Query("{ 'fiscalYear' : ?0, 'budgetType' : 'CARRY_OVER', 'deleted' : { $ne : true } }")
++    @Query("{ 'fiscalYear' : ?0, 'budgetType' : 'CARRY_OVER', 'deleted' : false }")
+     List<Budget> findActiveCarryOver(int fiscalYear);
+ }
+diff --git a/backend/src/main/resources/application.yml b/backend/src/main/resources/application.yml
+index 772cc46..71c91cb 100644
+--- a/backend/src/main/resources/application.yml
++++ b/backend/src/main/resources/application.yml
+@@ -1,15 +1,18 @@
+ spring:
+   application:
+     name: church-operation
+   mongodb:
+     uri: ${SPRING_MONGODB_URI:mongodb://localhost:27017/church_operations}
++  data:
++    mongodb:
++      auto-index-creation: true
+ 
+ server:
+   port: 8080
+ 
+ management:
+   endpoints:
+     web:
+       exposure:
+         include: health
+ 
