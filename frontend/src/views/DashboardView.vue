@@ -1,14 +1,30 @@
 <template>
   <AppLayout>
     <section class="workspace dashboard-page">
-      <header class="page-header">
-        <div>
-          <h2>Dashboard</h2>
-          <p>Review today's church operations at a glance.</p>
+      <section class="dashboard-hero">
+        <div class="banner-panel" :class="{ 'empty-banner': !churchInfo?.bannerPath }">
+          <img v-if="churchInfo?.bannerPath" :src="churchInfo.bannerPath" alt="" />
+          <div class="banner-copy">
+            <h2>Faith, Hope, Love</h2>
+            <p>Serving our community together</p>
+          </div>
         </div>
-      </header>
 
-      <section v-if="canViewReports" class="panel dashboard-panel">
+        <aside class="church-info-panel">
+          <div>
+            <h2>{{ churchName }}</h2>
+            <p>{{ churchAddress }}</p>
+            <p>{{ churchContactInfo }}</p>
+            <p>{{ treasurerLabel }}</p>
+          </div>
+          <div class="user-role">
+            <span>{{ userInitials }}</span>
+            <strong>{{ currentRoleLabel }}</strong>
+          </div>
+        </aside>
+      </section>
+
+      <section v-if="canViewReports" class="panel dashboard-panel accent-offering">
         <div class="panel-title-row">
           <div>
             <h3>Offering Overview</h3>
@@ -35,7 +51,7 @@
         </div>
       </section>
 
-      <section v-if="canViewReports" class="panel dashboard-panel">
+      <section v-if="canViewReports" class="panel dashboard-panel accent-fiscal">
         <div class="panel-title-row">
           <div>
             <h3>Fiscal Snapshot</h3>
@@ -68,7 +84,7 @@
       </section>
 
       <div class="dashboard-two-column">
-        <section v-if="canViewMembership" class="panel dashboard-panel">
+        <section v-if="canViewMembership" class="panel dashboard-panel accent-membership">
           <h3>Membership</h3>
           <p v-if="membershipError" class="error">{{ membershipError }}</p>
           <div class="dashboard-grid compact">
@@ -87,7 +103,7 @@
           </div>
         </section>
 
-        <section v-if="canViewFinance" class="panel dashboard-panel">
+        <section v-if="canViewFinance" class="panel dashboard-panel accent-finance">
           <h3>Recent Finance Activity</h3>
           <p v-if="financeError" class="error">{{ financeError }}</p>
           <div class="dashboard-grid compact">
@@ -107,24 +123,13 @@
         </section>
       </div>
 
-      <section class="panel dashboard-panel">
-        <h3>Quick Links</h3>
-        <nav class="quick-links" aria-label="Dashboard quick links">
-          <RouterLink v-if="canViewMembership" to="/members">Members</RouterLink>
-          <RouterLink v-if="canViewFinance" to="/offerings">Offerings</RouterLink>
-          <RouterLink v-if="canViewFinance" to="/finance">Finance</RouterLink>
-          <RouterLink v-if="canViewFinance" to="/budgets">Budgets</RouterLink>
-          <RouterLink v-if="canViewReferenceData" to="/reference-data">Reference Data</RouterLink>
-          <RouterLink v-if="canViewReports" to="/reports">Reports</RouterLink>
-        </nav>
-      </section>
     </section>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { getChurchInformation, type ChurchInformation } from '../api/churchInformation';
 import type { FinancialTransaction } from '../api/finance';
 import { listFinanceTransactions } from '../api/finance';
 import { listMembers } from '../api/members';
@@ -169,15 +174,30 @@ const offeringError = ref('');
 const fiscalError = ref('');
 const membershipError = ref('');
 const financeError = ref('');
+const churchInfo = ref<ChurchInformation | null>(null);
 
 const canViewReports = computed(() => hasAnyRole(['ADMIN', 'TREASURER', 'PASTOR', 'VIEWER']));
 const canViewFinance = computed(() => hasAnyRole(['ADMIN', 'TREASURER']));
 const canViewMembership = computed(() => hasAnyRole(['ADMIN', 'MEMBERSHIP']));
-const canViewReferenceData = computed(() => hasAnyRole(['ADMIN', 'TREASURER', 'MEMBERSHIP']));
 const monthStartLabel = computed(() => monthStart);
 const yearStartLabel = computed(() => yearStart);
+const churchName = computed(() => churchInfo.value?.name || 'Church Operations');
+const churchAddress = computed(() => churchInfo.value?.address || 'Address not configured');
+const churchContactInfo = computed(() => churchInfo.value?.contactInfo || 'Contact info not configured');
+const treasurerLabel = computed(() => `Treasurer: ${churchInfo.value?.treasurerName || 'Not configured'}`);
+const currentRoleLabel = computed(() => authState.currentUser?.roles[0] ?? 'User');
+const userInitials = computed(() => {
+  const source = authState.currentUser?.displayName || authState.currentUser?.primaryEmail || 'User';
+  return source
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('');
+});
 
 onMounted(() => {
+  void loadChurchInformation();
   if (canViewReports.value) {
     void loadOfferingOverview();
     void loadFiscalSnapshot();
@@ -189,6 +209,14 @@ onMounted(() => {
     void loadFinanceSummary();
   }
 });
+
+async function loadChurchInformation() {
+  try {
+    churchInfo.value = await getChurchInformation();
+  } catch {
+    churchInfo.value = null;
+  }
+}
 
 function setError(errorState: { value: string }, error: unknown) {
   errorState.value = error instanceof Error ? error.message : 'Request failed.';
@@ -304,9 +332,119 @@ function currentSunday(date: Date) {
   gap: 18px;
 }
 
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.4fr) minmax(320px, 0.9fr);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: white;
+}
+
+.banner-panel {
+  position: relative;
+  min-height: 190px;
+  overflow: hidden;
+  background: #123047;
+}
+
+.banner-panel img {
+  width: 100%;
+  height: 100%;
+  min-height: 190px;
+  display: block;
+  object-fit: cover;
+}
+
+.banner-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(18, 48, 71, 0.72), rgba(18, 48, 71, 0.12));
+}
+
+.empty-banner {
+  min-height: 190px;
+}
+
+.banner-copy {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  z-index: 1;
+  color: white;
+}
+
+.banner-copy h2 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.banner-copy p {
+  margin: 8px 0 0;
+}
+
+.church-info-panel {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+  background: white;
+}
+
+.church-info-panel h2 {
+  margin: 0 0 12px;
+}
+
+.church-info-panel p {
+  margin: 10px 0;
+  color: #344054;
+}
+
+.user-role {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.user-role span {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #0b6fd3;
+  color: white;
+  font-weight: 700;
+}
+
+.user-role strong {
+  padding-top: 10px;
+  font-size: 0.9rem;
+}
+
 .dashboard-panel {
   display: grid;
   gap: 14px;
+  box-shadow: 0 10px 28px rgba(16, 24, 40, 0.05);
+}
+
+.accent-offering {
+  border-color: #f3c56b;
+}
+
+.accent-fiscal {
+  border-color: #9fc9f5;
+}
+
+.accent-membership {
+  border-color: #aad8b3;
+}
+
+.accent-finance {
+  border-color: #f3b38f;
 }
 
 .panel-title-row {
@@ -346,7 +484,7 @@ function currentSunday(date: Date) {
   border: 1px solid #edf0f4;
   border-radius: 8px;
   padding: 14px;
-  background: #fbfcfe;
+  background: linear-gradient(135deg, #ffffff, #fbfcfe);
 }
 
 .metric-card span {
@@ -364,26 +502,19 @@ function currentSunday(date: Date) {
   color: #667085;
 }
 
-.quick-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.quick-links a {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 6px;
-  padding: 0 14px;
-  background: #22577a;
-  color: white;
-  text-decoration: none;
+@media (max-width: 900px) {
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
   .dashboard-two-column {
     grid-template-columns: 1fr;
+  }
+
+  .church-info-panel {
+    display: grid;
   }
 }
 </style>

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/vue';
+import { cleanup, render, screen, waitFor } from '@testing-library/vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import DashboardView from './DashboardView.vue';
 import { authState } from '../auth/authStore';
+import { getChurchInformation } from '../api/churchInformation';
 import { listFinanceTransactions } from '../api/finance';
 import { listMembers } from '../api/members';
 import { listFinancialBudgetReport, listWeeklyOfferingReport } from '../api/reports';
@@ -20,10 +21,22 @@ vi.mock('../api/finance', () => ({
   listFinanceTransactions: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('../api/churchInformation', () => ({
+  getChurchInformation: vi.fn().mockResolvedValue({
+    name: 'Grace Community Church',
+    address: '123 Church Street, Toronto, ON M1A 1A1',
+    contactInfo: '416-555-0100',
+    treasurerName: 'Daniel Kim',
+    bannerPath: '/branding/church-banner.png',
+    logPath: '/branding/church_logo.png',
+  }),
+}));
+
 const weeklyReportMock = vi.mocked(listWeeklyOfferingReport);
 const financialReportMock = vi.mocked(listFinancialBudgetReport);
 const membersMock = vi.mocked(listMembers);
 const financeMock = vi.mocked(listFinanceTransactions);
+const churchInformationMock = vi.mocked(getChurchInformation);
 
 function router() {
   return createRouter({
@@ -133,6 +146,14 @@ describe('DashboardView', () => {
         sourceType: 'MANUAL',
       },
     ]);
+    churchInformationMock.mockResolvedValue({
+      name: 'Grace Community Church',
+      address: '123 Church Street, Toronto, ON M1A 1A1',
+      contactInfo: '416-555-0100',
+      treasurerName: 'Daniel Kim',
+      bannerPath: '/branding/church-banner.png',
+      logPath: '/branding/church_logo.png',
+    });
   });
 
   afterEach(() => {
@@ -144,7 +165,7 @@ describe('DashboardView', () => {
   it('shows admin all dashboard sections and totals', async () => {
     authState.currentUser = {
       primaryEmail: 'admin@example.com',
-      displayName: 'Admin',
+      displayName: 'Admin Demo',
       roles: ['ADMIN'],
       mustChangePassword: false,
       token: 'token',
@@ -160,12 +181,14 @@ describe('DashboardView', () => {
     expect(screen.getByText('Membership')).toBeTruthy();
     expect(screen.getByText('Total Members')).toBeTruthy();
     expect(screen.getByText('Recent Finance Activity')).toBeTruthy();
-    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
-    expect(quickLinks.getByRole('link', { name: 'Members' })).toBeTruthy();
-    expect(quickLinks.getByRole('link', { name: 'Offerings' })).toBeTruthy();
-    expect(quickLinks.getByRole('link', { name: 'Finance' })).toBeTruthy();
-    expect(quickLinks.getByRole('link', { name: 'Budgets' })).toBeTruthy();
-    expect(quickLinks.getByRole('link', { name: 'Reports' })).toBeTruthy();
+    expect(await screen.findByText('Faith, Hope, Love')).toBeTruthy();
+    expect(screen.getByText('Grace Community Church')).toBeTruthy();
+    expect(screen.getByText('123 Church Street, Toronto, ON M1A 1A1')).toBeTruthy();
+    expect(screen.getByText('416-555-0100')).toBeTruthy();
+    expect(screen.getByText('Treasurer: Daniel Kim')).toBeTruthy();
+    expect(screen.getByText('AD')).toBeTruthy();
+    expect(screen.getByText('ADMIN')).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Dashboard quick links' })).toBeNull();
   });
 
   it('hides membership summary from treasurer', async () => {
@@ -180,10 +203,7 @@ describe('DashboardView', () => {
     await renderDashboard();
 
     expect(await screen.findByText('Recent Finance Activity')).toBeTruthy();
-    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
     expect(screen.queryByText('Membership')).toBeNull();
-    expect(quickLinks.queryByRole('link', { name: 'Members' })).toBeNull();
-    expect(quickLinks.getByRole('link', { name: 'Offerings' })).toBeTruthy();
   });
 
   it('shows membership user member summary without finance summary', async () => {
@@ -198,11 +218,7 @@ describe('DashboardView', () => {
     await renderDashboard();
 
     expect(await screen.findByText('Membership')).toBeTruthy();
-    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
     expect(screen.queryByText('Recent Finance Activity')).toBeNull();
-    expect(quickLinks.queryByRole('link', { name: 'Finance' })).toBeNull();
-    expect(quickLinks.getByRole('link', { name: 'Members' })).toBeTruthy();
-    expect(quickLinks.getByRole('link', { name: 'Reference Data' })).toBeTruthy();
   });
 
   it('shows viewer read-only report content only', async () => {
@@ -217,12 +233,9 @@ describe('DashboardView', () => {
     await renderDashboard();
 
     expect(await screen.findByText('This Week')).toBeTruthy();
-    const quickLinks = within(screen.getByRole('navigation', { name: 'Dashboard quick links' }));
     expect(screen.getByText('Fiscal Snapshot')).toBeTruthy();
-    expect(quickLinks.getByRole('link', { name: 'Reports' })).toBeTruthy();
     expect(screen.queryByText('Membership')).toBeNull();
     expect(screen.queryByText('Recent Finance Activity')).toBeNull();
-    expect(quickLinks.queryByRole('link', { name: 'Offerings' })).toBeNull();
   });
 
   it('shows a section error without hiding other sections', async () => {
