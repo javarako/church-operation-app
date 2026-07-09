@@ -67,6 +67,21 @@ class FinancialTransactionServiceTest {
     }
 
     @Test
+    void hidesCancelledOfferingIncomeFromFinanceList() {
+        Member viewer = member("viewer-id", Role.VIEWER);
+        FinancialTransaction cancelledIncome = incomeTransaction();
+        cancelledIncome.setId("cancelled-income");
+        cancelledIncome.setAmount(BigDecimal.ZERO);
+        FinancialTransaction expense = manualExpense("expense-1");
+        when(financialTransactionRepository.findByDeletedFalseOrderByTransactionDateDescCreatedAtDesc())
+            .thenReturn(List.of(cancelledIncome, expense));
+
+        List<FinancialTransaction> transactions = service().listTransactions(viewer);
+
+        assertThat(transactions).containsExactly(expense);
+    }
+
+    @Test
     void rejectsViewerCreatingExpense() {
         Member viewer = member("viewer-id", Role.VIEWER);
 

@@ -125,7 +125,9 @@ public class OfferingService {
             return;
         }
         financialTransactionRepository.findById(offering.getIncomeTransactionId()).ifPresent(transaction -> {
-            transaction.setAmount(BigDecimal.ZERO);
+            transaction.setDeleted(true);
+            transaction.setDeletedBy(offering.getDeletedBy());
+            transaction.setDeletedAt(offering.getDeletedAt());
             transaction.setMemo("Cancelled offering: " + (offering.getMemo() == null ? offering.getId() : offering.getMemo()));
             financialTransactionRepository.save(transaction);
         });

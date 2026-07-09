@@ -205,7 +205,7 @@ class OfferingServiceTest {
     }
 
     @Test
-    void softDeletesOfferingAndKeepsLinkedIncomeTraceable() {
+    void softDeletesOfferingAndHidesLinkedIncomeFromFinance() {
         Member actor = member("treasurer-id", "treasurer@example.com", Role.TREASURER);
         Offering existing = existingOffering();
         FinancialTransaction transaction = linkedTransaction(existing);
@@ -221,7 +221,9 @@ class OfferingServiceTest {
         assertThat(deleted.getDeletedBy()).isEqualTo("treasurer-id");
         assertThat(deleted.getDeletedAt()).isNotNull();
         verify(financialTransactionRepository).save(argThat(saved ->
-            saved.getAmount().compareTo(BigDecimal.ZERO) == 0
+            saved.isDeleted()
+                && "treasurer-id".equals(saved.getDeletedBy())
+                && saved.getDeletedAt() != null
                 && saved.getMemo().contains("Cancelled offering")
         ));
     }

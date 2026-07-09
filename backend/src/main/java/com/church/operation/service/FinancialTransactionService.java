@@ -32,7 +32,9 @@ public class FinancialTransactionService {
 
     public List<FinancialTransaction> listTransactions(Member actor) {
         requireFinanceAccess(actor, false);
-        return financialTransactionRepository.findByDeletedFalseOrderByTransactionDateDescCreatedAtDesc();
+        return financialTransactionRepository.findByDeletedFalseOrderByTransactionDateDescCreatedAtDesc().stream()
+            .filter(this::isVisibleFinanceTransaction)
+            .toList();
     }
 
     public FinancialTransaction createExpense(Member actor, FinancialTransactionRequest request) {
@@ -137,6 +139,13 @@ public class FinancialTransactionService {
 
     private boolean hasRole(Member actor, Role role) {
         return actor != null && actor.getRoles() != null && actor.getRoles().contains(role);
+    }
+
+    private boolean isVisibleFinanceTransaction(FinancialTransaction transaction) {
+        if (transaction.getType() == FinancialTransactionType.INCOME && transaction.getSourceType() == FinancialSourceType.OFFERING) {
+            return transaction.getAmount() != null && transaction.getAmount().compareTo(BigDecimal.ZERO) > 0;
+        }
+        return true;
     }
 
     private String trimToNull(String value) {

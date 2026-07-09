@@ -29,7 +29,7 @@
 
         <div class="summary-strip">
           <strong>{{ formatMoney(filteredIncome - filteredExpense) }}</strong>
-          <span>{{ filteredTransactions.length }} transaction{{ filteredTransactions.length === 1 ? '' : 's' }}</span>
+          <span>{{ filteredRows.length }} row{{ filteredRows.length === 1 ? '' : 's' }}</span>
           <span>Income {{ formatMoney(filteredIncome) }}</span>
           <span>Expense {{ formatMoney(filteredExpense) }}</span>
         </div>
@@ -54,7 +54,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="transaction in filteredTransactions"
+                v-for="transaction in filteredRows"
                 :key="transaction.id"
                 :class="{ selected: editingExpenseId === transaction.id, 'read-only-row': !isManualExpense(transaction) }"
                 @click="selectExpense(transaction)"
@@ -69,7 +69,7 @@
                 <td>{{ transaction.chequeCleared ? 'Yes' : '-' }}</td>
                 <td>{{ transaction.payableTo || '-' }}</td>
                 <td>{{ transaction.treasurer || '-' }}</td>
-                <td>{{ transaction.sourceType === 'OFFERING' ? 'Offering' : 'Manual' }}</td>
+                <td>{{ sourceLabel(transaction) }}</td>
                 <td class="row-actions">
                   <button
                     v-if="isManualExpense(transaction)"
@@ -106,7 +106,7 @@
           Category
           <select v-model="form.category" required @change="handleCategoryChange">
             <option value="">Select category</option>
-            <option v-for="category in categoryOptions" :key="category.code" :value="category.code">
+            <option v-for="category in financialCategoryOptions" :key="category.code" :value="category.code">
               {{ category.label }}
             </option>
           </select>
@@ -188,9 +188,14 @@ interface ExpenseForm {
   memo: string;
 }
 
+interface FinanceDisplayRow extends FinancialTransaction {
+  summaryCount?: number;
+}
+
 const today = new Date().toISOString().slice(0, 10);
 const transactions = ref<FinancialTransaction[]>([]);
-const categoryOptions = ref<ReferenceDataOption[]>([]);
+const offeringFundOptions = ref<ReferenceDataOption[]>([]);
+const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
 const subCategoryOptions = ref<ReferenceDataOption[]>([]);
 const allSubCategoryOptions = ref<ReferenceDataOption[]>([]);
 const error = ref('');
@@ -201,6 +206,13 @@ const editingExpenseId = ref('');
 const filters = reactive({
   category: '',
   type: '' as '' | FinancialTransactionType,
+});
+
+const categoryOptions = computed(() => {
+  const options = new Map<string, ReferenceDataOption>();
+  offeringFundOptions.value.forEach((option) => options.set(option.code, option));
+  financialCategoryOptions.value.forEach((option) => options.set(option.code, option));
+  return Array.from(options.values()).sort((left, right) => left.label.localeCompare(right.label));
 });
 
 const form = reactive<ExpenseForm>({
@@ -216,8 +228,44 @@ const form = reactive<ExpenseForm>({
   memo: '',
 });
 
-const filteredTransactions = computed(() =>
-  transactions.value.filter((transaction) => {
+const visibleTransactions = computed(() =>
+  transactions.value.filter((transaction) => !isCancelledOfferingIncome(transaction)),
+);
+
+const displayRows = computed<FinanceDisplayRow[]>(() => {
+  const incomeByDayAndCategory = new Map<string, FinanceDisplayRow>();
+  const expenseRows: FinanceDisplayRow[] = [];
+
+  visibleTransactions.value.forEach((transaction) => {
+    if (transaction.type === 'INCOME' && transaction.sourceType === 'OFFERING') {
+      const summaryKey = `${transaction.transactionDate}:${transaction.category}`;
+      const existing = incomeByDayAndCategory.get(summaryKey);
+      if (existing) {
+        existing.amount += Number(transaction.amount);
+        existing.summaryCount = (existing.summaryCount ?? 1) + 1;
+        return;
+      }
+
+      incomeByDayAndCategory.set(summaryKey, {
+        ...transaction,
+        id: `income-summary-${transaction.transactionDate}-${transaction.category}`,
+        amount: Number(transaction.amount),
+        memo: 'Daily offering income summary',
+        summaryCount: 1,
+      });
+      return;
+    }
+
+    expenseRows.push(transaction);
+  });
+
+  return [...incomeByDayAndCategory.values(), ...expenseRows].sort((left, right) =>
+    right.transactionDate.localeCompare(left.transactionDate),
+  );
+});
+
+const filteredRows = computed(() =>
+  displayRows.value.filter((transaction) => {
     const matchesCategory = !filters.category || transaction.category === filters.category;
     const matchesType = !filters.type || transaction.type === filters.type;
     return matchesCategory && matchesType;
@@ -225,19 +273,19 @@ const filteredTransactions = computed(() =>
 );
 
 const filteredIncome = computed(() =>
-  filteredTransactions.value
+  filteredRows.value
     .filter((transaction) => transaction.type === 'INCOME')
     .reduce((total, transaction) => total + Number(transaction.amount), 0),
 );
 
 const filteredExpense = computed(() =>
-  filteredTransactions.value
+  filteredRows.value
     .filter((transaction) => transaction.type === 'EXPENSE')
     .reduce((total, transaction) => total + Number(transaction.amount), 0),
 );
 
 onMounted(async () => {
-  await Promise.all([loadTransactions(), loadCategories(), loadAllSubCategories()]);
+  await Promise.all([loadTransactions(), loadOfferingFunds(), loadFinancialCategories(), loadAllSubCategories()]);
 });
 
 async function loadTransactions() {
@@ -251,11 +299,19 @@ async function loadTransactions() {
   }
 }
 
-async function loadCategories() {
+async function loadOfferingFunds() {
   try {
-    categoryOptions.value = await listReferenceData('FINANCIAL_CATEGORY');
+    offeringFundOptions.value = (await listReferenceData('OFFERING_FUND_CATEGORY')).filter((option) => option.active);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
+  }
+}
+
+async function loadFinancialCategories() {
+  try {
+    financialCategoryOptions.value = (await listReferenceData('FINANCIAL_CATEGORY')).filter((option) => option.active);
     if (!form.category) {
-      form.category = categoryOptions.value[0]?.code ?? '';
+      form.category = financialCategoryOptions.value[0]?.code ?? '';
       await loadSubCategories();
     }
   } catch (err) {
@@ -363,7 +419,7 @@ function resetForm() {
   editingExpenseId.value = '';
   form.transactionDate = today;
   form.amount = null;
-  form.category = categoryOptions.value[0]?.code ?? '';
+  form.category = financialCategoryOptions.value[0]?.code ?? '';
   form.subCategory = '';
   form.hstIncluded = false;
   form.chequeNo = '';
@@ -378,12 +434,27 @@ function isManualExpense(transaction: FinancialTransaction) {
   return transaction.type === 'EXPENSE' && transaction.sourceType === 'MANUAL';
 }
 
+function isCancelledOfferingIncome(transaction: FinancialTransaction) {
+  return transaction.type === 'INCOME'
+    && transaction.sourceType === 'OFFERING'
+    && Number(transaction.amount) <= 0;
+}
+
+function sourceLabel(transaction: FinanceDisplayRow) {
+  if (transaction.type === 'INCOME' && transaction.sourceType === 'OFFERING') {
+    return `Offering summary (${transaction.summaryCount ?? 1})`;
+  }
+  return transaction.sourceType === 'OFFERING' ? 'Offering' : 'Manual';
+}
+
 function formatMoney(value: number) {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
 }
 
 function labelForCategory(code: string) {
-  return categoryOptions.value.find((category) => category.code === code)?.label ?? code;
+  return financialCategoryOptions.value.find((category) => category.code === code)?.label
+    ?? offeringFundOptions.value.find((category) => category.code === code)?.label
+    ?? code;
 }
 
 function labelForSubCategory(code?: string) {
