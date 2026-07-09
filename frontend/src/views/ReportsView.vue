@@ -10,10 +10,10 @@
     <section class="panel">
       <div class="toolbar reports-toolbar" role="tablist" aria-label="Reports">
         <button
-          v-for="report in reportTabs"
+          v-for="report in visibleReportTabs"
           :key="report.id"
           type="button"
-          :class="{ secondary: report.id !== activeReportId }"
+          :class="{ secondary: report.id !== activeVisibleReportId }"
           @click="activeReportId = report.id"
         >
           {{ report.label }}
@@ -31,6 +31,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { authState, type Role } from '../auth/authStore';
 
 interface ReportTab {
   id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget';
@@ -67,8 +68,24 @@ const reportTabs: ReportTab[] = [
 ];
 
 const activeReportId = ref<ReportTab['id']>('weekly-offerings');
+const officialTaxRoles: Role[] = ['ADMIN', 'TREASURER'];
+
+const visibleReportTabs = computed(() =>
+  reportTabs.filter((report) => report.id !== 'tax-return' || hasOfficialTaxAccess()),
+);
+
+const activeVisibleReportId = computed<ReportTab['id']>(() => {
+  return visibleReportTabs.value.some((report) => report.id === activeReportId.value)
+    ? activeReportId.value
+    : visibleReportTabs.value[0]?.id ?? 'weekly-offerings';
+});
 
 const activeReport = computed(
-  () => reportTabs.find((report) => report.id === activeReportId.value) ?? reportTabs[0],
+  () => visibleReportTabs.value.find((report) => report.id === activeVisibleReportId.value) ?? visibleReportTabs.value[0],
 );
+
+function hasOfficialTaxAccess() {
+  const roles = authState.currentUser?.roles ?? [];
+  return roles.some((role) => officialTaxRoles.includes(role));
+}
 </script>
