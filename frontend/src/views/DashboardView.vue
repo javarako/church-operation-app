@@ -331,7 +331,7 @@ function currentSunday(date: Date) {
 
 .dashboard-hero {
   display: grid;
-  grid-template-columns: minmax(360px, 1.4fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(234px, 0.625fr) minmax(320px, 1fr);
   gap: 0;
   overflow: hidden;
   border: 1px solid #d8dee6;
@@ -341,8 +341,6 @@ function currentSunday(date: Date) {
 
 .banner-panel {
   position: relative;
-  aspect-ratio: 366 / 86;
-  height: auto;
   align-self: start;
   overflow: hidden;
   background: #123047;
@@ -350,9 +348,8 @@ function currentSunday(date: Date) {
 
 .banner-panel img {
   width: 100%;
-  height: 100%;
+  height: auto;
   display: block;
-  object-fit: contain;
 }
 
 .banner-panel::after {
@@ -363,7 +360,7 @@ function currentSunday(date: Date) {
 }
 
 .empty-banner {
-  aspect-ratio: 366 / 86;
+  aspect-ratio: 977 / 240;
 }
 
 .banner-copy {
