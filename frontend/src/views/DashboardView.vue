@@ -341,7 +341,8 @@ function currentSunday(date: Date) {
 
 .banner-panel {
   position: relative;
-  height: 133px;
+  aspect-ratio: 366 / 86;
+  height: auto;
   align-self: start;
   overflow: hidden;
   background: #123047;
@@ -351,7 +352,7 @@ function currentSunday(date: Date) {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .banner-panel::after {
@@ -362,7 +363,7 @@ function currentSunday(date: Date) {
 }
 
 .empty-banner {
-  height: 133px;
+  aspect-ratio: 366 / 86;
 }
 
 .banner-copy {
