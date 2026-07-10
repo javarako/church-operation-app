@@ -19,6 +19,7 @@ com/church/operation/dto/MemberResponse.class
 com/church/operation/config/ChurchInformationProperties$Branding.class
 com/church/operation/filter/BearerTokenAuthenticationFilter.class
 com/church/operation/rest/AuthController.class
+com/church/operation/config/ChurchInformationProperties$Ui.class
 com/church/operation/repo/MemberRepository.class
 com/church/operation/entity/Member.class
 com/church/operation/dto/LoginResponse.class
