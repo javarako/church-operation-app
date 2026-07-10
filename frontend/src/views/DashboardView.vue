@@ -1,6 +1,5 @@
 <template>
-  <AppLayout>
-    <section class="workspace dashboard-page">
+  <section class="workspace dashboard-page">
       <section class="dashboard-hero">
         <div class="banner-panel" :class="{ 'empty-banner': !churchInfo?.bannerPath }">
           <img v-if="churchInfo?.bannerPath" :src="churchInfo.bannerPath" alt="" />
@@ -123,8 +122,7 @@
         </section>
       </div>
 
-    </section>
-  </AppLayout>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -135,7 +133,6 @@ import { listFinanceTransactions } from '../api/finance';
 import { listMembers } from '../api/members';
 import { listFinancialBudgetReport, listWeeklyOfferingReport } from '../api/reports';
 import { authState, type Role } from '../auth/authStore';
-import AppLayout from '../layouts/AppLayout.vue';
 
 const currentDate = new Date();
 const currentYear = currentDate.getFullYear();
