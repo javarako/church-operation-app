@@ -1,8 +1,11 @@
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/rest/AuthControllerTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/rest/ChurchInformationControllerTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/AuthServiceTest.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/AuthTokenServiceTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/BudgetServiceTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/FinancialTransactionServiceTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/MemberServiceTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/OfferingServiceTest.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/PasswordResetServiceTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/ReferenceDataServiceTest.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/test/java/com/church/operation/service/ReportServiceTest.java

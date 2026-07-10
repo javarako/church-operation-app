@@ -49,6 +49,15 @@ textarea {
   color: white;
 }
 
+.auth-panel a {
+  color: #22577a;
+  text-align: center;
+}
+
+.success {
+  color: #247148;
+}
+
 .error {
   color: #b42318;
 }
@@ -61,11 +70,24 @@ textarea {
 
 .sidebar {
   display: grid;
-  align-content: start;
+  grid-template-rows: auto auto 1fr auto;
   gap: 18px;
   padding: 18px 14px;
   background: linear-gradient(180deg, #023544 0%, #052d3b 55%, #082636 100%);
   color: white;
+}
+
+.sidebar-logout {
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+}
+
+.sidebar-logout:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-brand {

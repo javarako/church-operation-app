@@ -56,6 +56,10 @@ public class AuthService {
         memberRepository.save(member);
     }
 
+    public void logout(String token) {
+        authTokenService.revokeToken(token);
+    }
+
     private String normalize(String username) {
         return username.trim().toLowerCase();
     }

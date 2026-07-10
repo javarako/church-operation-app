@@ -11,6 +11,6 @@
 import AppLayout from './layouts/AppLayout.vue';
 
 function isStandaloneRoute(path: string) {
-  return path === '/login' || path === '/change-password';
+  return ['/login', '/change-password', '/forgot-password', '/reset-password'].includes(path);
 }
 </script>

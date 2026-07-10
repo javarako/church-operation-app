@@ -33,4 +33,13 @@ public class AuthTokenService {
             .filter(Member::isActive)
             .filter(member -> !member.isLocked());
     }
+
+    public void revokeToken(String token) {
+        tokenToPrimaryEmail.remove(token);
+    }
+
+    public void revokeAllForMember(String primaryEmail) {
+        String normalized = primaryEmail.trim().toLowerCase();
+        tokenToPrimaryEmail.entrySet().removeIf(entry -> entry.getValue().equalsIgnoreCase(normalized));
+    }
 }

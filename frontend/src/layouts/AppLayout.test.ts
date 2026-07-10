@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import AppLayout from './AppLayout.vue';
 import { authState } from '../auth/authStore';
 import { getChurchInformation } from '../api/churchInformation';
+import { postEmpty } from '../api/http';
 
 vi.mock('../api/churchInformation', () => ({
   getChurchInformation: vi.fn().mockResolvedValue({
@@ -17,7 +18,12 @@ vi.mock('../api/churchInformation', () => ({
   }),
 }));
 
+vi.mock('../api/http', () => ({
+  postEmpty: vi.fn(),
+}));
+
 const churchInformationMock = vi.mocked(getChurchInformation);
+const postEmptyMock = vi.mocked(postEmpty);
 
 function router() {
   return createRouter({
@@ -31,6 +37,7 @@ function router() {
       { path: '/reference-data', component: { template: '<span>Reference Data</span>' } },
       { path: '/reports', component: { template: '<span>Reports</span>' } },
       { path: '/profile', component: { template: '<span>Profile</span>' } },
+      { path: '/login', component: { template: '<span>Login</span>' } },
     ],
   });
 }
@@ -39,7 +46,7 @@ async function renderLayout() {
   const testRouter = router();
   testRouter.push('/');
   await testRouter.isReady();
-  return render(AppLayout, {
+  const result = render(AppLayout, {
     slots: {
       default: '<main>Page Content</main>',
     },
@@ -47,6 +54,7 @@ async function renderLayout() {
       plugins: [testRouter],
     },
   });
+  return { result, testRouter };
 }
 
 describe('AppLayout', () => {
@@ -103,5 +111,16 @@ describe('AppLayout', () => {
 
     expect(await screen.findByText('Church Operations')).toBeTruthy();
     expect(screen.queryByAltText(/logo/i)).toBeNull();
+  });
+
+  it('logs out, clears authentication, and returns to login', async () => {
+    postEmptyMock.mockResolvedValue(undefined);
+    const { testRouter } = await renderLayout();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Logout' }));
+
+    expect(postEmptyMock).toHaveBeenCalledWith('/api/auth/logout', {});
+    expect(authState.currentUser).toBeNull();
+    await waitFor(() => expect(testRouter.currentRoute.value.path).toBe('/login'));
   });
 });

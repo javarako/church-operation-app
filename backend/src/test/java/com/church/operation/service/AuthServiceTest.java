@@ -17,6 +17,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -68,5 +69,14 @@ class AuthServiceTest {
         assertThatThrownBy(() -> service.login(new LoginRequest("admin", "bad")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Invalid username or password.");
+    }
+
+    @Test
+    void logoutRevokesThePresentedToken() {
+        AuthService service = new AuthService(memberRepository, passwordEncoder, authTokenService);
+
+        service.logout("issued-token");
+
+        verify(authTokenService).revokeToken("issued-token");
     }
 }

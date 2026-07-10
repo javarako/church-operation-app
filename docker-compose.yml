@@ -15,10 +15,23 @@ services:
       CHURCH_ADDRESS: 111 Cactus Ave, North York, ON M2R 2V1
       CHURCH_CONTACT_INFO: lovecapstone@gmail.com
       CHURCH_TREASURER_NAME: Treasurer
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_SMTP_AUTH: "false"
+      MAIL_SMTP_STARTTLS: "false"
+      PASSWORD_RESET_FRONTEND_BASE_URL: http://localhost:5173
+      PASSWORD_RESET_FROM_ADDRESS: no-reply@church.local
     ports:
       - "8080:8080"
     depends_on:
       - mongo
+      - mailpit
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 
   frontend:
     build:

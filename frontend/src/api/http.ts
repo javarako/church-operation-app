@@ -7,6 +7,13 @@ export async function postJson<TRequest, TResponse>(path: string, body: TRequest
   });
 }
 
+export async function postEmpty<TRequest>(path: string, body: TRequest): Promise<void> {
+  await request(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function getJson<TResponse>(path: string): Promise<TResponse> {
   return requestJson<TResponse>(path);
 }
@@ -25,6 +32,11 @@ export async function deleteJson<TResponse>(path: string): Promise<TResponse> {
 }
 
 async function requestJson<TResponse>(path: string, init: RequestInit = {}): Promise<TResponse> {
+  const response = await request(path, init);
+  return response.json() as Promise<TResponse>;
+}
+
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
   if (authState.currentUser?.token) {
@@ -41,5 +53,5 @@ async function requestJson<TResponse>(path: string, init: RequestInit = {}): Pro
     throw new Error(error.message ?? 'Request failed.');
   }
 
-  return response.json() as Promise<TResponse>;
+  return response;
 }

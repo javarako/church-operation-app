@@ -9,6 +9,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 public class SecurityConfig {
@@ -19,8 +20,18 @@ public class SecurityConfig {
             .httpBasic(httpBasic -> httpBasic.disable())
             .formLogin(formLogin -> formLogin.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
+                (request, response, exception) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED)
+            ))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/login", "/api/auth/change-password", "/api/church-information", "/actuator/health", "/branding/**").permitAll()
+                .requestMatchers(
+                    "/api/auth/login",
+                    "/api/auth/forgot-password",
+                    "/api/auth/reset-password",
+                    "/api/church-information",
+                    "/actuator/health",
+                    "/branding/**"
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(bearerTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

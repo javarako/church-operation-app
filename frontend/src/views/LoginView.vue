@@ -12,6 +12,7 @@
       </label>
       <p v-if="error" class="error">{{ error }}</p>
       <button type="submit">Sign in</button>
+      <RouterLink to="/forgot-password">Forgot password?</RouterLink>
     </form>
   </main>
 </template>

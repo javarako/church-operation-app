@@ -3,6 +3,8 @@ import { authState, canAccessRoute, type Role } from '../auth/authStore';
 import { financeRoles, membershipRoles, reportRoles, selfServiceRoles, staffRoles } from '../auth/roles';
 import LoginView from '../views/LoginView.vue';
 import ChangePasswordView from '../views/ChangePasswordView.vue';
+import ForgotPasswordView from '../views/ForgotPasswordView.vue';
+import ResetPasswordView from '../views/ResetPasswordView.vue';
 import DashboardView from '../views/DashboardView.vue';
 import FinanceView from '../views/FinanceView.vue';
 import BudgetsView from '../views/BudgetsView.vue';
@@ -15,6 +17,8 @@ import ReportsView from '../views/ReportsView.vue';
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
   { path: '/change-password', component: ChangePasswordView },
+  { path: '/forgot-password', component: ForgotPasswordView },
+  { path: '/reset-password', component: ResetPasswordView },
   { path: '/', component: DashboardView, meta: { roles: staffRoles } },
   { path: '/members', component: MembersView, meta: { roles: membershipRoles } },
   { path: '/offerings', component: OfferingsView, meta: { roles: financeRoles } },
@@ -31,7 +35,7 @@ export const router = createRouter({
 });
 
 router.beforeEach((to) => {
-  if (to.path === '/login') {
+  if (['/login', '/forgot-password', '/reset-password'].includes(to.path)) {
     return true;
   }
 
