@@ -341,7 +341,8 @@ function currentSunday(date: Date) {
 
 .banner-panel {
   position: relative;
-  min-height: 133px;
+  height: 133px;
+  align-self: start;
   overflow: hidden;
   background: #123047;
 }
@@ -349,7 +350,6 @@ function currentSunday(date: Date) {
 .banner-panel img {
   width: 100%;
   height: 100%;
-  min-height: 133px;
   display: block;
   object-fit: cover;
 }
@@ -362,7 +362,7 @@ function currentSunday(date: Date) {
 }
 
 .empty-banner {
-  min-height: 133px;
+  height: 133px;
 }
 
 .banner-copy {
@@ -386,16 +386,16 @@ function currentSunday(date: Date) {
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  padding: 24px;
+  padding: 16px 24px;
   background: white;
 }
 
 .church-info-panel h2 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 
 .church-info-panel p {
-  margin: 10px 0;
+  margin: 6px 0;
   color: #344054;
 }
 
