@@ -49,7 +49,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="offering in filteredOfferings"
+                v-for="offering in offeringPagination.paginatedRows.value"
                 :key="offering.id"
                 :class="{ selected: editingOfferingId === offering.id }"
                 @click="selectOffering(offering)"
@@ -76,6 +76,15 @@
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          :current-page="offeringPagination.currentPage.value"
+          :page-count="offeringPagination.pageCount.value"
+          :page-size="offeringPagination.pageSize.value"
+          :total-rows="offeringPagination.totalRows.value"
+          :start-row="offeringPagination.startRow.value"
+          :end-row="offeringPagination.endRow.value"
+          @change-page="offeringPagination.goToPage"
+        />
       </section>
 
       <form class="panel form-grid" @submit.prevent="saveOffering">
@@ -162,7 +171,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import {
   createOffering,
   deleteOffering,
@@ -174,6 +183,8 @@ import {
 } from '../api/offerings';
 import { listMembers, type MemberRecord } from '../api/members';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
+import PaginationControls from '../components/PaginationControls.vue';
+import { usePagination } from '../composables/usePagination';
 
 interface OfferingForm {
   givingType: GivingType;
@@ -226,6 +237,9 @@ const filteredOfferings = computed(() =>
 const filteredTotal = computed(() =>
   filteredOfferings.value.reduce((total, offering) => total + Number(offering.amount), 0),
 );
+const offeringPagination = usePagination(filteredOfferings);
+
+watch(filters, () => offeringPagination.resetPage());
 
 onMounted(async () => {
   await Promise.all([loadOfferings(), loadFunds(), loadPaymentMethods(), loadMembers()]);
@@ -236,6 +250,7 @@ async function loadOfferings() {
   savedMessage.value = '';
   try {
     offerings.value = await listOfferings();
+    offeringPagination.resetPage();
     savedMessage.value = 'Refreshed';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offerings.';

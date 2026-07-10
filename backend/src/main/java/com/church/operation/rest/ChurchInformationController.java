@@ -22,7 +22,8 @@ public class ChurchInformationController {
             properties.information().contactInfo(),
             properties.information().treasurerName(),
             properties.branding().bannerPath(),
-            properties.branding().logPath()
+            properties.branding().logPath(),
+            properties.ui().listPageSize()
         );
     }
 
@@ -32,7 +33,8 @@ public class ChurchInformationController {
         String contactInfo,
         String treasurerName,
         String bannerPath,
-        String logPath
+        String logPath,
+        int listPageSize
     ) {
     }
 }

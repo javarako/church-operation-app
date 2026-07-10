@@ -40,7 +40,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="budget in filteredBudgets"
+                v-for="budget in budgetPagination.paginatedRows.value"
                 :key="budget.id"
                 :class="{ selected: editingBudgetId === budget.id }"
                 @click="selectBudget(budget)"
@@ -66,6 +66,15 @@
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          :current-page="budgetPagination.currentPage.value"
+          :page-count="budgetPagination.pageCount.value"
+          :page-size="budgetPagination.pageSize.value"
+          :total-rows="budgetPagination.totalRows.value"
+          :start-row="budgetPagination.startRow.value"
+          :end-row="budgetPagination.endRow.value"
+          @change-page="budgetPagination.goToPage"
+        />
       </section>
 
       <form class="panel form-grid" @submit.prevent="saveBudget">
@@ -126,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import {
   createBudget,
   deleteBudget,
@@ -137,6 +146,8 @@ import {
   type BudgetType,
 } from '../api/budgets';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
+import PaginationControls from '../components/PaginationControls.vue';
+import { usePagination } from '../composables/usePagination';
 
 interface BudgetForm {
   budgetType: BudgetType;
@@ -176,6 +187,9 @@ const form = reactive<BudgetForm>({
 const filteredBudgets = computed(() =>
   budgets.value.filter((budget) => !filters.budgetType || budget.budgetType === filters.budgetType),
 );
+const budgetPagination = usePagination(filteredBudgets);
+
+watch(filters, () => budgetPagination.resetPage());
 
 const showsCategory = computed(() => form.budgetType !== 'CARRY_OVER');
 const showsSubCategory = computed(() => form.budgetType === 'EXPENSE');
@@ -196,6 +210,7 @@ async function loadBudgets() {
   savedMessage.value = '';
   try {
     budgets.value = await listBudgets(selectedFiscalYear.value);
+    budgetPagination.resetPage();
     savedMessage.value = 'Refreshed';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load budgets.';

@@ -13,6 +13,7 @@ vi.mock('./api/churchInformation', () => ({
     treasurerName: 'Daniel Kim',
     bannerPath: '/branding/church-banner.png',
     logPath: '/branding/church_logo.png',
+    listPageSize: 20,
   }),
 }));
 
@@ -50,6 +51,7 @@ describe('App', () => {
       treasurerName: 'Daniel Kim',
       bannerPath: '/branding/church-banner.png',
       logPath: '/branding/church_logo.png',
+      listPageSize: 20,
     });
     authState.currentUser = {
       primaryEmail: 'admin@example.com',

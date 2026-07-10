@@ -203,6 +203,34 @@ textarea {
   color: #1f2933;
 }
 
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  color: #5b6778;
+}
+
+.pagination-controls > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-controls button {
+  min-height: 34px;
+  border: 1px solid #c8d0d9;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: white;
+  color: #22577a;
+}
+
+.pagination-controls button:disabled {
+  opacity: 0.45;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

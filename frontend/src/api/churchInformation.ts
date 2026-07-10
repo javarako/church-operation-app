@@ -7,6 +7,7 @@ export interface ChurchInformation {
   treasurerName: string;
   bannerPath: string;
   logPath: string;
+  listPageSize: number;
 }
 
 export function getChurchInformation() {

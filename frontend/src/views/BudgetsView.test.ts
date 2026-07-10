@@ -4,6 +4,18 @@ import BudgetsView from './BudgetsView.vue';
 import { listBudgets } from '../api/budgets';
 import { listReferenceData } from '../api/referenceData';
 
+vi.mock('../api/churchInformation', () => ({
+  getChurchInformation: vi.fn().mockResolvedValue({
+    name: 'Grace Community Church',
+    address: '123 Church Street',
+    contactInfo: '416-555-0100',
+    treasurerName: 'Daniel Kim',
+    bannerPath: '/branding/church-banner.png',
+    logPath: '/branding/church_logo.png',
+    listPageSize: 20,
+  }),
+}));
+
 vi.mock('../api/budgets', () => ({
   listBudgets: vi.fn().mockResolvedValue([]),
   createBudget: vi.fn(),

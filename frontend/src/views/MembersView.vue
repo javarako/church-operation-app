@@ -28,7 +28,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="member in members"
+                v-for="member in memberPagination.paginatedRows.value"
                 :key="member.id"
                 :class="{ selected: selectedMember?.id === member.id }"
                 @click="selectMember(member)"
@@ -41,6 +41,15 @@
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          :current-page="memberPagination.currentPage.value"
+          :page-count="memberPagination.pageCount.value"
+          :page-size="memberPagination.pageSize.value"
+          :total-rows="memberPagination.totalRows.value"
+          :start-row="memberPagination.startRow.value"
+          :end-row="memberPagination.endRow.value"
+          @change-page="memberPagination.goToPage"
+        />
       </section>
 
       <form class="panel form-grid" @submit.prevent="saveMember">
@@ -150,6 +159,8 @@ import { onMounted, reactive, ref } from 'vue';
 import { createMember, listMembers, updateMember, type Address, type MemberPayload, type MemberRecord } from '../api/members';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import type { Role } from '../auth/authStore';
+import PaginationControls from '../components/PaginationControls.vue';
+import { usePagination } from '../composables/usePagination';
 
 interface MemberForm extends MemberPayload {
   mailingAddress: Address;
@@ -164,6 +175,7 @@ const error = ref('');
 const savedMessage = ref('');
 const groupCodeOptions = ref<ReferenceDataOption[]>([]);
 const membershipStatusOptions = ref<ReferenceDataOption[]>([]);
+const memberPagination = usePagination(members);
 
 const form = reactive<MemberForm>({
   primaryEmail: '',
@@ -204,6 +216,7 @@ async function loadMembers() {
   error.value = '';
   try {
     members.value = await listMembers(search.value);
+    memberPagination.resetPage();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load members.';
   }

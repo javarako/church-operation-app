@@ -54,7 +54,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="transaction in filteredRows"
+                v-for="transaction in financePagination.paginatedRows.value"
                 :key="transaction.id"
                 :class="{ selected: editingExpenseId === transaction.id, 'read-only-row': !isManualExpense(transaction) }"
                 @click="selectExpense(transaction)"
@@ -86,6 +86,15 @@
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          :current-page="financePagination.currentPage.value"
+          :page-count="financePagination.pageCount.value"
+          :page-size="financePagination.pageSize.value"
+          :total-rows="financePagination.totalRows.value"
+          :start-row="financePagination.startRow.value"
+          :end-row="financePagination.endRow.value"
+          @change-page="financePagination.goToPage"
+        />
       </section>
 
       <form class="panel form-grid" @submit.prevent="saveExpense">
@@ -163,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import {
   createExpense,
   deleteExpense,
@@ -174,6 +183,8 @@ import {
   type FinancialTransactionType,
 } from '../api/finance';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
+import PaginationControls from '../components/PaginationControls.vue';
+import { usePagination } from '../composables/usePagination';
 
 interface ExpenseForm {
   transactionDate: string;
@@ -283,6 +294,9 @@ const filteredExpense = computed(() =>
     .filter((transaction) => transaction.type === 'EXPENSE')
     .reduce((total, transaction) => total + Number(transaction.amount), 0),
 );
+const financePagination = usePagination(filteredRows);
+
+watch(filters, () => financePagination.resetPage());
 
 onMounted(async () => {
   await Promise.all([loadTransactions(), loadOfferingFunds(), loadFinancialCategories(), loadAllSubCategories()]);
@@ -293,6 +307,7 @@ async function loadTransactions() {
   savedMessage.value = '';
   try {
     transactions.value = await listFinanceTransactions();
+    financePagination.resetPage();
     savedMessage.value = 'Refreshed';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load finance transactions.';

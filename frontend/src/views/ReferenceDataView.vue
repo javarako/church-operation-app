@@ -33,7 +33,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="option in options"
+                v-for="option in referencePagination.paginatedRows.value"
                 :key="option.id"
                 :class="{ selected: selectedOption?.id === option.id }"
                 @click="selectOption(option)"
@@ -47,6 +47,15 @@
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          :current-page="referencePagination.currentPage.value"
+          :page-count="referencePagination.pageCount.value"
+          :page-size="referencePagination.pageSize.value"
+          :total-rows="referencePagination.totalRows.value"
+          :start-row="referencePagination.startRow.value"
+          :end-row="referencePagination.endRow.value"
+          @change-page="referencePagination.goToPage"
+        />
       </section>
 
       <form class="panel form-grid" @submit.prevent="saveOption">
@@ -105,6 +114,8 @@ import {
   type ReferenceDataPayload,
   type ReferenceDataType,
 } from '../api/referenceData';
+import PaginationControls from '../components/PaginationControls.vue';
+import { usePagination } from '../composables/usePagination';
 
 const selectedType = ref<ReferenceDataType>('GROUP_CODE');
 const selectedOption = ref<ReferenceDataOption | null>(null);
@@ -112,6 +123,7 @@ const options = ref<ReferenceDataOption[]>([]);
 const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
 const error = ref('');
 const savedMessage = ref('');
+const referencePagination = usePagination(options);
 
 const typeOptions: Array<{ type: ReferenceDataType; label: string }> = [
   { type: 'GROUP_CODE', label: 'Group code' },
@@ -139,6 +151,7 @@ async function loadOptions() {
   error.value = '';
   try {
     options.value = await listReferenceData(selectedType.value);
+    referencePagination.resetPage();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load reference data.';
   }

@@ -141,7 +141,7 @@
           </thead>
           <tbody>
             <tr
-              v-for="row in weeklyRows"
+              v-for="row in weeklyPagination.paginatedRows.value"
               :key="`${row.offeringSunday}-${row.fundCategory}-${row.givingType}-${row.paymentMethod}`"
             >
               <td>{{ row.offeringSunday }}</td>
@@ -169,7 +169,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in memberRows" :key="`${row.memberId}-${row.fundCategory}`">
+            <tr v-for="row in memberPagination.paginatedRows.value" :key="`${row.memberId}-${row.fundCategory}`">
               <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.memberName }}</td>
               <td>{{ row.primaryEmail }}</td>
@@ -196,7 +196,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in taxRows" :key="`${row.memberId}-${row.givingDate}-${row.fundCategory}-${row.amount}`">
+            <tr
+              v-for="row in taxPagination.paginatedRows.value"
+              :key="`${row.memberId}-${row.givingDate}-${row.fundCategory}-${row.amount}`"
+            >
               <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.givingDate }}</td>
               <td>{{ row.memberName }}</td>
@@ -224,7 +227,7 @@
           </thead>
           <tbody>
             <tr
-              v-for="row in financialRows"
+              v-for="row in financialPagination.paginatedRows.value"
               :key="`${row.fiscalYear}-${row.budgetType}-${row.category || ''}-${row.subCategory || ''}`"
             >
               <td>{{ row.budgetType }}</td>
@@ -240,12 +243,57 @@
           </tbody>
         </table>
       </div>
+
+      <PaginationControls
+        v-if="activeVisibleReportId === 'weekly-offerings'"
+        :current-page="weeklyPagination.currentPage.value"
+        :page-count="weeklyPagination.pageCount.value"
+        :page-size="weeklyPagination.pageSize.value"
+        :total-rows="weeklyPagination.totalRows.value"
+        :start-row="weeklyPagination.startRow.value"
+        :end-row="weeklyPagination.endRow.value"
+        @change-page="weeklyPagination.goToPage"
+      />
+
+      <PaginationControls
+        v-else-if="activeVisibleReportId === 'member-offerings'"
+        :current-page="memberPagination.currentPage.value"
+        :page-count="memberPagination.pageCount.value"
+        :page-size="memberPagination.pageSize.value"
+        :total-rows="memberPagination.totalRows.value"
+        :start-row="memberPagination.startRow.value"
+        :end-row="memberPagination.endRow.value"
+        @change-page="memberPagination.goToPage"
+      />
+
+      <PaginationControls
+        v-else-if="activeVisibleReportId === 'tax-return'"
+        :current-page="taxPagination.currentPage.value"
+        :page-count="taxPagination.pageCount.value"
+        :page-size="taxPagination.pageSize.value"
+        :total-rows="taxPagination.totalRows.value"
+        :start-row="taxPagination.startRow.value"
+        :end-row="taxPagination.endRow.value"
+        @change-page="taxPagination.goToPage"
+      />
+
+      <PaginationControls
+        v-else
+        :current-page="financialPagination.currentPage.value"
+        :page-count="financialPagination.pageCount.value"
+        :page-size="financialPagination.pageSize.value"
+        :total-rows="financialPagination.totalRows.value"
+        :start-row="financialPagination.startRow.value"
+        :end-row="financialPagination.endRow.value"
+        @change-page="financialPagination.goToPage"
+      />
     </section>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import PaginationControls from '../components/PaginationControls.vue';
 import {
   listFinancialBudgetReport,
   listMemberOfferingSummaryReport,
@@ -258,6 +306,7 @@ import {
 } from '../api/reports';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import { authState, type Role } from '../auth/authStore';
+import { usePagination } from '../composables/usePagination';
 
 interface ReportTab {
   id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget';
@@ -300,6 +349,10 @@ const weeklyRows = ref<WeeklyOfferingReportRow[]>([]);
 const memberRows = ref<MemberOfferingSummaryReportRow[]>([]);
 const taxRows = ref<OfficialTaxReportRow[]>([]);
 const financialRows = ref<FinancialBudgetReportRow[]>([]);
+const weeklyPagination = usePagination(weeklyRows);
+const memberPagination = usePagination(memberRows);
+const taxPagination = usePagination(taxRows);
+const financialPagination = usePagination(financialRows);
 const offeringFundOptions = ref<ReferenceDataOption[]>([]);
 const paymentMethodOptions = ref<ReferenceDataOption[]>([]);
 const loading = ref(false);
@@ -416,20 +469,24 @@ async function runActiveReport() {
   try {
     if (activeVisibleReportId.value === 'weekly-offerings') {
       weeklyRows.value = await listWeeklyOfferingReport({ ...weeklyFilters });
+      weeklyPagination.resetPage();
       return;
     }
 
     if (activeVisibleReportId.value === 'member-offerings') {
       memberRows.value = await listMemberOfferingSummaryReport({ ...memberFilters });
+      memberPagination.resetPage();
       return;
     }
 
     if (activeVisibleReportId.value === 'tax-return') {
       taxRows.value = await listOfficialTaxReport({ ...taxFilters });
+      taxPagination.resetPage();
       return;
     }
 
     financialRows.value = await listFinancialBudgetReport({ ...financialFilters });
+    financialPagination.resetPage();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load report.';
   } finally {

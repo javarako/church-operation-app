@@ -367,7 +367,8 @@ class ReportServiceTest {
             budgetRepository,
             new ChurchInformationProperties(
                 new ChurchInformationProperties.Information("Grace Church", "1 Hope Rd", "555-1111", "Pat Lee"),
-                new ChurchInformationProperties.Branding(null, null)
+                new ChurchInformationProperties.Branding(null, null),
+                new ChurchInformationProperties.Ui(20)
             ),
             new FiscalYearProperties(4)
         );
