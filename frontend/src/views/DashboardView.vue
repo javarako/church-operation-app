@@ -341,7 +341,7 @@ function currentSunday(date: Date) {
 
 .banner-panel {
   position: relative;
-  min-height: 190px;
+  min-height: 133px;
   overflow: hidden;
   background: #123047;
 }
@@ -349,7 +349,7 @@ function currentSunday(date: Date) {
 .banner-panel img {
   width: 100%;
   height: 100%;
-  min-height: 190px;
+  min-height: 133px;
   display: block;
   object-fit: cover;
 }
@@ -362,7 +362,7 @@ function currentSunday(date: Date) {
 }
 
 .empty-banner {
-  min-height: 190px;
+  min-height: 133px;
 }
 
 .banner-copy {
