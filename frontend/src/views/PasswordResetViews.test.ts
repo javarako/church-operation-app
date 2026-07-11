@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import { postEmpty, postJson } from '../api/http';
 import ForgotPasswordView from './ForgotPasswordView.vue';
 import LoginView from './LoginView.vue';
 import ResetPasswordView from './ResetPasswordView.vue';
+import ChangePasswordView from './ChangePasswordView.vue';
+import { authState } from '../auth/authStore';
 
 vi.mock('../api/http', () => ({
   postJson: vi.fn(),
@@ -21,6 +23,7 @@ function testRouter(path = '/login') {
       { path: '/login', component: LoginView },
       { path: '/forgot-password', component: ForgotPasswordView },
       { path: '/reset-password', component: ResetPasswordView },
+      { path: '/change-password', component: ChangePasswordView },
       { path: '/', component: { template: '<main>Dashboard</main>' } },
     ],
   });
@@ -30,6 +33,7 @@ function testRouter(path = '/login') {
 
 afterEach(() => {
   cleanup();
+  authState.currentUser = null;
   vi.clearAllMocks();
 });
 
@@ -89,5 +93,31 @@ describe('password reset views', () => {
     });
     expect(await screen.findByText('Your password has been reset.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Return to sign in' })).toBeTruthy();
+  });
+
+  it('handles a no-content forced password change and opens the dashboard', async () => {
+    authState.currentUser = {
+      primaryEmail: 'admin',
+      displayName: 'System Administrator',
+      roles: ['ADMIN'],
+      mustChangePassword: true,
+      token: 'login-token',
+    };
+    postEmptyMock.mockResolvedValue(undefined);
+    const router = testRouter('/change-password');
+    await router.isReady();
+    render(ChangePasswordView, { global: { plugins: [router] } });
+
+    await fireEvent.update(screen.getByLabelText('Current password'), 'password');
+    await fireEvent.update(screen.getByLabelText('New password'), 'password1');
+    await fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
+
+    expect(postEmptyMock).toHaveBeenCalledWith('/api/auth/change-password', {
+      username: 'admin',
+      currentPassword: 'password',
+      newPassword: 'password1',
+    });
+    expect(authState.currentUser.mustChangePassword).toBe(false);
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/'));
   });
 });

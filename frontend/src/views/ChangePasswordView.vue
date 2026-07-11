@@ -19,7 +19,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { postJson } from '../api/http';
+import { postEmpty } from '../api/http';
 import { authState, setCurrentUser } from '../auth/authStore';
 
 const router = useRouter();
@@ -34,7 +34,7 @@ async function changePassword() {
     return;
   }
   try {
-    await postJson('/api/auth/change-password', {
+    await postEmpty('/api/auth/change-password', {
       username: authState.currentUser.primaryEmail,
       currentPassword: currentPassword.value,
       newPassword: newPassword.value,
