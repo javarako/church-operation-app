@@ -11,21 +11,23 @@ services:
       context: ./backend
     environment:
       SPRING_MONGODB_URI: mongodb://mongo:27017/church_operations
-      CHURCH_NAME: Capstone Presbyterian Church
-      CHURCH_ADDRESS: 111 Cactus Ave, North York, ON M2R 2V1
-      CHURCH_CONTACT_INFO: lovecapstone@gmail.com
-      CHURCH_TREASURER_NAME: Treasurer
-      MAIL_HOST: mailpit
-      MAIL_PORT: 1025
-      MAIL_SMTP_AUTH: "false"
-      MAIL_SMTP_STARTTLS: "false"
-      PASSWORD_RESET_FRONTEND_BASE_URL: http://localhost:5173
-      PASSWORD_RESET_FROM_ADDRESS: no-reply@church.local
+      CHURCH_NAME: ${CHURCH_NAME_VALUE:Capstone Presbyterian Church}
+      CHURCH_ADDRESS: ${CHURCH_ADDRESS_VALUE:111 Cactus Ave, North York, ON M2R 2V1}
+      CHURCH_CONTACT_INFO: ${CHURCH_CONTACT_INFO_VALUE:lovecapstone@gmail.com}
+      CHURCH_TREASURER_NAME: ${CHURCH_TREASURER_NAME_VALUE:Treasurer}
+      MAIL_HOST: smtp-relay.brevo.com #mailpit
+      MAIL_PORT: 587 ##1025
+      MAIL_USERNAME: ${BREVO_SMTP_USERNAME}
+      MAIL_PASSWORD: ${BREVO_SMTP_KEY}
+      MAIL_SMTP_AUTH: "true" #"false"
+      MAIL_SMTP_STARTTLS: "true" #"false"
+      PASSWORD_RESET_FRONTEND_BASE_URL: ${PASSWORD_RESET_FRONTEND_BASE_URL:-http://localhost:5173}
+      PASSWORD_RESET_FROM_ADDRESS: ${PASSWORD_RESET_FROM_ADDRESS:no-reply@church.local}
     ports:
       - "8080:8080"
     depends_on:
       - mongo
-      - mailpit
+      #- mailpit
 
   mailpit:
     image: axllent/mailpit:latest
