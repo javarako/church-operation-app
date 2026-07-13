@@ -32,6 +32,9 @@ church:
     address: ${CHURCH_ADDRESS:church address --- IGNORE ---}
     contact-info: ${CHURCH_CONTACT_INFO:contact info --- IGNORE ---}
     treasurer-name: ${CHURCH_TREASURER_NAME:treasurer name --- IGNORE ---}
+    charity-registration-number: ${CHURCH_CHARITY_REGISTRATION_NUMBER:}
+    receipt-issue-location: ${CHURCH_RECEIPT_ISSUE_LOCATION:}
+    website: ${CHURCH_WEBSITE:}
   branding:
     banner-path: /branding/church-banner.png
     log-path: /branding/church_logo.png

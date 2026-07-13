@@ -8,7 +8,15 @@ public record ChurchInformationProperties(
     Branding branding,
     Ui ui
 ) {
-    public record Information(String name, String address, String contactInfo, String treasurerName) {
+    public record Information(
+        String name,
+        String address,
+        String contactInfo,
+        String treasurerName,
+        String charityRegistrationNumber,
+        String receiptIssueLocation,
+        String website
+    ) {
     }
 
     public record Branding(String bannerPath, String logPath) {
