@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authState } from '../auth/authStore';
-import { deleteEmpty, getBlob, postJson, putFile } from './http';
+import { deleteEmpty, getBlob, postBlob, postJson, putFile } from './http';
 
 describe('HTTP file helpers', () => {
   beforeEach(() => {
@@ -54,6 +54,19 @@ describe('HTTP file helpers', () => {
     const headers = new Headers(fetchMock.mock.calls[0][1].headers);
     expect(headers.get('Authorization')).toBe('Bearer issued-token');
     expect(result).toBeInstanceOf(Blob);
+  });
+
+  it('posts JSON and returns a Blob download', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(new Blob(['zip']), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await postBlob('/api/reports/tax-receipts/issue-batch', { taxYear: 2026 });
+
+    expect(result).toBeInstanceOf(Blob);
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ taxYear: 2026 }));
+    const headers = new Headers(fetchMock.mock.calls[0][1].headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
   });
 
   it('sends an empty DELETE request', async () => {

@@ -30,7 +30,15 @@
           <h3>{{ activeReport.title }}</h3>
           <p>{{ activeReport.description }}</p>
         </div>
-        <button type="button" class="secondary" @click="exportActiveReport">
+        <button
+          v-if="activeVisibleReportId === 'tax-return'"
+          type="button"
+          :disabled="receiptBusy"
+          @click="downloadAllReceipts"
+        >
+          Download all receipts
+        </button>
+        <button v-else type="button" class="secondary" @click="exportActiveReport">
           Export CSV
         </button>
       </div>
@@ -104,6 +112,11 @@
           <label>
             Offering number
             <input v-model="taxFilters.offeringNumber" placeholder="All offering numbers" />
+          </label>
+
+          <label class="tax-note-field">
+            Thank-you note
+            <textarea v-model="thankYouNote" maxlength="500" rows="3"></textarea>
           </label>
         </template>
 
@@ -186,30 +199,62 @@
         <table v-else-if="activeVisibleReportId === 'tax-return'">
           <thead>
             <tr>
-              <th>Offering number</th>
-              <th>Giving date</th>
-              <th>Member</th>
-              <th>Email</th>
+              <th>Offering #</th>
+              <th>Donor</th>
               <th>Address</th>
-              <th>Fund/category</th>
-              <th>Amount</th>
+              <th>Tax year</th>
+              <th>Total offering</th>
+              <th>Receipt #</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="row in taxPagination.paginatedRows.value"
-              :key="`${row.memberId}-${row.givingDate}-${row.fundCategory}-${row.amount}`"
+              :key="`${row.memberId}-${row.taxYear}`"
             >
-              <td>{{ row.offeringNumber || '-' }}</td>
-              <td>{{ row.givingDate }}</td>
-              <td>{{ row.memberName }}</td>
-              <td>{{ row.primaryEmail }}</td>
-              <td>{{ row.memberAddress || '-' }}</td>
-              <td>{{ row.fundCategory }}</td>
-              <td>{{ formatMoney(row.amount) }}</td>
+              <td>{{ row.offeringNumber }}</td>
+              <td>{{ row.donorName }}</td>
+              <td>{{ row.donorAddress || '-' }}</td>
+              <td>{{ row.taxYear }}</td>
+              <td>{{ formatMoney(row.totalAmount) }}</td>
+              <td>
+                {{ row.receiptNumber || '-' }}
+                <span v-if="row.sourceChanged" class="receipt-warning">
+                  Offerings changed after this receipt was issued.
+                </span>
+              </td>
+              <td>{{ row.receiptStatus || 'Not issued' }}</td>
+              <td class="receipt-actions">
+                <button
+                  v-if="!row.receiptId"
+                  type="button"
+                  :disabled="receiptBusy"
+                  @click="issueReceipt(row)"
+                >
+                  Issue receipt
+                </button>
+                <template v-else-if="row.receiptStatus === 'ISSUED'">
+                  <button type="button" class="secondary" :disabled="receiptBusy" @click="downloadReceipt(row)">
+                    Download
+                  </button>
+                  <button type="button" class="secondary danger-text" :disabled="receiptBusy" @click="voidReceipt(row)">
+                    Void receipt
+                  </button>
+                </template>
+                <button
+                  v-else
+                  type="button"
+                  :disabled="receiptBusy"
+                  @click="replaceReceipt(row)"
+                >
+                  Replace receipt
+                </button>
+              </td>
             </tr>
             <tr v-if="!taxRows.length && !loading">
-              <td colspan="7" class="empty-state">No tax report rows found.</td>
+              <td colspan="8" class="empty-state">No eligible member offerings found for this tax year.</td>
             </tr>
           </tbody>
         </table>
@@ -295,13 +340,19 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import PaginationControls from '../components/PaginationControls.vue';
 import {
+  DEFAULT_THANK_YOU_NOTE,
+  downloadTaxReceiptPdf,
+  issueBatchTaxReceipts,
+  issueTaxReceipt,
   listFinancialBudgetReport,
   listMemberOfferingSummaryReport,
-  listOfficialTaxReport,
+  listTaxReceiptSummary,
   listWeeklyOfferingReport,
+  replaceTaxReceipt,
+  voidTaxReceipt,
   type FinancialBudgetReportRow,
   type MemberOfferingSummaryReportRow,
-  type OfficialTaxReportRow,
+  type TaxReceiptSummaryRow,
   type WeeklyOfferingReportRow,
 } from '../api/reports';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
@@ -347,7 +398,7 @@ const now = new Date();
 const activeReportId = ref<ReportTab['id']>('weekly-offerings');
 const weeklyRows = ref<WeeklyOfferingReportRow[]>([]);
 const memberRows = ref<MemberOfferingSummaryReportRow[]>([]);
-const taxRows = ref<OfficialTaxReportRow[]>([]);
+const taxRows = ref<TaxReceiptSummaryRow[]>([]);
 const financialRows = ref<FinancialBudgetReportRow[]>([]);
 const weeklyPagination = usePagination(weeklyRows);
 const memberPagination = usePagination(memberRows);
@@ -356,7 +407,9 @@ const financialPagination = usePagination(financialRows);
 const offeringFundOptions = ref<ReferenceDataOption[]>([]);
 const paymentMethodOptions = ref<ReferenceDataOption[]>([]);
 const loading = ref(false);
+const receiptBusy = ref(false);
 const error = ref('');
+const thankYouNote = ref(DEFAULT_THANK_YOU_NOTE);
 
 const weeklyFilters = reactive({
   start: startOfYear(now),
@@ -416,7 +469,7 @@ const activeSummary = computed(() => {
     return {
       label: 'Receipt total',
       rows: taxRows.value.length,
-      total: formatSummaryMoney(sum(taxRows.value.map((row) => row.amount))),
+      total: formatSummaryMoney(sum(taxRows.value.map((row) => row.totalAmount))),
     };
   }
 
@@ -480,7 +533,12 @@ async function runActiveReport() {
     }
 
     if (activeVisibleReportId.value === 'tax-return') {
-      taxRows.value = await listOfficialTaxReport({ ...taxFilters });
+      const rows = await listTaxReceiptSummary({ ...taxFilters });
+      taxRows.value = rows.sort((left, right) => left.offeringNumber.localeCompare(
+        right.offeringNumber,
+        undefined,
+        { numeric: true, sensitivity: 'base' },
+      ));
       taxPagination.resetPage();
       return;
     }
@@ -527,46 +585,6 @@ function exportActiveReport() {
     return;
   }
 
-  if (activeVisibleReportId.value === 'tax-return') {
-    const confirmed = window.confirm('This extraction is for official use. Continue?');
-    if (!confirmed) {
-      return;
-    }
-
-    exportCsv(
-      'official-tax-return.csv',
-      [
-        'Church name',
-        'Church address',
-        'Church contact info',
-        'Treasurer name',
-        'Tax year',
-        'Offering number',
-        'Giving date',
-        'Member',
-        'Email',
-        'Address',
-        'Fund/category',
-        'Amount',
-      ],
-      taxRows.value.map((row) => [
-        row.churchName,
-        row.churchAddress,
-        row.churchContactInfo,
-        row.treasurerName,
-        row.taxYear,
-        row.offeringNumber,
-        row.givingDate,
-        row.memberName,
-        row.primaryEmail,
-        row.memberAddress,
-        row.fundCategory,
-        row.amount,
-      ]),
-    );
-    return;
-  }
-
   exportCsv(
     'financial-budget-report.csv',
     ['Type', 'Category', 'Sub-category', 'Budget', 'Actual', 'Variance'],
@@ -579,6 +597,78 @@ function exportActiveReport() {
       row.variance,
     ]),
   );
+}
+
+async function issueReceipt(row: TaxReceiptSummaryRow) {
+  await runReceiptAction(async () => {
+    const receipt = await issueTaxReceipt({
+      taxYear: row.taxYear,
+      offeringNumber: row.offeringNumber,
+      thankYouNote: thankYouNote.value,
+    });
+    await downloadReceiptResult(receipt.id, `receipt-${receipt.receiptNumber}.pdf`);
+    await runActiveReport();
+  });
+}
+
+async function downloadReceipt(row: TaxReceiptSummaryRow) {
+  if (!row.receiptId || !row.receiptNumber) return;
+  await runReceiptAction(() => downloadReceiptResult(row.receiptId!, `receipt-${row.receiptNumber}.pdf`));
+}
+
+async function downloadAllReceipts() {
+  await runReceiptAction(async () => {
+    const blob = await issueBatchTaxReceipts({
+      taxYear: taxFilters.taxYear,
+      thankYouNote: thankYouNote.value,
+    });
+    downloadBlob(blob, `tax-receipts-${taxFilters.taxYear}.zip`);
+    await runActiveReport();
+  });
+}
+
+async function voidReceipt(row: TaxReceiptSummaryRow) {
+  if (!row.receiptId || !window.confirm(`Void receipt ${row.receiptNumber}?`)) return;
+  const reason = window.prompt('Reason for voiding this receipt:')?.trim();
+  if (!reason) return;
+  await runReceiptAction(async () => {
+    await voidTaxReceipt(row.receiptId!, reason);
+    await runActiveReport();
+  });
+}
+
+async function replaceReceipt(row: TaxReceiptSummaryRow) {
+  if (!row.receiptId) return;
+  await runReceiptAction(async () => {
+    const receipt = await replaceTaxReceipt(row.receiptId!, thankYouNote.value);
+    await downloadReceiptResult(receipt.id, `receipt-${receipt.receiptNumber}.pdf`);
+    await runActiveReport();
+  });
+}
+
+async function downloadReceiptResult(receiptId: string, filename: string) {
+  downloadBlob(await downloadTaxReceiptPdf(receiptId), filename);
+}
+
+async function runReceiptAction(action: () => Promise<void>) {
+  error.value = '';
+  receiptBusy.value = true;
+  try {
+    await action();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not complete the receipt action.';
+  } finally {
+    receiptBusy.value = false;
+  }
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function validateActiveFilters() {
@@ -691,12 +781,46 @@ function startOfYear(value: Date) {
 }
 
 .report-filters input,
-.report-filters select {
+.report-filters select,
+.report-filters textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #c8d0d9;
   border-radius: 6px;
   padding: 9px 10px;
+}
+
+.tax-note-field {
+  grid-column: 1 / -1;
+}
+
+.tax-note-field textarea {
+  resize: vertical;
+  min-height: 72px;
+  font: inherit;
+}
+
+.receipt-warning {
+  display: block;
+  margin-top: 4px;
+  color: #9a5b00;
+  font-size: 12px;
+  white-space: normal;
+}
+
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.receipt-actions button {
+  white-space: nowrap;
+}
+
+.danger-text {
+  color: #a32929;
 }
 
 .report-filters .actions {

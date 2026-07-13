@@ -1,4 +1,4 @@
-import { getJson } from './http';
+import { getBlob, getJson, postBlob, postJson } from './http';
 
 export type GivingType = 'MEMBER' | 'ANONYMOUS' | 'GROUP';
 export type BudgetType = 'CARRY_OVER' | 'OFFERING_INCOME' | 'EXPENSE';
@@ -22,20 +22,27 @@ export interface MemberOfferingSummaryReportRow {
   totalAmount: number;
 }
 
-export interface OfficialTaxReportRow {
-  churchName: string;
-  churchAddress: string;
-  churchContactInfo: string;
-  treasurerName: string;
-  taxYear: number;
+export const DEFAULT_THANK_YOU_NOTE = "Thank you for your faithful and generous support over the past year. Because of you, we are able to continue serving our community and sharing God's message.";
+
+export type TaxReceiptStatus = 'ISSUED' | 'VOID';
+
+export interface TaxReceiptSummaryRow {
   memberId: string;
-  memberName: string;
-  primaryEmail: string;
-  offeringNumber?: string;
-  memberAddress?: string;
-  givingDate: string;
-  fundCategory: string;
-  amount: number;
+  offeringNumber: string;
+  donorName: string;
+  donorAddress?: string;
+  taxYear: number;
+  totalAmount: number;
+  receiptId?: string;
+  receiptNumber?: string;
+  receiptStatus?: TaxReceiptStatus;
+  sourceChanged: boolean;
+}
+
+export interface TaxReceiptResult {
+  id: string;
+  receiptNumber: string;
+  status: TaxReceiptStatus;
 }
 
 export interface FinancialBudgetReportRow {
@@ -62,9 +69,20 @@ interface MemberOfferingSummaryReportFilters {
   fundCategory?: string;
 }
 
-interface OfficialTaxReportFilters {
+interface TaxReceiptSummaryFilters {
   taxYear: number;
   offeringNumber?: string;
+}
+
+interface TaxReceiptIssuePayload {
+  taxYear: number;
+  offeringNumber: string;
+  thankYouNote: string;
+}
+
+interface TaxReceiptBatchPayload {
+  taxYear: number;
+  thankYouNote: string;
 }
 
 interface FinancialBudgetReportFilters {
@@ -96,8 +114,30 @@ export function listMemberOfferingSummaryReport(filters: MemberOfferingSummaryRe
   return getJson<MemberOfferingSummaryReportRow[]>(withQuery('/api/reports/member-offerings', { ...filters }));
 }
 
-export function listOfficialTaxReport(filters: OfficialTaxReportFilters) {
-  return getJson<OfficialTaxReportRow[]>(withQuery('/api/reports/tax-return', { ...filters }));
+export function listTaxReceiptSummary(filters: TaxReceiptSummaryFilters) {
+  return getJson<TaxReceiptSummaryRow[]>(withQuery('/api/reports/tax-receipts/summary', { ...filters }));
+}
+
+export function issueTaxReceipt(payload: TaxReceiptIssuePayload) {
+  return postJson<TaxReceiptIssuePayload, TaxReceiptResult>('/api/reports/tax-receipts/issue', payload);
+}
+
+export function issueBatchTaxReceipts(payload: TaxReceiptBatchPayload) {
+  return postBlob('/api/reports/tax-receipts/issue-batch', payload);
+}
+
+export function downloadTaxReceiptPdf(receiptId: string) {
+  return getBlob(`/api/reports/tax-receipts/${receiptId}/pdf`);
+}
+
+export function voidTaxReceipt(receiptId: string, reason: string) {
+  return postJson<{ reason: string }, TaxReceiptResult>(`/api/reports/tax-receipts/${receiptId}/void`, { reason });
+}
+
+export function replaceTaxReceipt(receiptId: string, thankYouNote: string) {
+  return postJson<{ thankYouNote: string }, TaxReceiptResult>(`/api/reports/tax-receipts/${receiptId}/replace`, {
+    thankYouNote,
+  });
 }
 
 export function listFinancialBudgetReport(filters: FinancialBudgetReportFilters) {

@@ -36,6 +36,14 @@ export async function getBlob(path: string): Promise<Blob> {
   return response.blob();
 }
 
+export async function postBlob<TRequest>(path: string, body: TRequest): Promise<Blob> {
+  const response = await request(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return response.blob();
+}
+
 export async function putFile<TResponse>(path: string, field: string, file: File): Promise<TResponse> {
   const formData = new FormData();
   formData.append(field, file);
