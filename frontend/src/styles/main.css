@@ -78,6 +78,10 @@ textarea {
 }
 
 .sidebar-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   min-height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 6px;
@@ -125,10 +129,18 @@ textarea {
 }
 
 .sidebar a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: white;
   text-decoration: none;
   padding: 11px 12px;
   border-radius: 6px;
+}
+
+.sidebar a svg,
+.sidebar-logout svg {
+  flex: 0 0 auto;
 }
 
 .sidebar a.router-link-active {

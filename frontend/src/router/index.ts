@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { authState, canAccessRoute, type Role } from '../auth/authStore';
-import { financeRoles, membershipRoles, reportRoles, selfServiceRoles, staffRoles } from '../auth/roles';
+import { adminRoles, financeRoles, membershipRoles, reportRoles, selfServiceRoles, staffRoles } from '../auth/roles';
 import LoginView from '../views/LoginView.vue';
 import ChangePasswordView from '../views/ChangePasswordView.vue';
 import ForgotPasswordView from '../views/ForgotPasswordView.vue';
@@ -13,6 +13,7 @@ import OfferingsView from '../views/OfferingsView.vue';
 import ProfileView from '../views/ProfileView.vue';
 import ReferenceDataView from '../views/ReferenceDataView.vue';
 import ReportsView from '../views/ReportsView.vue';
+import SystemAdministrationView from '../views/SystemAdministrationView.vue';
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView },
@@ -27,6 +28,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/reference-data', component: ReferenceDataView, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
   { path: '/reports', component: ReportsView, meta: { roles: reportRoles } },
   { path: '/profile', component: ProfileView, meta: { roles: selfServiceRoles } },
+  { path: '/system-administration', component: SystemAdministrationView, meta: { roles: adminRoles } },
 ];
 
 export const router = createRouter({
