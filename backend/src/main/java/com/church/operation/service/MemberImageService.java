@@ -3,6 +3,7 @@ package com.church.operation.service;
 import com.church.operation.config.MemberImageProperties;
 import com.church.operation.dto.MemberImageContent;
 import com.church.operation.entity.Member;
+import com.church.operation.exception.MemberImageNotFoundException;
 import com.church.operation.repo.MemberRepository;
 import com.church.operation.util.Role;
 import com.mongodb.client.gridfs.model.GridFSFile;
@@ -75,12 +76,12 @@ public class MemberImageService {
         Member member = findAuthorized(actor, memberId);
         String imageId = member.getFaceImageAttachmentId();
         if (imageId == null || imageId.isBlank()) {
-            throw new IllegalArgumentException("Member image was not found.");
+            throw new MemberImageNotFoundException();
         }
 
         GridFSFile file = gridFsTemplate.findOne(idQuery(imageId));
         if (file == null) {
-            throw new IllegalArgumentException("Member image was not found.");
+            throw new MemberImageNotFoundException();
         }
 
         GridFsResource resource = gridFsTemplate.getResource(file);
