@@ -37,6 +37,8 @@ church:
     log-path: /branding/church_logo.png
   ui:
     list-page-size: ${CHURCH_LIST_PAGE_SIZE:20}
+  member-image:
+    max-size: ${CHURCH_MEMBER_IMAGE_MAX_SIZE:5MB}
   password-reset:
     frontend-base-url: ${PASSWORD_RESET_FRONTEND_BASE_URL:http://localhost:5173}
     token-lifetime: ${PASSWORD_RESET_TOKEN_LIFETIME:30m}
