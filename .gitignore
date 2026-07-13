@@ -26,3 +26,6 @@ dist/
 
 target/
 *.iml
+
+# Local Superpowers visual-companion artifacts
+.superpowers/
