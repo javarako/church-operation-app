@@ -1,12 +1,9 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.config.FiscalYearProperties;
 import com.church.operation.dto.FinancialBudgetReportRow;
 import com.church.operation.dto.MemberOfferingSummaryReportRow;
-import com.church.operation.dto.OfficialTaxReportRow;
 import com.church.operation.dto.WeeklyOfferingReportRow;
-import com.church.operation.entity.Address;
 import com.church.operation.entity.Budget;
 import com.church.operation.entity.FinancialTransaction;
 import com.church.operation.entity.Member;
@@ -149,84 +146,6 @@ class ReportServiceTest {
     }
 
     @Test
-    void viewerCannotExtractOfficialTaxReport() {
-        Member actor = member("viewer-id", Role.VIEWER);
-
-        assertThatThrownBy(() -> service().officialTaxReturn(actor, 2026, null))
-            .isInstanceOf(SecurityException.class)
-            .hasMessage("You do not have permission to extract official tax reports.");
-    }
-
-    @Test
-    void taxReportUsesCalendarYearRange() {
-        Member actor = member("treasurer-id", Role.TREASURER);
-        Member member = member("member-1", Role.MEMBER);
-        member.setDisplayName("Ada Wong");
-        member.setPrimaryEmail("ada@example.com");
-        member.setOfferingNumber("OFF-1");
-        member.setMailingAddress(new Address("123 Main St", "Unit 5", "Toronto", "ON", "M1M1M1", "Canada"));
-        when(memberRepository.findAll()).thenReturn(List.of(member));
-        when(offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
-            LocalDate.of(2026, 1, 1),
-            LocalDate.of(2026, 12, 31)
-        )).thenReturn(List.of(
-            offering("1", GivingType.MEMBER, "member-1", "Ada Wong", LocalDate.of(2026, 6, 15), LocalDate.of(2026, 6, 21), "TITHE", "CASH", "120.00")
-        ));
-
-        List<OfficialTaxReportRow> rows = service().officialTaxReturn(actor, 2026, "OFF-1");
-
-        assertThat(rows).containsExactly(
-            new OfficialTaxReportRow(
-                "Grace Church",
-                "1 Hope Rd",
-                "555-1111",
-                "Pat Lee",
-                2026,
-                "member-1",
-                "Ada Wong",
-                "ada@example.com",
-                "OFF-1",
-                "123 Main St, Unit 5, Toronto, ON, M1M1M1, Canada",
-                LocalDate.of(2026, 6, 15),
-                "TITHE",
-                new BigDecimal("120.00")
-            )
-        );
-    }
-
-    @Test
-    void taxReportFiltersAndSortsByOfferingNumberThenGivingDate() {
-        Member actor = member("treasurer-id", Role.TREASURER);
-        Member memberTwo = member("member-2", Role.MEMBER);
-        memberTwo.setDisplayName("Ben Kim");
-        memberTwo.setPrimaryEmail("ben@example.com");
-        memberTwo.setOfferingNumber("200");
-        Member memberOne = member("member-1", Role.MEMBER);
-        memberOne.setDisplayName("Ada Wong");
-        memberOne.setPrimaryEmail("ada@example.com");
-        memberOne.setOfferingNumber("100");
-        when(memberRepository.findAll()).thenReturn(List.of(memberTwo, memberOne));
-        when(offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
-            LocalDate.of(2026, 1, 1),
-            LocalDate.of(2026, 12, 31)
-        )).thenReturn(List.of(
-            offering("1", GivingType.MEMBER, "member-2", "Ben Kim", LocalDate.of(2026, 3, 10), LocalDate.of(2026, 3, 15), "TITHE", "CASH", "20.00"),
-            offering("2", GivingType.MEMBER, "member-1", "Ada Wong", LocalDate.of(2026, 2, 10), LocalDate.of(2026, 2, 15), "TITHE", "CASH", "10.00"),
-            offering("3", GivingType.MEMBER, "member-1", "Ada Wong", LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 11), "MISSION", "CASH", "15.00")
-        ));
-
-        List<OfficialTaxReportRow> rows = service().officialTaxReturn(actor, 2026, null);
-
-        assertThat(rows).extracting(row -> row.offeringNumber() + ":" + row.givingDate())
-            .containsExactly("100:2026-01-10", "100:2026-02-10", "200:2026-03-10");
-
-        List<OfficialTaxReportRow> filteredRows = service().officialTaxReturn(actor, 2026, "200");
-
-        assertThat(filteredRows).extracting(OfficialTaxReportRow::memberName)
-            .containsExactly("Ben Kim");
-    }
-
-    @Test
     void financialReportUsesConfiguredFiscalYearRange() {
         Member actor = member("viewer-id", Role.VIEWER);
         when(budgetRepository.findActiveByFiscalYear(2026)).thenReturn(List.of(
@@ -290,36 +209,6 @@ class ReportServiceTest {
     }
 
     @Test
-    void taxReportUsesCalendarYearRangeArguments() {
-        Member actor = member("treasurer-id", Role.TREASURER);
-        when(memberRepository.findAll()).thenReturn(List.of());
-        when(offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
-            LocalDate.of(2026, 1, 1),
-            LocalDate.of(2026, 12, 31)
-        )).thenReturn(List.of());
-
-        service().officialTaxReturn(actor, 2026, null);
-
-        ArgumentCaptor<LocalDate> startCaptor = ArgumentCaptor.forClass(LocalDate.class);
-        ArgumentCaptor<LocalDate> endCaptor = ArgumentCaptor.forClass(LocalDate.class);
-        verify(offeringRepository).findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
-            startCaptor.capture(),
-            endCaptor.capture()
-        );
-        assertThat(startCaptor.getValue()).isEqualTo(LocalDate.of(2026, 1, 1));
-        assertThat(endCaptor.getValue()).isEqualTo(LocalDate.of(2026, 12, 31));
-    }
-
-    @Test
-    void taxReportRejectsInvalidTaxYear() {
-        Member actor = member("treasurer-id", Role.TREASURER);
-
-        assertThatThrownBy(() -> service().officialTaxReturn(actor, 0, null))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Tax year is required.");
-    }
-
-    @Test
     void financialReportUsesActiveTransactionsWithinFiscalYearRange() {
         Member actor = member("viewer-id", Role.VIEWER);
         when(budgetRepository.findActiveByFiscalYear(2026)).thenReturn(List.of(
@@ -365,11 +254,6 @@ class ReportServiceTest {
             memberRepository,
             financialTransactionRepository,
             budgetRepository,
-            new ChurchInformationProperties(
-                new ChurchInformationProperties.Information("Grace Church", "1 Hope Rd", "555-1111", "Pat Lee"),
-                new ChurchInformationProperties.Branding(null, null),
-                new ChurchInformationProperties.Ui(20)
-            ),
             new FiscalYearProperties(4)
         );
     }

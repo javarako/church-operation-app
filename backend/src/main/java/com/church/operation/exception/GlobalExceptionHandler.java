@@ -1,12 +1,15 @@
 package com.church.operation.exception;
 
 import com.church.operation.dto.ApiError;
+import com.church.operation.dto.TaxReceiptValidationError;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.security.access.AccessDeniedException;
+
+import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -18,6 +21,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError("BAD_REQUEST", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ReceiptValidationException.class)
+    ResponseEntity<ReceiptValidationResponse> handleReceiptValidation(ReceiptValidationException ex) {
+        return ResponseEntity.badRequest().body(new ReceiptValidationResponse(
+            "RECEIPT_VALIDATION_ERROR",
+            ex.getMessage(),
+            ex.getErrors()
+        ));
     }
 
     @ExceptionHandler(SecurityException.class)
@@ -33,5 +45,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MemberImageNotFoundException.class)
     ResponseEntity<ApiError> handleMemberImageNotFound(MemberImageNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("NOT_FOUND", ex.getMessage()));
+    }
+
+    record ReceiptValidationResponse(String code, String message, List<TaxReceiptValidationError> errors) {
     }
 }

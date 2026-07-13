@@ -1,12 +1,9 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.config.FiscalYearProperties;
 import com.church.operation.dto.FinancialBudgetReportRow;
 import com.church.operation.dto.MemberOfferingSummaryReportRow;
-import com.church.operation.dto.OfficialTaxReportRow;
 import com.church.operation.dto.WeeklyOfferingReportRow;
-import com.church.operation.entity.Address;
 import com.church.operation.entity.Budget;
 import com.church.operation.entity.FinancialTransaction;
 import com.church.operation.entity.Member;
@@ -38,7 +35,6 @@ public class ReportService {
     private final MemberRepository memberRepository;
     private final FinancialTransactionRepository financialTransactionRepository;
     private final BudgetRepository budgetRepository;
-    private final ChurchInformationProperties churchInformationProperties;
     private final FiscalYearProperties fiscalYearProperties;
 
     public ReportService(
@@ -46,14 +42,12 @@ public class ReportService {
         MemberRepository memberRepository,
         FinancialTransactionRepository financialTransactionRepository,
         BudgetRepository budgetRepository,
-        ChurchInformationProperties churchInformationProperties,
         FiscalYearProperties fiscalYearProperties
     ) {
         this.offeringRepository = offeringRepository;
         this.memberRepository = memberRepository;
         this.financialTransactionRepository = financialTransactionRepository;
         this.budgetRepository = budgetRepository;
-        this.churchInformationProperties = churchInformationProperties;
         this.fiscalYearProperties = fiscalYearProperties;
     }
 
@@ -153,50 +147,6 @@ public class ReportService {
             .toList();
     }
 
-    public List<OfficialTaxReportRow> officialTaxReturn(Member actor, int taxYear, String offeringNumber) {
-        requireTaxAccess(actor);
-        validateYear(taxYear, "Tax year is required.");
-
-        LocalDate start = LocalDate.of(taxYear, 1, 1);
-        LocalDate end = LocalDate.of(taxYear, 12, 31);
-        Map<String, Member> membersById = new LinkedHashMap<>();
-        for (Member member : memberRepository.findAll()) {
-            membersById.put(member.getId(), member);
-        }
-
-        ChurchInformationProperties.Information information = churchInformationProperties.information();
-        return offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(start, end).stream()
-            .filter(offering -> offering.getGivingType() == GivingType.MEMBER)
-            .map(offering -> {
-                Member member = membersById.get(offering.getMemberId());
-                if (!matches(member != null ? member.getOfferingNumber() : null, offeringNumber)) {
-                    return null;
-                }
-                String memberName = member != null && member.getDisplayName() != null ? member.getDisplayName() : offering.getGiverDisplayName();
-                return new OfficialTaxReportRow(
-                    information.name(),
-                    information.address(),
-                    information.contactInfo(),
-                    information.treasurerName(),
-                    taxYear,
-                    offering.getMemberId(),
-                    memberName,
-                    member != null ? member.getPrimaryEmail() : null,
-                    member != null ? member.getOfferingNumber() : null,
-                    member != null ? formatAddress(member.getMailingAddress()) : null,
-                    offering.getOfferingDate(),
-                    offering.getFundCategory(),
-                    offering.getAmount()
-                );
-            })
-            .filter(Objects::nonNull)
-            .sorted(Comparator
-                .comparing(OfficialTaxReportRow::offeringNumber, Comparator.nullsLast(String::compareTo))
-                .thenComparing(OfficialTaxReportRow::givingDate, Comparator.nullsLast(LocalDate::compareTo))
-                .thenComparing(OfficialTaxReportRow::memberName, Comparator.nullsLast(String::compareTo)))
-            .toList();
-    }
-
     public List<FinancialBudgetReportRow> financialBudget(Member actor, int fiscalYear) {
         requireReportAccess(actor);
         validateYear(fiscalYear, "Fiscal year is required.");
@@ -289,13 +239,6 @@ public class ReportService {
         throw new SecurityException("You do not have permission to view reports.");
     }
 
-    private void requireTaxAccess(Member actor) {
-        if (hasAnyRole(actor, Role.ADMIN, Role.TREASURER)) {
-            return;
-        }
-        throw new SecurityException("You do not have permission to extract official tax reports.");
-    }
-
     private boolean hasAnyRole(Member actor, Role... roles) {
         if (actor == null || actor.getRoles() == null) {
             return false;
@@ -322,23 +265,6 @@ public class ReportService {
 
     private boolean matches(String value, String filter) {
         return filter == null || filter.isBlank() || Objects.equals(value, filter);
-    }
-
-    private String formatAddress(Address address) {
-        if (address == null) {
-            return null;
-        }
-        return Stream.of(
-                address.addressLine1(),
-                address.addressLine2(),
-                address.city(),
-                address.provinceState(),
-                address.postalZipCode(),
-                address.country()
-            )
-            .filter(value -> value != null && !value.isBlank())
-            .reduce((left, right) -> left + ", " + right)
-            .orElse(null);
     }
 
     private record WeeklyOfferingKey(
