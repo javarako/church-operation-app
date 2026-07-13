@@ -33,7 +33,12 @@
                 :class="{ selected: selectedMember?.id === member.id }"
                 @click="selectMember(member)"
               >
-                <td>{{ member.displayName || member.nickname || 'Unnamed' }}</td>
+                <td>
+                  <div class="member-name-cell">
+                    <MemberAvatar :member-id="member.id" :name="memberDisplayName(member)" :size="38" />
+                    <span>{{ memberDisplayName(member) }}</span>
+                  </div>
+                </td>
                 <td>{{ member.primaryEmail }}</td>
                 <td>{{ member.groupCode || '-' }}</td>
                 <td>{{ member.membershipStatus || '-' }}</td>
@@ -54,6 +59,11 @@
 
       <form class="panel form-grid" @submit.prevent="saveMember">
         <h3>{{ selectedMember ? 'Member Detail' : 'New Member' }}</h3>
+        <MemberImageEditor
+          class="wide"
+          :member-id="selectedMember?.id"
+          :name="form.displayName || form.nickname || 'Unnamed'"
+        />
 
         <label>
           Primary email
@@ -160,6 +170,8 @@ import { createMember, listMembers, updateMember, type Address, type MemberPaylo
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import type { Role } from '../auth/authStore';
 import PaginationControls from '../components/PaginationControls.vue';
+import MemberAvatar from '../components/MemberAvatar.vue';
+import MemberImageEditor from '../components/MemberImageEditor.vue';
 import { usePagination } from '../composables/usePagination';
 
 interface MemberForm extends MemberPayload {
@@ -293,5 +305,9 @@ function cleanPayload(member: MemberPayload): MemberPayload {
 
 function keepOfferingNumberNumeric() {
   form.offeringNumber = form.offeringNumber?.replace(/\D/g, '') ?? '';
+}
+
+function memberDisplayName(member: MemberRecord) {
+  return member.displayName || member.nickname || 'Unnamed';
 }
 </script>
