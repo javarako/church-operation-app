@@ -5,6 +5,7 @@ import com.church.operation.entity.Member;
 import com.church.operation.util.Role;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.Set;
 
 public record MemberResponse(
@@ -27,7 +28,8 @@ public record MemberResponse(
     Set<Role> roles,
     boolean active,
     boolean locked,
-    boolean mustChangePassword
+    boolean mustChangePassword,
+    Instant createdAt
 ) {
     public static MemberResponse from(Member member) {
         return new MemberResponse(
@@ -50,7 +52,8 @@ public record MemberResponse(
             member.getRoles(),
             member.isActive(),
             member.isLocked(),
-            member.isMustChangePassword()
+            member.isMustChangePassword(),
+            member.getCreatedAt()
         );
     }
 }

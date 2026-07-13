@@ -37,6 +37,7 @@ export interface MemberRecord extends MemberPayload {
   active: boolean;
   locked: boolean;
   mustChangePassword: boolean;
+  createdAt?: string;
 }
 
 export function listMembers(search: string) {

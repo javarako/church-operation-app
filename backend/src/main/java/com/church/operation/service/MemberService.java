@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.time.Instant;
 
 @Service
 public class MemberService {
@@ -34,6 +35,7 @@ public class MemberService {
         member.setActive(true);
         member.setLocked(false);
         member.setMustChangePassword(true);
+        member.setCreatedAt(Instant.now());
         return memberRepository.save(member);
     }
 
@@ -67,6 +69,7 @@ public class MemberService {
     public Member createMember(Member actor, MemberRequest request) {
         requireMembershipManager(actor);
         Member member = new Member();
+        member.setCreatedAt(Instant.now());
         applyManagedFields(member, request);
         ensureUniqueIdentity(member);
         return memberRepository.save(member);

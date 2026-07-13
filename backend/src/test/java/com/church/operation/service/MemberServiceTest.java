@@ -37,6 +37,7 @@ class MemberServiceTest {
         assertThat(member.getPrimaryEmail()).isEqualTo("admin");
         assertThat(member.getRoles()).containsExactly(Role.ADMIN);
         assertThat(member.isMustChangePassword()).isTrue();
+        assertThat(member.getCreatedAt()).isNotNull();
         verify(memberRepository).save(org.mockito.ArgumentMatchers.any(Member.class));
     }
 
@@ -85,6 +86,21 @@ class MemberServiceTest {
         assertThat(created.getDisplayName()).isEqualTo("New Member");
         assertThat(created.getRoles()).containsExactly(Role.MEMBER);
         assertThat(created.isActive()).isTrue();
+    }
+
+    @Test
+    void createMemberSetsCreatedAt() {
+        Member actor = member("manager-id", "manager@example.com", Role.MEMBERSHIP);
+        MemberRequest request = minimalRequest("new@example.com");
+
+        when(memberRepository.findByPrimaryEmail("new@example.com")).thenReturn(Optional.empty());
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MemberService service = new MemberService(memberRepository);
+
+        Member created = service.createMember(actor, request);
+
+        assertThat(created.getCreatedAt()).isNotNull();
     }
 
     @Test
