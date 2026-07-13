@@ -14,5 +14,6 @@ public interface TaxReceiptRepository extends MongoRepository<TaxReceipt, String
         String offeringNumber,
         TaxReceiptStatus status
     );
+    Optional<TaxReceipt> findFirstByTaxYearAndOfferingNumberOrderByCreatedAtDesc(int taxYear, String offeringNumber);
     List<TaxReceipt> findByTaxYearOrderByOfferingNumberAsc(int taxYear);
 }

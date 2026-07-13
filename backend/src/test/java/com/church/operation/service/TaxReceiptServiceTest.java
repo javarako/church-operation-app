@@ -161,12 +161,31 @@ class TaxReceiptServiceTest {
         when(offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
             LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)
         )).thenReturn(List.of(offering("o1", "m1", "45.00")));
-        when(receiptRepository.findFirstByTaxYearAndOfferingNumberAndStatusOrderByCreatedAtDesc(
-            2026, "1001", TaxReceiptStatus.ISSUED
-        )).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findFirstByTaxYearAndOfferingNumberOrderByCreatedAtDesc(2026, "1001"))
+            .thenReturn(Optional.of(receipt));
 
         assertThat(service.summary(treasurer(), 2026, null)).singleElement()
             .satisfies(row -> assertThat(row.sourceChanged()).isTrue());
+    }
+
+    @Test
+    void summaryReturnsLatestVoidReceiptForReplacementAction() {
+        Member member = member("m1", "1001", "Ada Wong", true);
+        TaxReceipt receipt = new TaxReceipt();
+        receipt.setId("r1");
+        receipt.setReceiptNumber("2026-000001");
+        receipt.setStatus(TaxReceiptStatus.VOID);
+        when(memberRepository.findAll()).thenReturn(List.of(member));
+        when(offeringRepository.findByDeletedFalseAndOfferingDateBetweenOrderByOfferingDateAscCreatedAtAsc(
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)
+        )).thenReturn(List.of(offering("o1", "m1", "45.00")));
+        when(receiptRepository.findFirstByTaxYearAndOfferingNumberOrderByCreatedAtDesc(2026, "1001"))
+            .thenReturn(Optional.of(receipt));
+
+        assertThat(service.summary(treasurer(), 2026, null)).singleElement().satisfies(row -> {
+            assertThat(row.receiptId()).isEqualTo("r1");
+            assertThat(row.receiptStatus()).isEqualTo(TaxReceiptStatus.VOID);
+        });
     }
 
     @Test

@@ -179,7 +179,7 @@ public class TaxReceiptService {
 
     private TaxReceiptSummaryRow toSummary(int taxYear, Member member, List<Offering> offerings) {
         BigDecimal total = total(offerings);
-        Optional<TaxReceipt> receipt = activeReceipt(taxYear, member.getOfferingNumber());
+        Optional<TaxReceipt> receipt = latestReceipt(taxYear, member.getOfferingNumber());
         boolean sourceChanged = receipt.map(value -> !Objects.equals(value.getSourceChecksum(), checksum(offerings))).orElse(false);
         return new TaxReceiptSummaryRow(
             member.getId(), member.getOfferingNumber(), member.getDisplayName(), formatAddress(member.getMailingAddress()),
@@ -279,6 +279,11 @@ public class TaxReceiptService {
         return receiptRepository.findFirstByTaxYearAndOfferingNumberAndStatusOrderByCreatedAtDesc(
             taxYear, offeringNumber, TaxReceiptStatus.ISSUED
         );
+    }
+
+    private Optional<TaxReceipt> latestReceipt(int taxYear, String offeringNumber) {
+        if (isBlank(offeringNumber)) return Optional.empty();
+        return receiptRepository.findFirstByTaxYearAndOfferingNumberOrderByCreatedAtDesc(taxYear, offeringNumber);
     }
 
     private BigDecimal total(List<Offering> offerings) {
