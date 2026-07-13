@@ -379,6 +379,51 @@ tbody tr.read-only-row {
 
   .sidebar {
     position: static;
+    grid-template-rows: auto auto auto;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .sidebar-brand {
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+  }
+
+  .sidebar-brand img,
+  .sidebar-logo-fallback {
+    width: 48px;
+    height: 48px;
+  }
+
+  .sidebar h1 {
+    font-size: 1rem;
+    text-align: left;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .sidebar a {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .sidebar-spacer {
+    display: none;
+  }
+
+  .sidebar-logout {
+    justify-self: start;
+    min-height: 36px;
+    padding: 0 12px;
   }
 
   .offering-toolbar {
