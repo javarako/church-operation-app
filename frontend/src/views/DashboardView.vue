@@ -1,183 +1,160 @@
 <template>
   <section class="workspace dashboard-page">
-      <section class="dashboard-hero">
-        <div class="banner-panel" :class="{ 'empty-banner': !churchInfo?.bannerPath }">
-          <img v-if="churchInfo?.bannerPath" :src="churchInfo.bannerPath" alt="" />
-          <div class="banner-copy">
-            <h2>Faith, Hope, Love</h2>
-            <p>Serving our community together</p>
-          </div>
+    <section class="dashboard-hero">
+      <div class="banner-panel" :class="{ 'empty-banner': !churchInfo?.bannerPath }">
+        <img v-if="churchInfo?.bannerPath" :src="churchInfo.bannerPath" alt="" />
+        <div class="banner-copy">
+          <h2>Faith, Hope, Love</h2>
+          <p>Serving our community together</p>
         </div>
+      </div>
 
-        <aside class="church-info-panel">
-          <div>
-            <h2>{{ churchName }}</h2>
-            <p>{{ churchAddress }}</p>
-            <p>{{ churchContactInfo }}</p>
-            <p>{{ treasurerLabel }}</p>
+      <aside class="church-info-panel">
+        <div>
+          <h2>{{ churchName }}</h2>
+          <p>{{ churchAddress }}</p>
+          <p>{{ churchContactInfo }}</p>
+          <p>{{ treasurerLabel }}</p>
+        </div>
+        <div class="user-role">
+          <span>{{ userInitials }}</span>
+          <strong>{{ currentRoleLabel }}</strong>
+        </div>
+      </aside>
+    </section>
+
+    <p v-if="dashboardError" class="error dashboard-error">{{ dashboardError }}</p>
+
+    <template v-if="dashboard">
+      <section class="dashboard-summary-grid" aria-label="Fiscal snapshot">
+        <article class="summary-card members-card">
+          <div class="summary-icon"><Users :size="30" aria-hidden="true" /></div>
+          <div class="summary-content">
+            <span>Active Members</span>
+            <strong>{{ dashboard.activeMemberCount }}</strong>
+            <small>New this month: {{ dashboard.newMemberCount }}</small>
           </div>
-          <div class="user-role">
-            <span>{{ userInitials }}</span>
-            <strong>{{ currentRoleLabel }}</strong>
+        </article>
+
+        <article class="summary-card offering-card">
+          <div class="summary-icon"><HandHeart :size="30" aria-hidden="true" /></div>
+          <div class="summary-content">
+            <span>YTD Offering vs Budget</span>
+            <strong>{{ formatPercentage(dashboard.ytdOfferingPercentage) }}</strong>
+            <small>{{ formatMoney(dashboard.ytdOfferingActual) }} / {{ formatMoney(dashboard.ytdOfferingBudget) }}</small>
+            <div v-if="dashboard.ytdOfferingPercentage !== null" class="progress-track" aria-hidden="true">
+              <span :style="{ width: progressWidth(dashboard.ytdOfferingPercentage) }"></span>
+            </div>
           </div>
-        </aside>
+        </article>
+
+        <article class="summary-card expense-card">
+          <div class="summary-icon"><ChartNoAxesCombined :size="30" aria-hidden="true" /></div>
+          <div class="summary-content">
+            <span>YTD Expense vs Budget</span>
+            <strong>{{ formatPercentage(dashboard.ytdExpensePercentage) }}</strong>
+            <small>{{ formatMoney(dashboard.ytdExpenseActual) }} / {{ formatMoney(dashboard.ytdExpenseBudget) }}</small>
+            <div v-if="dashboard.ytdExpensePercentage !== null" class="progress-track" aria-hidden="true">
+              <span :style="{ width: progressWidth(dashboard.ytdExpensePercentage) }"></span>
+            </div>
+          </div>
+        </article>
+
+        <article class="summary-card cheque-card">
+          <div class="summary-icon"><ReceiptText :size="30" aria-hidden="true" /></div>
+          <div class="summary-content">
+            <span>Pending Cheques</span>
+            <strong>{{ dashboard.pendingChequeCount }}</strong>
+            <small>Total: {{ formatMoney(dashboard.pendingChequeTotal) }}</small>
+          </div>
+        </article>
       </section>
 
-      <section v-if="canViewReports" class="panel dashboard-panel accent-offering">
-        <div class="panel-title-row">
+      <section class="dashboard-band offering-overview">
+        <div class="section-heading">
           <div>
             <h3>Offering Overview</h3>
             <p>Current giving totals from active offering records.</p>
           </div>
         </div>
-        <p v-if="offeringError" class="error">{{ offeringError }}</p>
-        <div class="dashboard-grid">
-          <article class="metric-card">
+        <div class="overview-grid">
+          <div class="overview-metric">
             <span>This Week</span>
-            <strong>{{ formatMoney(offeringTotals.week) }}</strong>
+            <strong>{{ formatMoney(dashboard.weekOfferingTotal) }}</strong>
             <small>Current Sunday week</small>
-          </article>
-          <article class="metric-card">
+          </div>
+          <div class="overview-metric">
             <span>Month to Date</span>
-            <strong>{{ formatMoney(offeringTotals.month) }}</strong>
-            <small>Since {{ monthStartLabel }}</small>
-          </article>
-          <article class="metric-card">
+            <strong>{{ formatMoney(dashboard.monthOfferingTotal) }}</strong>
+            <small>Current calendar month</small>
+          </div>
+          <div class="overview-metric">
             <span>Year to Date</span>
-            <strong>{{ formatMoney(offeringTotals.year) }}</strong>
-            <small>Since {{ yearStartLabel }}</small>
-          </article>
+            <strong>{{ formatMoney(dashboard.yearOfferingTotal) }}</strong>
+            <small>Current calendar year</small>
+          </div>
         </div>
       </section>
 
-      <section v-if="canViewReports" class="panel dashboard-panel accent-fiscal">
-        <div class="panel-title-row">
+      <section class="panel trend-panel">
+        <div class="section-heading">
           <div>
-            <h3>Fiscal Snapshot</h3>
-            <p>Budget and actuals for {{ currentYear }}.</p>
+            <h3>Offering Trend</h3>
+            <p>Last 12 Sundays, including Sundays with no recorded offerings.</p>
           </div>
+          <span class="fiscal-period">Fiscal year {{ dashboard.fiscalYearStart }} to {{ dashboard.fiscalYearEnd }}</span>
         </div>
-        <p v-if="fiscalError" class="error">{{ fiscalError }}</p>
-        <div class="dashboard-grid">
-          <article class="metric-card">
-            <span>Budgeted Income</span>
-            <strong>{{ formatMoney(fiscalTotals.budgetedIncome) }}</strong>
-          </article>
-          <article class="metric-card">
-            <span>Actual Income</span>
-            <strong>{{ formatMoney(fiscalTotals.actualIncome) }}</strong>
-          </article>
-          <article class="metric-card">
-            <span>Budgeted Expense</span>
-            <strong>{{ formatMoney(fiscalTotals.budgetedExpense) }}</strong>
-          </article>
-          <article class="metric-card">
-            <span>Actual Expense</span>
-            <strong>{{ formatMoney(fiscalTotals.actualExpense) }}</strong>
-          </article>
-          <article class="metric-card">
-            <span>Net Actual</span>
-            <strong>{{ formatMoney(fiscalTotals.netActual) }}</strong>
-          </article>
+        <div class="trend-chart">
+          <Bar :data="chartData" :options="chartOptions" />
         </div>
       </section>
-
-      <div class="dashboard-two-column">
-        <section v-if="canViewMembership" class="panel dashboard-panel accent-membership">
-          <h3>Membership</h3>
-          <p v-if="membershipError" class="error">{{ membershipError }}</p>
-          <div class="dashboard-grid compact">
-            <article class="metric-card">
-              <span>Total Members</span>
-              <strong>{{ memberTotals.total }}</strong>
-            </article>
-            <article class="metric-card">
-              <span>Active Members</span>
-              <strong>{{ memberTotals.active }}</strong>
-            </article>
-            <article class="metric-card">
-              <span>Locked Accounts</span>
-              <strong>{{ memberTotals.locked }}</strong>
-            </article>
-          </div>
-        </section>
-
-        <section v-if="canViewFinance" class="panel dashboard-panel accent-finance">
-          <h3>Recent Finance Activity</h3>
-          <p v-if="financeError" class="error">{{ financeError }}</p>
-          <div class="dashboard-grid compact">
-            <article class="metric-card">
-              <span>Recent Income</span>
-              <strong>{{ formatMoney(financeTotals.income) }}</strong>
-            </article>
-            <article class="metric-card">
-              <span>Recent Expense</span>
-              <strong>{{ formatMoney(financeTotals.expense) }}</strong>
-            </article>
-            <article class="metric-card">
-              <span>Transactions</span>
-              <strong>{{ financeTotals.count }}</strong>
-            </article>
-          </div>
-        </section>
-      </div>
-
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { Bar } from 'vue-chartjs';
+import { BarElement, CategoryScale, Chart as ChartJS, LinearScale, Tooltip, type ChartData, type ChartOptions } from 'chart.js';
+import { ChartNoAxesCombined, HandHeart, ReceiptText, Users } from '@lucide/vue';
 import { getChurchInformation, type ChurchInformation } from '../api/churchInformation';
-import type { FinancialTransaction } from '../api/finance';
-import { listFinanceTransactions } from '../api/finance';
-import { listMembers } from '../api/members';
-import { listFinancialBudgetReport, listWeeklyOfferingReport } from '../api/reports';
-import { authState, type Role } from '../auth/authStore';
+import { getDashboard, type DashboardResponse } from '../api/dashboard';
+import { authState } from '../auth/authStore';
 
-const currentDate = new Date();
-const currentYear = currentDate.getFullYear();
-const today = isoDate(currentDate);
-const currentWeekSunday = currentSunday(currentDate);
-const monthStart = startOfMonth(currentDate);
-const yearStart = startOfYear(currentDate);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-const offeringTotals = reactive({
-  week: 0,
-  month: 0,
-  year: 0,
-});
-
-const fiscalTotals = reactive({
-  budgetedIncome: 0,
-  actualIncome: 0,
-  budgetedExpense: 0,
-  actualExpense: 0,
-  netActual: 0,
-});
-
-const memberTotals = reactive({
-  total: 0,
-  active: 0,
-  locked: 0,
-});
-
-const financeTotals = reactive({
-  income: 0,
-  expense: 0,
-  count: 0,
-});
-
-const offeringError = ref('');
-const fiscalError = ref('');
-const membershipError = ref('');
-const financeError = ref('');
+const dashboard = ref<DashboardResponse | null>(null);
+const dashboardError = ref('');
 const churchInfo = ref<ChurchInformation | null>(null);
 
-const canViewReports = computed(() => hasAnyRole(['ADMIN', 'TREASURER', 'PASTOR', 'VIEWER']));
-const canViewFinance = computed(() => hasAnyRole(['ADMIN', 'TREASURER']));
-const canViewMembership = computed(() => hasAnyRole(['ADMIN', 'MEMBERSHIP']));
-const monthStartLabel = computed(() => monthStart);
-const yearStartLabel = computed(() => yearStart);
+const chartData = computed<ChartData<'bar'>>(() => ({
+  labels: dashboard.value?.offeringTrend.map((point) => point.sunday) ?? [],
+  datasets: [{
+    label: 'Offering',
+    data: dashboard.value?.offeringTrend.map((point) => point.amount) ?? [],
+    backgroundColor: '#d99a13',
+    borderRadius: 3,
+    maxBarThickness: 42,
+  }],
+}));
+
+const chartOptions: ChartOptions<'bar'> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (context) => formatMoney(Number(context.raw)),
+      },
+    },
+  },
+  scales: {
+    x: { grid: { display: false } },
+    y: { beginAtZero: true },
+  },
+};
+
 const churchName = computed(() => churchInfo.value?.name || 'Church Operations');
 const churchAddress = computed(() => churchInfo.value?.address || 'Address not configured');
 const churchContactInfo = computed(() => churchInfo.value?.contactInfo || 'Contact info not configured');
@@ -195,16 +172,7 @@ const userInitials = computed(() => {
 
 onMounted(() => {
   void loadChurchInformation();
-  if (canViewReports.value) {
-    void loadOfferingOverview();
-    void loadFiscalSnapshot();
-  }
-  if (canViewMembership.value) {
-    void loadMembershipSummary();
-  }
-  if (canViewFinance.value) {
-    void loadFinanceSummary();
-  }
+  void loadDashboard();
 });
 
 async function loadChurchInformation() {
@@ -215,84 +183,13 @@ async function loadChurchInformation() {
   }
 }
 
-function setError(errorState: { value: string }, error: unknown) {
-  errorState.value = error instanceof Error ? error.message : 'Request failed.';
-}
-
-async function loadOfferingOverview() {
-  offeringError.value = '';
+async function loadDashboard() {
+  dashboardError.value = '';
   try {
-    const [weekRows, monthRows, yearRows] = await Promise.all([
-      listWeeklyOfferingReport({ start: currentWeekSunday, end: today }),
-      listWeeklyOfferingReport({ start: monthStart, end: today }),
-      listWeeklyOfferingReport({ start: yearStart, end: today }),
-    ]);
-    offeringTotals.week = weekRows.reduce((total, row) => total + row.totalAmount, 0);
-    offeringTotals.month = monthRows.reduce((total, row) => total + row.totalAmount, 0);
-    offeringTotals.year = yearRows.reduce((total, row) => total + row.totalAmount, 0);
+    dashboard.value = await getDashboard();
   } catch (error) {
-    setError(offeringError, error);
+    dashboardError.value = error instanceof Error ? error.message : 'Dashboard unavailable.';
   }
-}
-
-async function loadFiscalSnapshot() {
-  fiscalError.value = '';
-  try {
-    const rows = await listFinancialBudgetReport({ fiscalYear: currentYear });
-    fiscalTotals.budgetedIncome = rows
-      .filter((row) => row.budgetType === 'OFFERING_INCOME')
-      .reduce((total, row) => total + row.budget, 0);
-    fiscalTotals.actualIncome = rows
-      .filter((row) => row.budgetType === 'OFFERING_INCOME')
-      .reduce((total, row) => total + row.actual, 0);
-    fiscalTotals.budgetedExpense = rows
-      .filter((row) => row.budgetType === 'EXPENSE')
-      .reduce((total, row) => total + row.budget, 0);
-    fiscalTotals.actualExpense = rows
-      .filter((row) => row.budgetType === 'EXPENSE')
-      .reduce((total, row) => total + row.actual, 0);
-    fiscalTotals.netActual = fiscalTotals.actualIncome - fiscalTotals.actualExpense;
-  } catch (error) {
-    setError(fiscalError, error);
-  }
-}
-
-async function loadMembershipSummary() {
-  membershipError.value = '';
-  try {
-    const members = await listMembers('');
-    memberTotals.total = members.length;
-    memberTotals.active = members.filter((member) => member.active).length;
-    memberTotals.locked = members.filter((member) => member.locked).length;
-  } catch (error) {
-    setError(membershipError, error);
-  }
-}
-
-async function loadFinanceSummary() {
-  financeError.value = '';
-  try {
-    const transactions = await listFinanceTransactions();
-    const recentTransactions = transactions.filter(isCurrentMonthTransaction);
-    financeTotals.income = recentTransactions
-      .filter((transaction) => transaction.type === 'INCOME')
-      .reduce((total, transaction) => total + transaction.amount, 0);
-    financeTotals.expense = recentTransactions
-      .filter((transaction) => transaction.type === 'EXPENSE')
-      .reduce((total, transaction) => total + transaction.amount, 0);
-    financeTotals.count = recentTransactions.length;
-  } catch (error) {
-    setError(financeError, error);
-  }
-}
-
-function isCurrentMonthTransaction(transaction: FinancialTransaction) {
-  return transaction.transactionDate >= monthStart && transaction.transactionDate <= today;
-}
-
-function hasAnyRole(allowedRoles: Role[]) {
-  const roles = authState.currentUser?.roles ?? [];
-  return roles.some((role) => allowedRoles.includes(role));
 }
 
 function formatMoney(value: number) {
@@ -302,25 +199,12 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
-function isoDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function formatPercentage(value: number | null) {
+  return value === null ? 'Not budgeted' : `${value.toFixed(2)}%`;
 }
 
-function startOfMonth(date: Date) {
-  return isoDate(new Date(date.getFullYear(), date.getMonth(), 1));
-}
-
-function startOfYear(date: Date) {
-  return isoDate(new Date(date.getFullYear(), 0, 1));
-}
-
-function currentSunday(date: Date) {
-  const sunday = new Date(date);
-  sunday.setDate(date.getDate() - date.getDay());
-  return isoDate(sunday);
+function progressWidth(value: number | null) {
+  return `${Math.min(Math.max(value ?? 0, 0), 100)}%`;
 }
 </script>
 
@@ -420,81 +304,158 @@ function currentSunday(date: Date) {
   font-size: 0.9rem;
 }
 
-.dashboard-panel {
+.dashboard-error {
+  margin: 0;
+}
+
+.dashboard-summary-grid {
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
-  box-shadow: 0 10px 28px rgba(16, 24, 40, 0.05);
 }
 
-.accent-offering {
-  border-color: #f3c56b;
-}
-
-.accent-fiscal {
-  border-color: #9fc9f5;
-}
-
-.accent-membership {
-  border-color: #aad8b3;
-}
-
-.accent-finance {
-  border-color: #f3b38f;
-}
-
-.panel-title-row {
-  display: flex;
+.summary-card {
+  min-height: 154px;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.panel-title-row p,
-.dashboard-panel > p {
-  margin: 6px 0 0;
-  color: #5b6778;
-}
-
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.dashboard-grid.compact {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-}
-
-.dashboard-two-column {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 18px;
-}
-
-.metric-card {
-  min-height: 96px;
-  display: grid;
-  align-content: center;
-  gap: 6px;
-  border: 1px solid #edf0f4;
+  border: 1px solid #d8dee6;
   border-radius: 8px;
-  padding: 14px;
-  background: linear-gradient(135deg, #ffffff, #fbfcfe);
+  padding: 18px;
+  background: white;
 }
 
-.metric-card span {
-  color: #5b6778;
+.members-card { border-color: #a9d7ae; }
+.offering-card { border-color: #e8c36d; }
+.expense-card { border-color: #9fc5ed; }
+.cheque-card { border-color: #edb28f; }
+
+.summary-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.members-card .summary-icon { background: #e2f3e2; color: #237238; }
+.offering-card .summary-icon { background: #fff0c9; color: #a76d00; }
+.expense-card .summary-icon { background: #e4f1fc; color: #1768b0; }
+.cheque-card .summary-icon { background: #fde9dd; color: #b8541c; }
+
+.summary-content {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.summary-content > span {
+  color: #344054;
   font-size: 0.92rem;
 }
 
-.metric-card strong {
-  color: #1f2933;
-  font-size: 1.45rem;
-  line-height: 1.2;
+.summary-content strong {
+  color: #182230;
+  font-size: 1.65rem;
+  line-height: 1.15;
 }
 
-.metric-card small {
+.summary-content small {
   color: #667085;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.progress-track {
+  height: 7px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #e5e9ef;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2274bd;
+}
+
+.offering-card .progress-track span {
+  background: #d99a13;
+}
+
+.dashboard-band {
+  padding: 18px 4px 20px;
+  border-top: 1px solid #d8dee6;
+  border-bottom: 1px solid #d8dee6;
+}
+
+.section-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.section-heading h3,
+.section-heading p {
+  margin: 0;
+}
+
+.section-heading p {
+  margin-top: 6px;
+  color: #667085;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.overview-metric {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 4px 20px;
+  border-left: 1px solid #d8dee6;
+}
+
+.overview-metric:first-child {
+  border-left: 0;
+}
+
+.overview-metric span,
+.overview-metric small,
+.fiscal-period {
+  color: #667085;
+}
+
+.overview-metric strong {
+  font-size: 1.5rem;
+}
+
+.trend-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.fiscal-period {
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.trend-chart {
+  height: 290px;
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -503,13 +464,34 @@ function currentSunday(date: Date) {
   }
 }
 
-@media (max-width: 760px) {
-  .dashboard-two-column {
+@media (max-width: 680px) {
+  .dashboard-summary-grid,
+  .overview-grid {
     grid-template-columns: 1fr;
   }
 
-  .church-info-panel {
+  .summary-card {
+    min-height: 132px;
+  }
+
+  .overview-metric,
+  .overview-metric:first-child {
+    padding: 12px 4px;
+    border-left: 0;
+    border-top: 1px solid #d8dee6;
+  }
+
+  .overview-metric:first-child {
+    border-top: 0;
+  }
+
+  .church-info-panel,
+  .section-heading {
     display: grid;
+  }
+
+  .fiscal-period {
+    text-align: left;
   }
 }
 </style>
