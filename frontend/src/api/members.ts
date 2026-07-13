@@ -1,4 +1,4 @@
-import { getJson, postJson, putJson } from './http';
+import { deleteEmpty, getBlob, getJson, postJson, putFile, putJson } from './http';
 import type { Role } from '../auth/authStore';
 
 export interface Address {
@@ -59,4 +59,28 @@ export function getMyProfile() {
 
 export function updateMyProfile(payload: MemberPayload) {
   return putJson<MemberPayload, MemberRecord>('/api/members/me', payload);
+}
+
+export function getMemberImage(id: string) {
+  return getBlob(`/api/members/${id}/image`);
+}
+
+export function replaceMemberImage(id: string, file: File) {
+  return putFile<MemberRecord>(`/api/members/${id}/image`, 'file', file);
+}
+
+export function removeMemberImage(id: string) {
+  return deleteEmpty(`/api/members/${id}/image`);
+}
+
+export function getSelfImage() {
+  return getBlob('/api/members/me/image');
+}
+
+export function replaceSelfImage(file: File) {
+  return putFile<MemberRecord>('/api/members/me/image', 'file', file);
+}
+
+export function removeSelfImage() {
+  return deleteEmpty('/api/members/me/image');
 }
