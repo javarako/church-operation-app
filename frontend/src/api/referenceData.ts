@@ -1,4 +1,4 @@
-import { getJson, postJson, putJson } from './http';
+import { deleteEmpty, getJson, postJson, putJson } from './http';
 
 export type ReferenceDataType =
   | 'GROUP_CODE'
@@ -38,4 +38,8 @@ export function createReferenceData(payload: ReferenceDataPayload) {
 
 export function updateReferenceData(id: string, payload: ReferenceDataPayload) {
   return putJson<ReferenceDataPayload, ReferenceDataOption>(`/api/reference-data/${id}`, payload);
+}
+
+export function deleteReferenceData(id: string) {
+  return deleteEmpty(`/api/reference-data/${id}`);
 }

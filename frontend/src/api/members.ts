@@ -53,6 +53,10 @@ export function updateMember(id: string, payload: MemberPayload) {
   return putJson<MemberPayload, MemberRecord>(`/api/members/${id}`, payload);
 }
 
+export function deleteMember(id: string) {
+  return deleteEmpty(`/api/members/${id}`);
+}
+
 export function getMyProfile() {
   return getJson<MemberRecord>('/api/members/me');
 }

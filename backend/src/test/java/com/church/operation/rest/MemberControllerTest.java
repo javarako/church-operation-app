@@ -5,6 +5,7 @@ import com.church.operation.entity.Member;
 import com.church.operation.exception.GlobalExceptionHandler;
 import com.church.operation.exception.MemberImageNotFoundException;
 import com.church.operation.service.MemberImageService;
+import com.church.operation.service.MemberDeletionService;
 import com.church.operation.service.MemberService;
 import com.church.operation.util.Role;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,12 +34,13 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 class MemberControllerTest {
     private final MemberService memberService = mock(MemberService.class);
     private final MemberImageService memberImageService = mock(MemberImageService.class);
+    private final MemberDeletionService memberDeletionService = mock(MemberDeletionService.class);
     private MockMvc mockMvc;
     private Member admin;
 
     @BeforeEach
     void setUp() {
-        mockMvc = standaloneSetup(new MemberController(memberService, memberImageService))
+        mockMvc = standaloneSetup(new MemberController(memberService, memberImageService, memberDeletionService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
         admin = member("admin-id", Role.ADMIN);

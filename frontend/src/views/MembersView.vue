@@ -24,6 +24,7 @@
                 <th>Email</th>
                 <th>Group</th>
                 <th>Status</th>
+                <th aria-label="Actions"></th>
               </tr>
             </thead>
             <tbody>
@@ -42,6 +43,18 @@
                 <td>{{ member.primaryEmail }}</td>
                 <td>{{ member.groupCode || '-' }}</td>
                 <td>{{ member.membershipStatus || '-' }}</td>
+                <td class="row-actions">
+                  <button
+                    type="button"
+                    class="icon-button danger"
+                    :disabled="isBootstrapAdmin(member)"
+                    :title="isBootstrapAdmin(member) ? 'System Administrator cannot be deleted' : 'Delete member'"
+                    :aria-label="`Delete member ${memberDisplayName(member)}`"
+                    @click.stop="deleteSelectedMember(member)"
+                  >
+                    <Trash2 :size="17" aria-hidden="true" />
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -166,7 +179,8 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { createMember, listMembers, updateMember, type Address, type MemberPayload, type MemberRecord } from '../api/members';
+import { createMember, deleteMember, listMembers, updateMember, type Address, type MemberPayload, type MemberRecord } from '../api/members';
+import { Trash2 } from '@lucide/vue';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import type { Role } from '../auth/authStore';
 import PaginationControls from '../components/PaginationControls.vue';
@@ -277,6 +291,27 @@ async function saveMember() {
   }
 }
 
+async function deleteSelectedMember(member: MemberRecord) {
+  if (isBootstrapAdmin(member)) {
+    return;
+  }
+  if (!window.confirm(`Delete member ${memberDisplayName(member)}? This cannot be undone.`)) {
+    return;
+  }
+  error.value = '';
+  savedMessage.value = '';
+  try {
+    await deleteMember(member.id);
+    if (selectedMember.value?.id === member.id) {
+      startCreate();
+    }
+    await loadMembers();
+    savedMessage.value = 'Deleted';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete member.';
+  }
+}
+
 function applyToForm(member: MemberPayload) {
   form.primaryEmail = member.primaryEmail ?? '';
   form.displayName = member.displayName ?? '';
@@ -309,5 +344,9 @@ function keepOfferingNumberNumeric() {
 
 function memberDisplayName(member: MemberRecord) {
   return member.displayName || member.nickname || 'Unnamed';
+}
+
+function isBootstrapAdmin(member: MemberRecord) {
+  return member.primaryEmail.trim().toLowerCase() === 'admin';
 }
 </script>

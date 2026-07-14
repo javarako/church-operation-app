@@ -47,6 +47,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("NOT_FOUND", ex.getMessage()));
     }
 
+    @ExceptionHandler(DeletionBlockedException.class)
+    ResponseEntity<ApiError> handleDeletionBlocked(DeletionBlockedException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError("DELETION_BLOCKED", ex.getMessage()));
+    }
+
     record ReceiptValidationResponse(String code, String message, List<TaxReceiptValidationError> errors) {
     }
 }

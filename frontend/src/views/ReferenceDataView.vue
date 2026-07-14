@@ -29,6 +29,7 @@
                 <th>Parent</th>
                 <th>Order</th>
                 <th>Active</th>
+                <th aria-label="Actions"></th>
               </tr>
             </thead>
             <tbody>
@@ -43,6 +44,17 @@
                 <td>{{ option.parentCode || '-' }}</td>
                 <td>{{ option.sortOrder }}</td>
                 <td>{{ option.active ? 'Yes' : 'No' }}</td>
+                <td class="row-actions">
+                  <button
+                    type="button"
+                    class="icon-button danger"
+                    title="Delete reference value"
+                    :aria-label="`Delete reference value ${option.label}`"
+                    @click.stop="deleteSelectedOption(option)"
+                  >
+                    <Trash2 :size="17" aria-hidden="true" />
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -108,12 +120,14 @@
 import { onMounted, reactive, ref } from 'vue';
 import {
   createReferenceData,
+  deleteReferenceData,
   listReferenceData,
   updateReferenceData,
   type ReferenceDataOption,
   type ReferenceDataPayload,
   type ReferenceDataType,
 } from '../api/referenceData';
+import { Trash2 } from '@lucide/vue';
 import PaginationControls from '../components/PaginationControls.vue';
 import { usePagination } from '../composables/usePagination';
 
@@ -202,6 +216,24 @@ async function saveOption() {
     await loadOptions();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not save reference data.';
+  }
+}
+
+async function deleteSelectedOption(option: ReferenceDataOption) {
+  if (!window.confirm(`Delete reference value ${option.label}? This cannot be undone.`)) {
+    return;
+  }
+  error.value = '';
+  savedMessage.value = '';
+  try {
+    await deleteReferenceData(option.id);
+    if (selectedOption.value?.id === option.id) {
+      startCreate();
+    }
+    await Promise.all([loadOptions(), loadFinancialCategories()]);
+    savedMessage.value = 'Deleted';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete reference data.';
   }
 }
 

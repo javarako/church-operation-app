@@ -6,6 +6,7 @@ import com.church.operation.dto.MemberImageContent;
 import com.church.operation.entity.Member;
 import com.church.operation.service.MemberService;
 import com.church.operation.service.MemberImageService;
+import com.church.operation.service.MemberDeletionService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,10 +32,16 @@ import java.util.List;
 public class MemberController {
     private final MemberService memberService;
     private final MemberImageService memberImageService;
+    private final MemberDeletionService memberDeletionService;
 
-    public MemberController(MemberService memberService, MemberImageService memberImageService) {
+    public MemberController(
+        MemberService memberService,
+        MemberImageService memberImageService,
+        MemberDeletionService memberDeletionService
+    ) {
         this.memberService = memberService;
         this.memberImageService = memberImageService;
+        this.memberDeletionService = memberDeletionService;
     }
 
     @GetMapping
@@ -87,6 +94,12 @@ public class MemberController {
     @PutMapping("/{id}")
     MemberResponse updateMember(Authentication authentication, @PathVariable("id") String id, @Valid @RequestBody MemberRequest request) {
         return MemberResponse.from(memberService.updateMember(actor(authentication), id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    ResponseEntity<Void> deleteMember(Authentication authentication, @PathVariable("id") String id) {
+        memberDeletionService.delete(actor(authentication), id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/image")

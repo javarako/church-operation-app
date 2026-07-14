@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
 import MembersView from './MembersView.vue';
+import { deleteMember } from '../api/members';
 
 vi.mock('../api/members', () => ({
   listMembers: vi.fn().mockResolvedValue([{
@@ -15,6 +16,7 @@ vi.mock('../api/members', () => ({
   }]),
   createMember: vi.fn(),
   updateMember: vi.fn(),
+  deleteMember: vi.fn().mockResolvedValue(undefined),
   getMemberImage: vi.fn().mockRejectedValue(new Error('No image')),
   getSelfImage: vi.fn(),
   replaceMemberImage: vi.fn(),
@@ -44,5 +46,14 @@ describe('MembersView member images', () => {
 
     expect(screen.getByRole('button', { name: 'Replace image' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Remove image' })).toBeTruthy();
+  });
+
+  it('deletes a member from the row trash action after confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(MembersView);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Delete member Grace Park' }));
+
+    expect(deleteMember).toHaveBeenCalledWith('member-1');
   });
 });

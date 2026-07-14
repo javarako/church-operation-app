@@ -44,6 +44,7 @@
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/entity/ReferenceData.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/entity/TaxReceipt.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/entity/TaxReceiptCounter.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/exception/DeletionBlockedException.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/exception/GlobalExceptionHandler.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/exception/MemberImageNotFoundException.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/exception/ReceiptValidationException.java
@@ -73,6 +74,7 @@
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/BudgetService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/DashboardService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/FinancialTransactionService.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/MemberDeletionService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/MemberImageService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/MemberService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/MongoDatabaseExportService.java
@@ -84,6 +86,7 @@
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/PasswordResetEmailService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/PasswordResetService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/ReferenceDataBootstrapRunner.java
+/Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/ReferenceDataDeletionService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/ReferenceDataService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/ReportService.java
 /Users/brad/Desktop/workspcace/church-operation-app/backend/src/main/java/com/church/operation/service/RestoreCutoverException.java

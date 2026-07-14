@@ -4,6 +4,7 @@ import com.church.operation.dto.ReferenceDataResponse;
 import com.church.operation.dto.ReferenceDataRequest;
 import com.church.operation.entity.Member;
 import com.church.operation.service.ReferenceDataService;
+import com.church.operation.service.ReferenceDataDeletionService;
 import com.church.operation.util.ReferenceDataType;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -11,10 +12,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -22,9 +25,14 @@ import java.util.List;
 @RequestMapping("/api/reference-data")
 public class ReferenceDataController {
     private final ReferenceDataService referenceDataService;
+    private final ReferenceDataDeletionService referenceDataDeletionService;
 
-    public ReferenceDataController(ReferenceDataService referenceDataService) {
+    public ReferenceDataController(
+        ReferenceDataService referenceDataService,
+        ReferenceDataDeletionService referenceDataDeletionService
+    ) {
         this.referenceDataService = referenceDataService;
+        this.referenceDataDeletionService = referenceDataDeletionService;
     }
 
     @GetMapping("/{type}")
@@ -50,6 +58,12 @@ public class ReferenceDataController {
         @Valid @RequestBody ReferenceDataRequest request
     ) {
         return ReferenceDataResponse.from(referenceDataService.update(actor(authentication), id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    ResponseEntity<Void> deleteReferenceData(Authentication authentication, @PathVariable("id") String id) {
+        referenceDataDeletionService.delete(actor(authentication), id);
+        return ResponseEntity.noContent().build();
     }
 
     private Member actor(Authentication authentication) {
