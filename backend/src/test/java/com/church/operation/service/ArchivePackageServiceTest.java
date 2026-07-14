@@ -513,6 +513,35 @@ class ArchivePackageServiceTest {
     }
 
     @Test
+    void writeIncludesGeneratedManifestInAggregateSizeLimit() throws Exception {
+        Path entry = writeEntry(
+            "writer-aggregate-boundary.bson",
+            new Document("payload", "a".repeat(32_000))
+        );
+        long entrySize = Files.size(entry);
+        long aggregateLimit = entrySize + 64;
+        ArchivePackageService bounded = new ArchivePackageService(
+            codec,
+            4096,
+            aggregateLimit,
+            aggregateLimit,
+            tempDir.resolve("writer-aggregate-boundary"),
+            directory -> { }
+        );
+        ArchiveManifest manifest = new ArchiveManifest(
+            1,
+            ArchiveType.FULL_BACKUP,
+            List.of(new ArchiveCollectionManifest("members", ENTRY_NAME))
+        );
+        Path archive = tempDir.resolve("writer-aggregate-boundary.zip");
+
+        assertThatThrownBy(() -> bounded.write(archive, PASSWORD, manifest, Map.of(ENTRY_NAME, entry)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("cumulative");
+        assertThat(archive).doesNotExist();
+    }
+
+    @Test
     void extractsValidationFilesUnderConfiguredDataManagementDirectory() throws Exception {
         Path archive = writeArchive(ArchiveType.FULL_BACKUP);
         Path operationsDirectory = tempDir.resolve("configured-operations");

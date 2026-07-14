@@ -183,6 +183,7 @@ public class ArchivePackageService {
         if (manifestBytes.length > maxManifestBytes) {
             throw new IllegalArgumentException("Archive manifest size exceeds the limit.");
         }
+        validateCumulativeExtractedSize(manifestBytes.length, computedManifest.collections());
         char[] passwordCopy = copyPassword(password);
         try {
             Files.deleteIfExists(output);

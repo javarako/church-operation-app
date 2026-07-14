@@ -28,7 +28,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Stores each collection under collections/&lt;UTF-8-name-as-hex&gt;/{data,options,indexes}.bson.
+ * Stores application namespaces under collections/&lt;UTF-8-name-as-hex&gt;/{data,options,indexes}.bson.
+ * MongoDB-reserved {@code system.*} namespaces are internal state and are never application backup content.
  */
 @Service
 public class MongoDatabaseExportService {
@@ -126,7 +127,7 @@ public class MongoDatabaseExportService {
         database.listCollections(RawBsonDocument.class).into(catalogEntries);
         return catalogEntries.stream()
             .map(this::namespaceCatalog)
-            .filter(namespace -> !isMongoOwnedCompanion(namespace.name()))
+            .filter(namespace -> !isMongoSystemNamespace(namespace.name()))
             .filter(namespace -> !namespace.name().startsWith(RESTORE_STAGING_PREFIX))
             .filter(namespace -> !namespace.name().startsWith(RESTORE_BACKUP_PREFIX))
             .sorted(Comparator.comparing(NamespaceCatalog::name))
@@ -147,8 +148,8 @@ public class MongoDatabaseExportService {
         return new NamespaceCatalog(name, type, catalog.getDocument("options").clone());
     }
 
-    private boolean isMongoOwnedCompanion(String name) {
-        return "system.views".equals(name) || name.startsWith("system.buckets.");
+    private boolean isMongoSystemNamespace(String name) {
+        return name.startsWith("system.");
     }
 
     private void addCollectionEntries(

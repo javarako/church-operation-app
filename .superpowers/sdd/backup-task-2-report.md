@@ -222,3 +222,116 @@ git diff --check
 
 - Standalone MongoDB cannot make this multi-namespace cutover atomic. Ordinary collections have backup/rollback protection; views and time-series namespaces use a validated replay path and retain staging/recovery evidence on failure. Task 3 must take the mandatory safety backup first and map `maintenanceRequired()` failures to `FAILED_MAINTENANCE`.
 - `operationExpiry` remains intentionally unused until Task 3 and is not a Task 2 defect.
+
+## Remaining Findings Remediation - 2026-07-13
+
+### Status
+
+DONE
+
+### RED Evidence
+
+Generated-manifest aggregate accounting:
+
+```text
+mvn -Dtest=ArchivePackageServiceTest#writeIncludesGeneratedManifestInAggregateSizeLimit test
+Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+Expecting code to raise a throwable.
+BUILD FAILURE
+```
+
+System namespace export symmetry:
+
+```text
+mvn -Dtest=MongoDatabaseRoundTripIntegrationTest#excludesEveryMongoSystemNamespaceFromRestorableExports test
+Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+system.profile was present in all three exported sidecars.
+BUILD FAILURE
+```
+
+Preflight planner extraction and recursive dependency contracts:
+
+```text
+mvn -Dtest=MongoRestorePreflightPlannerTest test
+cannot find symbol: class MongoRestorePreflightPlanner
+BUILD FAILURE
+```
+
+After the namespace validator existed, the recursive view contract remained RED because `viewDependencies`, `stagingCreateCommand`, and `orderedViewNames` did not exist. The catalog service contract likewise failed to compile before `MongoRestoreCatalogService` was created.
+
+Primary cutover failure preservation:
+
+```text
+mvn -Dtest=MongoDatabaseRoundTripIntegrationTest#catalogFailureCannotMaskInjectedCutoverFailureOrRecoveryEvidence test
+Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+Expected RestoreCutoverException but got IllegalArgumentException: Self-suppression not permitted
+BUILD FAILURE
+```
+
+The failure showed the injected cutover exception was first masked by catalog evidence collection, then the same catalog throwable was suppressed onto itself during fallback cleanup.
+
+### GREEN Evidence
+
+Focused restore/archive suite:
+
+```text
+mvn -Dtest=MongoDatabaseRoundTripIntegrationTest,ArchivePackageServiceTest,BsonStreamCodecTest,MongoDatabaseExportServiceTest,MongoDatabaseImportServiceTest,MongoRestorePreflightPlannerTest,MongoRestoreCatalogServiceTest test
+Tests run: 71, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Complete backend suite:
+
+```text
+mvn test
+Tests run: 173, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+### Files
+
+Created:
+
+- `backend/src/main/java/com/church/operation/service/MongoRestorePreflightPlanner.java`
+- `backend/src/main/java/com/church/operation/service/MongoRestoreCatalogService.java`
+- `backend/src/test/java/com/church/operation/service/MongoRestorePreflightPlannerTest.java`
+- `backend/src/test/java/com/church/operation/service/MongoRestoreCatalogServiceTest.java`
+- `backend/src/test/java/com/church/operation/service/MongoDatabaseImportServiceTest.java`
+
+Modified:
+
+- `.superpowers/sdd/backup-task-2-report.md`
+- `backend/src/main/java/com/church/operation/service/ArchivePackageService.java`
+- `backend/src/main/java/com/church/operation/service/MongoDatabaseExportService.java`
+- `backend/src/main/java/com/church/operation/service/MongoDatabaseImportService.java`
+- `backend/src/test/java/com/church/operation/service/ArchivePackageServiceTest.java`
+- `backend/src/test/java/com/church/operation/service/MongoDatabaseRoundTripIntegrationTest.java`
+
+Receipt, UI, generated, target, progress, Docker Compose, and temporary files remain outside this change.
+
+### Decomposition Rationale
+
+- `MongoDatabaseImportService` fell from 1,020 to 371 lines and now coordinates validation ownership, staging data transfer, verification, and cutover flow.
+- `MongoRestorePreflightPlanner` owns archive sidecar parsing, semantic option/index validation, complete namespace-name validation, restore plan records, recursive view dependency analysis, topological ordering, cycle/missing-source checks, and staging command rewrites. It has no live database mutation capability.
+- `MongoRestoreCatalogService` owns live/recovery catalog discovery, backup naming, rename/drop ordering, rollback, catalog/index signatures, and failure evidence. Its `cutoverFailure` starts with known operation namespaces, catches evidence failures, safely suppresses them onto the primary, and always returns a maintenance-required `RestoreCutoverException`.
+- These boundaries are exercised directly by focused unit tests and through the MongoDB round-trip integration suite; the split removes independent responsibilities rather than redistributing methods cosmetically.
+
+### Self-Review
+
+- Confirmed every `IOException`, `RuntimeException`, or `Error` after live mutation is converted to `RestoreCutoverException`; rollback, cleanup, and evidence failures cannot replace or self-suppress the primary.
+- Confirmed original and referenced namespaces reject blanks, `$`, `system.*`, embedded `.system.`, restore prefixes, null/C0/C1 controls, malformed Unicode, and namespace lengths over 255 UTF-8 bytes before database access or staging. The exact byte boundary remains accepted.
+- Confirmed view dependency discovery and staging rewrite use the same recursive BSON walk for `viewOn`, `$lookup.from`, `$graphLookup.from`, both `$unionWith` forms, nested pipelines, and facets. Missing dependencies and indirect cycles fail preflight.
+- Confirmed a MongoDB integration view with lookup, nested pipeline lookup/union, and string union produces identical restored results and all captured staging references use staging names.
+- Confirmed export omits every MongoDB-reserved `system.*` namespace, including `system.profile`; restore applies the same policy, so export cannot emit internally generated archives that semantic preflight rejects.
+- Confirmed generated manifest bytes count toward writer aggregate limits before the archive output is touched.
+- Confirmed prior raw BSON, GridFS, views, time-series, index `v`/options, upload/entry/aggregate/temp bounds, byte-bounded batches, semantic preflight, rollback, recovery evidence, and cleanup suppression coverage remains green.
+- Confirmed focused diff checks contain no whitespace errors and only the listed Task 2/minimal archive files will be staged.
+
+### Commit
+
+- Message: `fix: preserve restore recovery state`
+- Final hash is supplied in the task handoff because a commit cannot include its own final hash.
+
+### Concerns
+
+- None beyond the already documented standalone MongoDB non-atomic cutover constraint, which is now consistently surfaced as maintenance-required recovery state.

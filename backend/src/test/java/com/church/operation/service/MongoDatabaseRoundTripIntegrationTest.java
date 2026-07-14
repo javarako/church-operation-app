@@ -41,9 +41,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 @Testcontainers
 class MongoDatabaseRoundTripIntegrationTest {
@@ -176,6 +180,103 @@ class MongoDatabaseRoundTripIntegrationTest {
     }
 
     @Test
+    void excludesEveryMongoSystemNamespaceFromRestorableExports() throws Exception {
+        try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
+            MongoDatabase database = client.getDatabase("system_namespace_policy");
+            database.getCollection("members").insertOne(new Document("name", "Ada"));
+            database.runCommand(new Document("profile", 2));
+            database.getCollection("members").find().first();
+            database.runCommand(new Document("profile", 0));
+            assertThat(database.listCollectionNames()).anyMatch(name -> name.startsWith("system."));
+
+            DataManagementProperties properties = properties("system-namespace-operations");
+            ArchivePackageService packages = new ArchivePackageService(properties);
+            MongoDatabaseExportService exporter = new MongoDatabaseExportService(database, packages, properties);
+            MongoDatabaseImportService importer = new MongoDatabaseImportService(database, packages);
+            Path archive = tempDirectory.resolve("system-namespace-policy.zip");
+
+            var manifest = exporter.exportFull(archive, PASSWORD);
+
+            assertThat(manifest.collections())
+                .extracting(entry -> entry.collection())
+                .contains("members")
+                .allMatch(name -> !name.startsWith("system."));
+            try (MongoDatabaseImportService.ValidatedArchive ignored = importer.validateFull(archive, PASSWORD)) {
+                // Export policy must never produce an archive rejected by restore namespace policy.
+            }
+        }
+    }
+
+    @Test
+    void restoresViewsWithLookupAndNestedPipelineUnionDependencies() throws Exception {
+        RecordingCommandListener commandListener = new RecordingCommandListener();
+        MongoClientSettings settings = MongoClientSettings.builder()
+            .applyConnectionString(new ConnectionString(MONGODB.getConnectionString()))
+            .addCommandListener(commandListener)
+            .build();
+        try (MongoClient client = MongoClients.create(settings)) {
+            MongoDatabase database = client.getDatabase("recursive_view_dependencies");
+            database.getCollection("members").insertOne(
+                new Document("_id", 1).append("name", "Ada")
+            );
+            database.getCollection("offerings").insertOne(
+                new Document("memberId", 1).append("kind", "offering")
+            );
+            database.getCollection("audit_events").insertOne(
+                new Document("memberId", 1).append("kind", "audit")
+            );
+            database.getCollection("member_links").insertOne(
+                new Document("memberId", 1).append("label", "choir")
+            );
+            database.getCollection("archived_members").insertOne(
+                new Document("_id", 2).append("name", "Grace")
+            );
+            database.runCommand(new Document("create", "member_activity")
+                .append("viewOn", "members")
+                .append("pipeline", List.of(
+                    new Document("$lookup", new Document("from", "offerings")
+                        .append("localField", "_id")
+                        .append("foreignField", "memberId")
+                        .append("pipeline", List.of(
+                            new Document("$unionWith", new Document("coll", "audit_events")
+                                .append("pipeline", List.of(
+                                    new Document("$lookup", new Document("from", "member_links")
+                                        .append("localField", "memberId")
+                                        .append("foreignField", "memberId")
+                                        .append("as", "links"))
+                                )))
+                        ))
+                        .append("as", "activity")),
+                    new Document("$unionWith", "archived_members")
+                )));
+            List<BsonDocument> expected = semanticDocuments(database, "member_activity");
+
+            DataManagementProperties properties = properties("recursive-view-operations");
+            ArchivePackageService packages = new ArchivePackageService(properties);
+            MongoDatabaseExportService exporter = new MongoDatabaseExportService(database, packages, properties);
+            MongoDatabaseImportService importer = new MongoDatabaseImportService(database, packages);
+            Path archive = tempDirectory.resolve("recursive-view-dependencies.zip");
+            exporter.exportFull(archive, PASSWORD);
+            dropAllCollections(database);
+            commandListener.clear();
+
+            try (MongoDatabaseImportService.ValidatedArchive validated = importer.validateFull(archive, PASSWORD)) {
+                importer.replaceAll(validated);
+            }
+
+            assertThat(semanticDocuments(database, "member_activity")).isEqualTo(expected);
+            BsonDocument stagedViewCreate = commandListener.viewCreateCommands().stream()
+                .filter(command -> command.getString("create").getValue().startsWith(
+                    MongoDatabaseExportService.RESTORE_STAGING_PREFIX
+                ))
+                .findFirst()
+                .orElseThrow();
+            assertThat(new MongoRestorePreflightPlanner(database.getName()).viewDependencies(stagedViewCreate))
+                .allMatch(name -> name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX));
+        }
+    }
+
+    @Test
     void forcedCutoverFailureRestoresOrdinaryOriginalsAndRetainsStagingEvidence() throws Exception {
         try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
             MongoDatabase database = client.getDatabase("forced_cutover_failure");
@@ -211,6 +312,54 @@ class MongoDatabaseRoundTripIntegrationTest {
             assertThat(snapshot(database)).usingRecursiveComparison().isEqualTo(before);
             assertThat(database.listCollectionNames())
                 .anyMatch(name -> name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX));
+        }
+    }
+
+    @Test
+    void catalogFailureCannotMaskInjectedCutoverFailureOrRecoveryEvidence() throws Exception {
+        try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
+            MongoDatabase database = client.getDatabase("catalog_failure_during_cutover");
+            database.getCollection("members").insertOne(new Document("version", "archive"));
+            DataManagementProperties properties = properties("catalog-failure-operations");
+            ArchivePackageService packages = new ArchivePackageService(properties);
+            MongoDatabaseExportService exporter = new MongoDatabaseExportService(database, packages, properties);
+            Path archive = tempDirectory.resolve("catalog-failure-cutover.zip");
+            exporter.exportFull(archive, PASSWORD);
+
+            database.getCollection("members").drop();
+            database.getCollection("members").insertOne(new Document("version", "live"));
+            AtomicBoolean failCatalog = new AtomicBoolean();
+            IllegalStateException catalogFailure = new IllegalStateException("catalog unavailable");
+            MongoDatabase failingCatalogDatabase = mock(MongoDatabase.class, delegatesTo(database));
+            doAnswer(invocation -> {
+                if (failCatalog.get()) {
+                    throw catalogFailure;
+                }
+                return database.listCollections(RawBsonDocument.class);
+            }).when(failingCatalogDatabase).listCollections(RawBsonDocument.class);
+            IllegalStateException forced = new IllegalStateException("injected cutover failure");
+            MongoDatabaseImportService importer = new MongoDatabaseImportService(
+                failingCatalogDatabase,
+                packages,
+                () -> {
+                    failCatalog.set(true);
+                    throw forced;
+                }
+            );
+
+            assertThatThrownBy(() -> {
+                try (MongoDatabaseImportService.ValidatedArchive validated = importer.validateFull(archive, PASSWORD)) {
+                    importer.replaceAll(validated);
+                }
+            }).isInstanceOf(RestoreCutoverException.class)
+                .hasCause(forced)
+                .satisfies(failure -> {
+                    RestoreCutoverException cutoverFailure = (RestoreCutoverException) failure;
+                    assertThat(cutoverFailure.maintenanceRequired()).isTrue();
+                    assertThat(cutoverFailure.stagingNamespaces()).isNotEmpty();
+                    assertThat(cutoverFailure.backupNamespaces()).isNotEmpty();
+                    assertThat(forced.getSuppressed()).contains(catalogFailure);
+                });
         }
     }
 
@@ -361,8 +510,7 @@ class MongoDatabaseRoundTripIntegrationTest {
     }
 
     private boolean isApplicationNamespace(String name) {
-        return !"system.views".equals(name)
-            && !name.startsWith("system.buckets.")
+        return !name.startsWith("system.")
             && !name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX)
             && !name.startsWith(MongoDatabaseExportService.RESTORE_BACKUP_PREFIX);
     }
@@ -527,11 +675,14 @@ class MongoDatabaseRoundTripIntegrationTest {
 
     private static final class RecordingCommandListener implements CommandListener {
         private final List<BsonDocument> createIndexesCommands = new CopyOnWriteArrayList<>();
+        private final List<BsonDocument> viewCreateCommands = new CopyOnWriteArrayList<>();
 
         @Override
         public void commandStarted(CommandStartedEvent event) {
             if ("createIndexes".equals(event.getCommandName())) {
                 createIndexesCommands.add(event.getCommand().clone());
+            } else if ("create".equals(event.getCommandName()) && event.getCommand().containsKey("viewOn")) {
+                viewCreateCommands.add(event.getCommand().clone());
             }
         }
 
@@ -539,8 +690,13 @@ class MongoDatabaseRoundTripIntegrationTest {
             return List.copyOf(createIndexesCommands);
         }
 
+        private List<BsonDocument> viewCreateCommands() {
+            return List.copyOf(viewCreateCommands);
+        }
+
         private void clear() {
             createIndexesCommands.clear();
+            viewCreateCommands.clear();
         }
     }
 }
