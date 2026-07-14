@@ -1,10 +1,9 @@
 package com.church.operation.service;
 
-import org.bson.BsonBinaryReader;
 import org.bson.BsonBinaryWriter;
 import org.bson.Document;
+import org.bson.RawBsonDocument;
 import org.bson.codecs.DocumentCodec;
-import org.bson.codecs.DecoderContext;
 import org.bson.codecs.EncoderContext;
 import org.bson.io.BasicOutputBuffer;
 
@@ -33,7 +32,29 @@ public class BsonStreamCodec {
 
     public List<Document> read(InputStream input) throws IOException {
         List<Document> documents = new ArrayList<>();
-        for (Document document; (document = readDocument(input)) != null;) {
+        for (RawBsonDocument document; (document = readRaw(input)) != null;) {
+            documents.add(document.decode(documentCodec));
+        }
+        return documents;
+    }
+
+    public void writeRaw(RawBsonDocument document, OutputStream output) throws IOException {
+        ByteBuffer buffer = document.getByteBuffer().asNIO().duplicate();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        output.write(bytes);
+    }
+
+    public List<RawBsonDocument> readRawBatch(InputStream input, int batchSize) throws IOException {
+        if (batchSize < 1) {
+            throw new IllegalArgumentException("BSON batch size must be positive.");
+        }
+        List<RawBsonDocument> documents = new ArrayList<>(batchSize);
+        while (documents.size() < batchSize) {
+            RawBsonDocument document = readRaw(input);
+            if (document == null) {
+                break;
+            }
             documents.add(document);
         }
         return documents;
@@ -41,7 +62,7 @@ public class BsonStreamCodec {
 
     public long count(InputStream input) throws IOException {
         long count = 0;
-        while (readDocument(input) != null) {
+        while (readRaw(input) != null) {
             if (count == Long.MAX_VALUE) {
                 throw new IOException("BSON document count exceeds the supported limit.");
             }
@@ -50,7 +71,7 @@ public class BsonStreamCodec {
         return count;
     }
 
-    private Document readDocument(InputStream input) throws IOException {
+    public RawBsonDocument readRaw(InputStream input) throws IOException {
         byte[] lengthBytes = new byte[Integer.BYTES];
         if (!readLength(input, lengthBytes)) {
             return null;
@@ -62,9 +83,7 @@ public class BsonStreamCodec {
         byte[] bson = new byte[length];
         System.arraycopy(lengthBytes, 0, bson, 0, lengthBytes.length);
         readFully(input, bson, lengthBytes.length, length - lengthBytes.length);
-        try (BsonBinaryReader reader = new BsonBinaryReader(ByteBuffer.wrap(bson))) {
-            return documentCodec.decode(reader, DecoderContext.builder().build());
-        }
+        return new RawBsonDocument(bson);
     }
 
     private boolean readLength(InputStream input, byte[] lengthBytes) throws IOException {

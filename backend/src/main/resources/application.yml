@@ -25,6 +25,10 @@ management:
         include: health
 
 church:
+  data-management:
+    temp-directory: ${CHURCH_DATA_TEMP_DIRECTORY:${java.io.tmpdir}/church-operation-data}
+    operation-expiry: ${CHURCH_DATA_OPERATION_EXPIRY:30m}
+    max-upload-size: ${CHURCH_DATA_MAX_UPLOAD_SIZE:2GB}
   fiscal-year:
     start-month: ${CHURCH_FISCAL_YEAR_START_MONTH:1}
   information:

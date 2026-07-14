@@ -260,7 +260,7 @@ class ArchivePackageServiceTest {
     }
 
     @Test
-    void rejectsDuplicateLogicalCollections() throws Exception {
+    void acceptsMultipleSidecarEntriesForOneLogicalCollection() throws Exception {
         byte[] first = bsonBytes(new Document("member", "Ada"));
         byte[] second = bsonBytes(new Document("member", "Grace"));
         String secondEntry = "collections/other.bson";
@@ -276,13 +276,16 @@ class ArchivePackageServiceTest {
             )
         );
 
-        assertThatThrownBy(() -> service.validate(archive, PASSWORD, ArchiveType.FULL_BACKUP))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("collection names");
+        try (ArchivePackageService.ValidatedArchive validated = service.validate(
+            archive, PASSWORD, ArchiveType.FULL_BACKUP
+        )) {
+            assertThat(validated.manifest().collections()).hasSize(2);
+            assertThat(validated.entries()).containsKeys(ENTRY_NAME, secondEntry);
+        }
     }
 
     @Test
-    void writeRejectsBlankNullAndDuplicateLogicalCollectionNames() throws Exception {
+    void writeRejectsBlankAndNullLogicalCollectionNamesAndAcceptsSidecars() throws Exception {
         Path first = writeEntry("logical-first.bson", new Document("member", "Ada"));
         Path second = writeEntry("logical-second.bson", new Document("member", "Grace"));
 
@@ -306,13 +309,12 @@ class ArchivePackageServiceTest {
             new ArchiveCollectionManifest("members", ENTRY_NAME),
             new ArchiveCollectionManifest("members", secondEntry)
         ));
-        assertThatThrownBy(() -> service.write(
+        service.write(
             tempDir.resolve("duplicate-logical-writer.zip"),
             PASSWORD,
             duplicate,
             Map.of(ENTRY_NAME, first, secondEntry, second)
-        )).isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("collection names");
+        );
     }
 
     @Test

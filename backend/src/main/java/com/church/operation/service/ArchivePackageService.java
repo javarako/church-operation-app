@@ -1,5 +1,6 @@
 package com.church.operation.service;
 
+import com.church.operation.config.DataManagementProperties;
 import com.church.operation.dto.ArchiveCollectionManifest;
 import com.church.operation.dto.ArchiveManifest;
 import com.church.operation.util.ArchiveType;
@@ -10,6 +11,8 @@ import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.bson.Document;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@Service
 public class ArchivePackageService {
     public static final int FORMAT_VERSION = 1;
 
@@ -55,6 +59,11 @@ public class ArchivePackageService {
 
     public ArchivePackageService() {
         this(new BsonStreamCodec(), DEFAULT_MAX_MANIFEST_BYTES, DEFAULT_MAX_ENTRY_BYTES);
+    }
+
+    @Autowired
+    public ArchivePackageService(DataManagementProperties properties) {
+        this(new BsonStreamCodec(), DEFAULT_MAX_MANIFEST_BYTES, properties.maxUploadSize().toBytes());
     }
 
     public ArchivePackageService(int maxManifestBytes, long maxEntryBytes) {
@@ -195,15 +204,13 @@ public class ArchivePackageService {
             throw new IllegalArgumentException("Archive type is required.");
         }
         Set<String> names = new HashSet<>();
-        Set<String> collectionNames = new HashSet<>();
         for (ArchiveCollectionManifest collection : manifest.collections()) {
             if (collection == null || !names.add(normalizeEntryName(collection.entryName()))
                 || !entries.containsKey(collection.entryName())) {
                 throw new IllegalArgumentException("Archive entries must be unique and declared.");
             }
-            if (collection.collection() == null || collection.collection().isBlank()
-                || !collectionNames.add(collection.collection())) {
-                throw new IllegalArgumentException("Archive collection names must be unique and nonblank.");
+            if (collection.collection() == null || collection.collection().isBlank()) {
+                throw new IllegalArgumentException("Archive collection names must be nonblank.");
             }
             if (collection.documentCount() < 0 || collection.sizeBytes() < 0) {
                 throw new IllegalArgumentException("Archive manifest contains an invalid number.");
@@ -245,14 +252,12 @@ public class ArchivePackageService {
             throw new IllegalArgumentException("Archive manifest collections are missing.");
         }
         Set<String> entryNames = new HashSet<>();
-        Set<String> collectionNames = new HashSet<>();
         for (ArchiveCollectionManifest collection : manifest.collections()) {
             if (collection == null || !entryNames.add(normalizeEntryName(collection.entryName()))) {
                 throw new IllegalArgumentException("Archive contains duplicate manifest entries.");
             }
-            if (collection.collection() == null || collection.collection().isBlank()
-                || !collectionNames.add(collection.collection())) {
-                throw new IllegalArgumentException("Archive collection names must be unique and nonblank.");
+            if (collection.collection() == null || collection.collection().isBlank()) {
+                throw new IllegalArgumentException("Archive collection names must be nonblank.");
             }
         }
     }
