@@ -17,9 +17,6 @@ public record ChurchInformationProperties(
         String receiptIssueLocation,
         String website
     ) {
-        public Information(String name, String address, String contactInfo, String treasurerName) {
-            this(name, address, contactInfo, treasurerName, "", "", "");
-        }
     }
 
     public record Branding(String bannerPath, String logPath) {

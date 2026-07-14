@@ -10,3 +10,5 @@ Reports V1 Task 2: complete (commits a6f40de..7f58e73, review approved after fix
 Reports V1 Task 3: complete (commits 7f58e73..a90e700, review approved)
 Reports V1 Task 4: complete (commits a90e700..217aa14, review approved after role-tab fix)
 Reports V1 Task 5: complete (commits 217aa14..3f11a1f, review approved after date/export-test fixes)
+Full Backup Task 1: complete (commits dbf427d..ef50c2a, review approved; 32 focused tests passing)
+Full Backup Task 2: complete (commits ef50c2a..b7f5a81, review approved; 80 focused and 182 full backend tests passing)

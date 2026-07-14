@@ -17,12 +17,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.bson.types.ObjectId;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
+import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,7 +44,7 @@ class DashboardServiceTest {
         DashboardService service = service();
         when(memberRepository.findAll()).thenReturn(List.of(
             member(true, Instant.parse("2026-07-02T12:00:00Z")),
-            member(true, null),
+            member(true, null, new ObjectId(Date.from(Instant.parse("2026-07-05T12:00:00Z"))).toHexString()),
             member(false, Instant.parse("2026-07-03T12:00:00Z"))
         ));
         when(budgetRepository.findActiveByFiscalYear(2026)).thenReturn(List.of(
@@ -53,10 +55,10 @@ class DashboardServiceTest {
             LocalDate.of(2026, 1, 1), TODAY
         )).thenReturn(List.of(offering(TODAY, LocalDate.of(2026, 7, 12), "60.00")));
         when(offeringRepository.findByDeletedFalseAndOfferingSundayBetweenOrderByOfferingSundayAscFundCategoryAscPaymentMethodAsc(
-            LocalDate.of(2026, 1, 1), TODAY
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 7, 19)
         )).thenReturn(List.of(
             offering(LocalDate.of(2026, 4, 30), LocalDate.of(2026, 5, 3), "10.00"),
-            offering(LocalDate.of(2026, 7, 12), LocalDate.of(2026, 7, 12), "20.00")
+            offering(LocalDate.of(2026, 7, 13), LocalDate.of(2026, 7, 19), "20.00")
         ));
         FinancialTransaction pending = expense("30.00", "100", false);
         FinancialTransaction cleared = expense("15.00", "101", true);
@@ -68,7 +70,7 @@ class DashboardServiceTest {
         DashboardResponse response = service.getDashboard(actor(Role.MEMBERSHIP), TODAY);
 
         assertThat(response.activeMemberCount()).isEqualTo(2);
-        assertThat(response.newMemberCount()).isEqualTo(2);
+        assertThat(response.newMemberCount()).isEqualTo(3);
         assertThat(response.ytdOfferingActual()).isEqualByComparingTo("60.00");
         assertThat(response.ytdOfferingBudget()).isEqualByComparingTo("100.00");
         assertThat(response.ytdOfferingPercentage()).isEqualByComparingTo("60.00");
@@ -81,9 +83,9 @@ class DashboardServiceTest {
         assertThat(response.monthOfferingTotal()).isEqualByComparingTo("20.00");
         assertThat(response.yearOfferingTotal()).isEqualByComparingTo("30.00");
         assertThat(response.offeringTrend()).hasSize(12);
-        assertThat(response.offeringTrend().getFirst().sunday()).isEqualTo(LocalDate.of(2026, 4, 26));
-        assertThat(response.offeringTrend().get(1).amount()).isEqualByComparingTo("10.00");
-        assertThat(response.offeringTrend().getLast().sunday()).isEqualTo(LocalDate.of(2026, 7, 12));
+        assertThat(response.offeringTrend().getFirst().sunday()).isEqualTo(LocalDate.of(2026, 5, 3));
+        assertThat(response.offeringTrend().getFirst().amount()).isEqualByComparingTo("10.00");
+        assertThat(response.offeringTrend().getLast().sunday()).isEqualTo(LocalDate.of(2026, 7, 19));
         assertThat(response.offeringTrend().getLast().amount()).isEqualByComparingTo("20.00");
     }
 
@@ -122,7 +124,7 @@ class DashboardServiceTest {
             LocalDate.of(2026, 1, 1), TODAY
         )).thenReturn(List.of());
         when(offeringRepository.findByDeletedFalseAndOfferingSundayBetweenOrderByOfferingSundayAscFundCategoryAscPaymentMethodAsc(
-            LocalDate.of(2026, 1, 1), TODAY
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 7, 19)
         )).thenReturn(List.of());
         when(transactionRepository.findActiveByTransactionDateBetween(LocalDate.of(2026, 1, 1), TODAY))
             .thenReturn(List.of());
@@ -136,7 +138,12 @@ class DashboardServiceTest {
     }
 
     private Member member(boolean active, Instant createdAt) {
+        return member(active, createdAt, null);
+    }
+
+    private Member member(boolean active, Instant createdAt, String id) {
         Member member = new Member();
+        member.setId(id);
         member.setActive(active);
         member.setCreatedAt(createdAt);
         return member;

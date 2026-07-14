@@ -12,9 +12,18 @@
       <aside class="church-info-panel">
         <div>
           <h2>{{ churchName }}</h2>
-          <p>{{ churchAddress }}</p>
-          <p>{{ churchContactInfo }}</p>
-          <p>{{ treasurerLabel }}</p>
+          <p class="church-info-row">
+            <MapPin data-testid="church-address-icon" :size="18" aria-hidden="true" />
+            <span>{{ churchAddress }}</span>
+          </p>
+          <p class="church-info-row">
+            <Phone data-testid="church-contact-icon" :size="18" aria-hidden="true" />
+            <span>{{ churchContactInfo }}</span>
+          </p>
+          <p class="church-info-row">
+            <UserRoundCheck data-testid="church-treasurer-icon" :size="18" aria-hidden="true" />
+            <span>{{ treasurerLabel }}</span>
+          </p>
         </div>
         <div class="user-role">
           <span>{{ userInitials }}</span>
@@ -116,7 +125,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { Bar } from 'vue-chartjs';
 import { BarElement, CategoryScale, Chart as ChartJS, LinearScale, Tooltip, type ChartData, type ChartOptions } from 'chart.js';
-import { ChartNoAxesCombined, HandHeart, ReceiptText, Users } from '@lucide/vue';
+import { ChartNoAxesCombined, HandHeart, MapPin, Phone, ReceiptText, UserRoundCheck, Users } from '@lucide/vue';
 import { getChurchInformation, type ChurchInformation } from '../api/churchInformation';
 import { getDashboard, type DashboardResponse } from '../api/dashboard';
 import { authState } from '../auth/authStore';
@@ -215,7 +224,7 @@ function progressWidth(value: number | null) {
 
 .dashboard-hero {
   display: grid;
-  grid-template-columns: minmax(234px, 0.625fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(360px, 1fr) minmax(420px, 1fr);
   gap: 0;
   overflow: hidden;
   border: 1px solid #d8dee6;
@@ -281,6 +290,17 @@ function progressWidth(value: number | null) {
   color: #344054;
 }
 
+.church-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.church-info-row svg {
+  flex: 0 0 auto;
+  color: #22577a;
+}
+
 .user-role {
   display: flex;
   align-items: flex-start;
@@ -315,7 +335,8 @@ function progressWidth(value: number | null) {
 }
 
 .summary-card {
-  min-height: 154px;
+  min-height: 132px;
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
   gap: 14px;

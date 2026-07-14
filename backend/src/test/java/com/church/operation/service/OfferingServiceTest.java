@@ -150,6 +150,26 @@ class OfferingServiceTest {
     }
 
     @Test
+    void rejectsOfferingSundayThatIsNotSunday() {
+        Member actor = member("admin-id", "admin", Role.ADMIN);
+        OfferingRequest request = new OfferingRequest(
+            GivingType.ANONYMOUS,
+            null,
+            "Anonymous",
+            LocalDate.of(2026, 7, 4),
+            LocalDate.of(2026, 7, 4),
+            "TITHE",
+            new BigDecimal("25.00"),
+            "CASH",
+            null
+        );
+
+        assertThatThrownBy(() -> service().createOffering(actor, request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Offering Sunday must be a Sunday.");
+    }
+
+    @Test
     void rejectsUnknownPaymentMethod() {
         Member actor = member("admin-id", "admin", Role.ADMIN);
         OfferingRequest request = request(GivingType.ANONYMOUS, null, "Anonymous");

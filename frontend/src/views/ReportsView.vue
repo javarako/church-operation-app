@@ -823,6 +823,30 @@ function startOfYear(value: Date) {
   color: #a32929;
 }
 
+@media (max-width: 600px) {
+  .reports-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-toolbar button {
+    min-width: 0;
+    padding: 6px 8px;
+    white-space: normal;
+  }
+
+  .reports-header {
+    flex-direction: column;
+  }
+
+  .reports-header button {
+    width: 100%;
+  }
+
+  .report-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .report-filters .actions {
   align-self: end;
 }

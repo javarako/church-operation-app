@@ -27,6 +27,7 @@ public class TaxReceiptPdfService {
     private static final float HALF_HEIGHT = PDRectangle.LETTER.getHeight() / 2f;
     private static final float LEFT = 30f;
     private static final float CONTENT_WIDTH = PAGE_WIDTH - 60f;
+    private static final float FONT_SIZE_INCREASE = 2f;
     private static final PDFont REGULAR = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
     private static final PDFont BOLD = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
@@ -61,55 +62,56 @@ public class TaxReceiptPdfService {
     private void renderReceipt(PDPageContentStream stream, TaxReceipt receipt, float originY, PDImageXObject logo)
         throws IOException {
         float titleY = originY - 22f;
-        writeCentered(stream, "Official Receipt for Income Tax Purposes", titleY, BOLD, 12f);
+        writeCentered(stream, "Official Receipt for Income Tax Purposes", titleY, BOLD, fontSize(12f));
 
         if (logo != null) {
-            float scale = Math.min(42f / logo.getWidth(), 42f / logo.getHeight());
+            float scale = Math.min(72f / logo.getWidth(), 44f / logo.getHeight());
             stream.drawImage(logo, LEFT, originY - 72f, logo.getWidth() * scale, logo.getHeight() * scale);
         }
-        float churchX = logo == null ? LEFT : 82f;
-        write(stream, receipt.getChurchName(), churchX, originY - 43f, BOLD, 10f);
-        writeFit(stream, receipt.getChurchAddress(), churchX, originY - 56f, PAGE_WIDTH - churchX - 30f, REGULAR, 7.5f);
-        write(stream, "Charity registration: " + value(receipt.getCharityRegistrationNumber()), churchX, originY - 68f, REGULAR, 7.5f);
-        writeFit(stream, value(receipt.getChurchWebsite()), churchX, originY - 80f, PAGE_WIDTH - churchX - 30f, REGULAR, 7.5f);
+        float churchX = logo == null ? LEFT : 112f;
+        write(stream, receipt.getChurchName(), churchX, originY - 43f, BOLD, fontSize(10f));
+        writeFit(stream, receipt.getChurchAddress(), churchX, originY - 56f, PAGE_WIDTH - churchX - 30f, REGULAR, fontSize(7.5f));
+        write(stream, "Charity registration: " + value(receipt.getCharityRegistrationNumber()), churchX, originY - 68f, REGULAR, fontSize(7.5f));
+        writeFit(stream, value(receipt.getChurchWebsite()), churchX, originY - 80f, PAGE_WIDTH - churchX - 30f, REGULAR, fontSize(7.5f));
 
-        write(stream, "Receipt number: " + value(receipt.getReceiptNumber()), LEFT, originY - 101f, BOLD, 8.5f);
-        write(stream, "Receipt issued: " + value(receipt.getIssueDate()), LEFT, originY - 114f, REGULAR, 8f);
-        write(stream, "Issued at: " + value(receipt.getReceiptIssueLocation()), LEFT, originY - 127f, REGULAR, 8f);
-        write(stream, "Donations received during: " + receipt.getTaxYear(), 330f, originY - 101f, REGULAR, 8f);
-        write(stream, "Offering number: " + value(receipt.getOfferingNumber()), 330f, originY - 114f, REGULAR, 8f);
+        write(stream, "Receipt number: " + value(receipt.getReceiptNumber()), LEFT, originY - 101f, BOLD, fontSize(8.5f));
+        write(stream, "Receipt issued: " + value(receipt.getIssueDate()), LEFT, originY - 114f, REGULAR, fontSize(8f));
+        write(stream, "Issued at: " + value(receipt.getReceiptIssueLocation()), LEFT, originY - 127f, REGULAR, fontSize(8f));
+        write(stream, "Donations received during: " + receipt.getTaxYear(), 330f, originY - 101f, REGULAR, fontSize(8f));
 
-        write(stream, "Donor: " + value(receipt.getDonorName()), LEFT, originY - 150f, BOLD, 8.5f);
-        writeFit(stream, value(receipt.getDonorAddress()), LEFT, originY - 164f, CONTENT_WIDTH, REGULAR, 8f);
-        write(stream, "Amount of gift: " + money(receipt.getGiftAmount()), LEFT, originY - 187f, BOLD, 9f);
-        write(stream, "Advantage amount: " + money(receipt.getAdvantageAmount()), 220f, originY - 187f, REGULAR, 8f);
-        write(stream, "Advantage description: " + value(receipt.getAdvantageDescription()), 390f, originY - 187f, REGULAR, 8f);
-        write(stream, "Eligible amount: " + money(receipt.getEligibleAmount()), LEFT, originY - 202f, BOLD, 9f);
+        write(stream, "Donor: " + value(receipt.getDonorName()), LEFT, originY - 150f, BOLD, fontSize(9.5f));
+        writeFit(stream, value(receipt.getDonorAddress()), LEFT, originY - 165f, CONTENT_WIDTH, REGULAR, fontSize(8.5f));
+        write(stream, "Amount: " + money(receipt.getGiftAmount()), LEFT, originY - 190f, BOLD, fontSize(11f));
 
-        write(stream, "Thank you", LEFT, originY - 225f, BOLD, 8f);
-        writeWrapped(stream, value(receipt.getThankYouNote()), LEFT, originY - 238f, CONTENT_WIDTH, REGULAR, 7f, 9f, 3);
+        write(stream, "Thank you", LEFT, originY - 214f, BOLD, fontSize(8.5f));
+        writeWrapped(stream, value(receipt.getThankYouNote()), LEFT, originY - 228f, CONTENT_WIDTH, REGULAR, fontSize(7.5f), 12f, 3);
 
         float signatureY = originY - 290f;
         stream.setStrokingColor(45f / 255f);
         stream.moveTo(LEFT, signatureY);
         stream.lineTo(220f, signatureY);
         stream.stroke();
-        write(stream, value(receipt.getTreasurerName()) + ", Treasurer", LEFT, signatureY - 12f, REGULAR, 7.5f);
-        write(stream, "Authorized signature", LEFT, signatureY + 4f, REGULAR, 6.5f);
-        write(stream, "Canada Revenue Agency", 330f, signatureY - 1f, BOLD, 7.5f);
-        write(stream, "canada.ca/charities-giving", 330f, signatureY - 13f, REGULAR, 7.5f);
+        write(stream, signerTitle(receipt.getTreasurerName()), LEFT, signatureY - 12f, REGULAR, fontSize(7.5f));
+        write(stream, "Authorized signature", LEFT, signatureY + 4f, REGULAR, fontSize(6.5f));
+        write(stream, "Canada Revenue Agency", 330f, signatureY - 1f, BOLD, fontSize(7.5f));
+        write(stream, "canada.ca/charities-giving", 330f, signatureY - 13f, REGULAR, fontSize(7.5f));
     }
 
     private PDImageXObject loadLogo(PDDocument document) {
         String path = properties.branding().logPath();
         if (path == null || path.isBlank()) return null;
-        try {
-            ClassPathResource resource = new ClassPathResource(path.replaceFirst("^/", ""));
-            if (!resource.exists()) return null;
-            return PDImageXObject.createFromByteArray(document, resource.getContentAsByteArray(), "church-logo");
-        } catch (IOException | IllegalArgumentException ex) {
-            return null;
+        String normalized = path.replaceFirst("^/", "");
+        for (String candidate : List.of(normalized, "static/" + normalized)) {
+            try {
+                ClassPathResource resource = new ClassPathResource(candidate);
+                if (resource.exists()) {
+                    return PDImageXObject.createFromByteArray(document, resource.getContentAsByteArray(), "church-logo");
+                }
+            } catch (IOException | IllegalArgumentException ignored) {
+                // Try the next classpath form before falling back to text-only output.
+            }
         }
+        return null;
     }
 
     private void writeCentered(PDPageContentStream stream, String text, float y, PDFont font, float size)
@@ -179,6 +181,15 @@ public class TaxReceiptPdfService {
     private String money(BigDecimal amount) {
         NumberFormat format = NumberFormat.getCurrencyInstance(Locale.CANADA);
         return format.format(amount == null ? BigDecimal.ZERO : amount);
+    }
+
+    private float fontSize(float currentSize) {
+        return currentSize + FONT_SIZE_INCREASE;
+    }
+
+    private String signerTitle(String treasurerName) {
+        if (treasurerName == null || treasurerName.isBlank()) return "Treasurer";
+        return treasurerName.equalsIgnoreCase("Treasurer") ? "Treasurer" : treasurerName + ", Treasurer";
     }
 
     private String value(Object value) {

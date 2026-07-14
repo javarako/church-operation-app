@@ -193,6 +193,7 @@ textarea {
 }
 
 .panel {
+  min-width: 0;
   border: 1px solid #d8dee6;
   border-radius: 8px;
   background: white;

@@ -212,6 +212,9 @@ public class OfferingService {
 
     private LocalDate resolveOfferingSunday(LocalDate offeringDate, LocalDate requestedSunday) {
         if (requestedSunday != null) {
+            if (requestedSunday.getDayOfWeek() != DayOfWeek.SUNDAY) {
+                throw new IllegalArgumentException("Offering Sunday must be a Sunday.");
+            }
             return requestedSunday;
         }
         int daysUntilSunday = DayOfWeek.SUNDAY.getValue() - offeringDate.getDayOfWeek().getValue();

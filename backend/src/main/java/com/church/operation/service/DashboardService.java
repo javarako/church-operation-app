@@ -14,6 +14,7 @@ import com.church.operation.repo.OfferingRepository;
 import com.church.operation.util.BudgetType;
 import com.church.operation.util.FinancialTransactionType;
 import com.church.operation.util.Role;
+import org.bson.types.ObjectId;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -66,19 +67,17 @@ public class DashboardService {
             : today.getYear() - 1;
         LocalDate fiscalStart = LocalDate.of(fiscalStartYear, fiscalYearProperties.startMonth(), 1);
         LocalDate fiscalEnd = fiscalStart.plusYears(1).minusDays(1);
-        LocalDate latestSunday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
-        List<LocalDate> sundays = IntStream.range(0, 12)
-            .mapToObj(index -> latestSunday.minusWeeks(11L - index))
-            .toList();
-        LocalDate offeringQueryStart = calendarYearStart.isBefore(sundays.getFirst())
+        LocalDate currentOfferingSunday = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        LocalDate trendQueryStart = currentOfferingSunday.minusWeeks(11);
+        LocalDate offeringQueryStart = calendarYearStart.isBefore(trendQueryStart)
             ? calendarYearStart
-            : sundays.getFirst();
+            : trendQueryStart;
 
         List<Member> members = memberRepository.findAll();
         long activeMembers = members.stream().filter(Member::isActive).count();
         long newMembers = members.stream()
-            .filter(member -> member.getCreatedAt() != null)
-            .map(member -> member.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate())
+            .map(this::registrationDate)
+            .filter(java.util.Objects::nonNull)
             .filter(created -> !created.isBefore(monthStart) && !created.isAfter(today))
             .count();
 
@@ -107,10 +106,10 @@ public class DashboardService {
 
         List<Offering> overviewOfferings = offeringRepository
             .findByDeletedFalseAndOfferingSundayBetweenOrderByOfferingSundayAscFundCategoryAscPaymentMethodAsc(
-                offeringQueryStart, today
+                offeringQueryStart, currentOfferingSunday
             );
         BigDecimal weekOffering = sumOfferings(overviewOfferings,
-            offering -> !offering.getOfferingSunday().isBefore(latestSunday));
+            offering -> currentOfferingSunday.equals(offering.getOfferingSunday()));
         BigDecimal monthOffering = sumOfferings(overviewOfferings,
             offering -> !offering.getOfferingSunday().isBefore(monthStart));
         BigDecimal yearOffering = sumOfferings(overviewOfferings,
@@ -123,6 +122,9 @@ public class DashboardService {
                 offering -> amountOrZero(offering.getAmount()),
                 BigDecimal::add
             ));
+        List<LocalDate> sundays = IntStream.range(0, 12)
+            .mapToObj(index -> currentOfferingSunday.minusWeeks(11L - index))
+            .toList();
         List<DashboardTrendPoint> trend = sundays.stream()
             .map(sunday -> new DashboardTrendPoint(sunday, totalsBySunday.getOrDefault(sunday, BigDecimal.ZERO)))
             .toList();
@@ -183,6 +185,18 @@ public class DashboardService {
 
     private BigDecimal amountOrZero(BigDecimal amount) {
         return amount == null ? BigDecimal.ZERO : amount;
+    }
+
+    private LocalDate registrationDate(Member member) {
+        if (member.getCreatedAt() != null) {
+            return member.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate();
+        }
+        if (member.getId() != null && ObjectId.isValid(member.getId())) {
+            return new ObjectId(member.getId()).getDate().toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+        }
+        return null;
     }
 
     private void requireStaffRole(Member actor) {

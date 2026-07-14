@@ -6,10 +6,12 @@ import com.church.operation.util.TaxReceiptStatus;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.TextPosition;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,15 +47,66 @@ class TaxReceiptPdfServiceTest {
             assertOccursTwice(text, "Donations received during: 2026");
             assertOccursTwice(text, "Ada Wong");
             assertOccursTwice(text, "100 Main St, Toronto, ON, M1M 1M1, Canada");
-            assertOccursTwice(text, "Amount of gift: $1,245.50");
-            assertOccursTwice(text, "Eligible amount: $1,245.50");
-            assertOccursTwice(text, "$0.00");
-            assertOccursTwice(text, "None");
+            assertOccursTwice(text, "Amount: $1,245.50");
+            assertThat(text).doesNotContain(
+                "Offering number:",
+                "Amount of gift:",
+                "Advantage amount:",
+                "Advantage description:",
+                "Eligible amount:"
+            );
             assertOccursTwice(text, "Daniel Kim, Treasurer");
             assertOccursTwice(text, "https://grace.example.org");
             assertOccursTwice(text, "Canada Revenue Agency");
             assertOccursTwice(text, "canada.ca/charities-giving");
-            assertOccursTwice(text, NOTE);
+            assertOccursTwice(text.replaceAll("\\s+", " "), NOTE);
+        }
+    }
+
+    @Test
+    void embedsConfiguredClasspathLogo() throws Exception {
+        ChurchInformationProperties properties = new ChurchInformationProperties(
+            new ChurchInformationProperties.Information(
+                "Grace Community Church", "123 Church Street", "416-555-0100", "Daniel Kim",
+                "123456789RR0001", "Toronto, Ontario", "https://grace.example.org"
+            ),
+            new ChurchInformationProperties.Branding("/branding/church-banner.png", "/branding/church_logo.png"),
+            new ChurchInformationProperties.Ui(20)
+        );
+
+        TaxReceipt receipt = receipt();
+        receipt.setTreasurerName("Treasurer");
+        try (PDDocument document = Loader.loadPDF(new TaxReceiptPdfService(properties).render(receipt))) {
+            assertThat(document.getPage(0).getResources().getXObjectNames()).isNotEmpty();
+            assertThat(new PDFTextStripper().getText(document)).doesNotContain("Treasurer, Treasurer");
+        }
+    }
+
+    @Test
+    void usesTwoPointLargerTypographyThroughoutTheReceipt() throws Exception {
+        ChurchInformationProperties properties = new ChurchInformationProperties(
+            new ChurchInformationProperties.Information(
+                "Grace Community Church", "123 Church Street", "416-555-0100", "Daniel Kim",
+                "123456789RR0001", "Toronto, Ontario", "https://grace.example.org"
+            ),
+            new ChurchInformationProperties.Branding("/banner.png", "/missing-logo.png"),
+            new ChurchInformationProperties.Ui(20)
+        );
+
+        try (PDDocument document = Loader.loadPDF(new TaxReceiptPdfService(properties).render(receipt()))) {
+            List<Float> fontSizes = new ArrayList<>();
+            PDFTextStripper stripper = new PDFTextStripper() {
+                @Override
+                protected void processTextPosition(TextPosition text) {
+                    fontSizes.add(text.getFontSizeInPt());
+                    super.processTextPosition(text);
+                }
+            };
+            stripper.getText(document);
+
+            assertThat(fontSizes).isNotEmpty();
+            assertThat(fontSizes).allMatch(size -> size >= 8f);
+            assertThat(fontSizes).anyMatch(size -> size == 14f);
         }
     }
 

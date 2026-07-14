@@ -127,7 +127,7 @@
 
         <label>
           Offering Sunday
-          <input v-model="form.offeringSunday" type="date" required />
+          <input v-model="form.offeringSunday" type="date" min="1970-01-04" step="7" required />
         </label>
 
         <label>
@@ -185,6 +185,7 @@ import { listMembers, type MemberRecord } from '../api/members';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import PaginationControls from '../components/PaginationControls.vue';
 import { usePagination } from '../composables/usePagination';
+import { calculateComingSunday } from '../utils/offeringDates';
 
 interface OfferingForm {
   givingType: GivingType;
@@ -390,14 +391,6 @@ function resetForm() {
   form.memo = '';
   memberSearch.value = '';
   void loadMembers();
-}
-
-function calculateComingSunday(dateValue: string) {
-  const date = new Date(`${dateValue}T00:00:00`);
-  const day = date.getDay();
-  const daysUntilSunday = day === 0 ? 0 : 7 - day;
-  date.setDate(date.getDate() + daysUntilSunday);
-  return date.toISOString().slice(0, 10);
 }
 
 function formatMoney(value: number) {

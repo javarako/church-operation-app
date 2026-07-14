@@ -32,6 +32,9 @@ class ChurchInformationControllerTest {
             .andExpect(jsonPath("$.address").value("church address --- IGNORE ---"))
             .andExpect(jsonPath("$.contactInfo").value("contact info --- IGNORE ---"))
             .andExpect(jsonPath("$.treasurerName").value("treasurer name --- IGNORE ---"))
+            .andExpect(jsonPath("$.charityRegistrationNumber").value(""))
+            .andExpect(jsonPath("$.receiptIssueLocation").value(""))
+            .andExpect(jsonPath("$.website").value(""))
             .andExpect(jsonPath("$.bannerPath").value("/branding/church-banner.png"))
             .andExpect(jsonPath("$.logPath").value("/branding/church_logo.png"))
             .andExpect(jsonPath("$.listPageSize").value(20));

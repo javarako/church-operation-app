@@ -15,6 +15,7 @@ import com.church.operation.util.GivingType;
 import com.church.operation.util.Role;
 import com.church.operation.util.TaxReceiptStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +44,7 @@ public class TaxReceiptService {
     private final ChurchInformationProperties churchProperties;
     private final Clock clock;
 
+    @Autowired
     public TaxReceiptService(
         OfferingRepository offeringRepository,
         MemberRepository memberRepository,

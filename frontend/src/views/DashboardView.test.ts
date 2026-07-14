@@ -96,7 +96,8 @@ describe('DashboardView', () => {
   );
 
   it('shows approved card values and church branding', async () => {
-    await renderDashboard();
+    const { container } = render(DashboardView);
+    await screen.findByText('Active Members');
 
     expect(screen.getByText('128')).toBeTruthy();
     expect(screen.getByText('New this month: 3')).toBeTruthy();
@@ -106,6 +107,9 @@ describe('DashboardView', () => {
     expect(screen.getByText('Total: $8,250.00')).toBeTruthy();
     expect(screen.getByText('Grace Community Church')).toBeTruthy();
     expect(screen.getByText('Treasurer: Daniel Kim')).toBeTruthy();
+    expect(container.querySelector('[data-testid="church-address-icon"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="church-contact-icon"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="church-treasurer-icon"]')).toBeTruthy();
   });
 
   it('shows not budgeted when a budget is zero', async () => {

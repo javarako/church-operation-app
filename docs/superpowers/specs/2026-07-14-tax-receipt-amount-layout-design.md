@@ -18,7 +18,7 @@ The donation section displays one prominent value labeled `Amount`, using the re
 
 ## Layout
 
-Use the space released by the removed fields to improve readability. Increase the donor and amount typography modestly while preserving the existing half-letter duplication, church identity, receipt metadata, thank-you note, authorized signature, and CRA information. Both receipt copies must remain identical and must fit within their half page.
+Use the space released by the removed fields to improve readability. Increase every visible PDF text size by exactly 2 points while preserving the existing half-letter duplication, church identity, receipt metadata, thank-you note, authorized signature, and CRA information. Both receipt copies must remain identical and must fit within their half page.
 
 ## Verification
 
