@@ -33,8 +33,8 @@ import java.util.Map;
  */
 @Service
 public class MongoDatabaseExportService {
-    public static final String RESTORE_STAGING_PREFIX = "__church_restore_staging__";
-    public static final String RESTORE_BACKUP_PREFIX = "__church_restore_backup__";
+    public static final String RESTORE_STAGING_PREFIX = MongoRestoreNamespacePolicy.RESTORE_STAGING_PREFIX;
+    public static final String RESTORE_BACKUP_PREFIX = MongoRestoreNamespacePolicy.RESTORE_BACKUP_PREFIX;
 
     private static final String COLLECTION_TYPE = "collection";
     private static final String VIEW_TYPE = "view";
@@ -125,11 +125,10 @@ public class MongoDatabaseExportService {
     private List<NamespaceCatalog> discoverNamespaces() {
         List<RawBsonDocument> catalogEntries = new ArrayList<>();
         database.listCollections(RawBsonDocument.class).into(catalogEntries);
+        MongoRestoreNamespacePolicy namespacePolicy = new MongoRestoreNamespacePolicy(database.getName());
         return catalogEntries.stream()
             .map(this::namespaceCatalog)
-            .filter(namespace -> !isMongoSystemNamespace(namespace.name()))
-            .filter(namespace -> !namespace.name().startsWith(RESTORE_STAGING_PREFIX))
-            .filter(namespace -> !namespace.name().startsWith(RESTORE_BACKUP_PREFIX))
+            .filter(namespace -> namespacePolicy.isRestorable(namespace.name()))
             .sorted(Comparator.comparing(NamespaceCatalog::name))
             .toList();
     }
@@ -146,10 +145,6 @@ public class MongoDatabaseExportService {
             throw new IllegalStateException("MongoDB returned an unsupported namespace type: " + type);
         }
         return new NamespaceCatalog(name, type, catalog.getDocument("options").clone());
-    }
-
-    private boolean isMongoSystemNamespace(String name) {
-        return name.startsWith("system.");
     }
 
     private void addCollectionEntries(

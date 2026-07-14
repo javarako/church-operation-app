@@ -335,3 +335,84 @@ Receipt, UI, generated, target, progress, Docker Compose, and temporary files re
 ### Concerns
 
 - None beyond the already documented standalone MongoDB non-atomic cutover constraint, which is now consistently surfaced as maintenance-required recovery state.
+
+## Final Two Findings Remediation - 2026-07-14
+
+### Status
+
+DONE
+
+### RED Evidence
+
+The initial shared-policy/planner run failed because the canonical policy did not yet exist:
+
+```text
+mvn -Dtest=MongoRestoreNamespacePolicyTest,MongoRestorePreflightPlannerTest test
+COMPILATION ERROR
+cannot find symbol: class MongoRestoreNamespacePolicy
+BUILD FAILURE
+```
+
+After introducing only the policy and wiring preflight, the literal regression remained red:
+
+```text
+mvn -Dtest=MongoRestoreNamespacePolicyTest,MongoRestorePreflightPlannerTest test
+Tests run: 27, Failures: 1, Errors: 0, Skipped: 0
+literal_lookup and literal_union were incorrectly discovered as view dependencies.
+BUILD FAILURE
+```
+
+The exporter regression then proved that a catalog entry preflight would reject still reached data export:
+
+```text
+mvn -Dtest=MongoDatabaseExportServiceTest#excludesCatalogNamespacesThatRestorePreflightWouldReject test
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0
+NullPointerException in writeCollectionData for members.system.profile
+BUILD FAILURE
+```
+
+### GREEN Evidence
+
+Focused policy, exporter, and planner tests:
+
+```text
+mvn -Dtest=MongoRestoreNamespacePolicyTest,MongoDatabaseExportServiceTest,MongoRestorePreflightPlannerTest test
+Tests run: 29, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Docker-backed literal/rewrite regression:
+
+```text
+mvn -Dtest=MongoDatabaseRoundTripIntegrationTest#restoresViewsWithNestedDependenciesWithoutRewritingLiteralLookupData test
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Focused Task 2 planner, export, restore, and archive suite:
+
+```text
+mvn -Dtest=MongoDatabaseRoundTripIntegrationTest,ArchivePackageServiceTest,BsonStreamCodecTest,MongoDatabaseExportServiceTest,MongoDatabaseImportServiceTest,MongoRestoreNamespacePolicyTest,MongoRestorePreflightPlannerTest,MongoRestoreCatalogServiceTest test
+Tests run: 80, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Complete backend suite:
+
+```text
+mvn test
+Tests run: 182, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+### Self-Review
+
+- `MongoRestoreNamespacePolicy` is the single database-aware source for reserved restore prefixes, `system.`/`.system.` rules, controls, malformed Unicode, and MongoDB's 255-byte namespace limit. Export filters catalog records through it and preflight delegates validation to it.
+- Tests cover `system.*`, embedded `.system.`, both restore prefixes, and permitted ordinary dotted names. MongoDB rejects physical `.system.` names itself, so the exporter case supplies that catalog entry through a mocked catalog and verifies no sidecar export is attempted.
+- View dependency discovery and staging rewrites now inspect only stage-level `$lookup`, `$graphLookup`, `$unionWith`, and `$facet` operators. Recursion occurs only in `$lookup.pipeline`, `$unionWith.pipeline`, and each `$facet` branch; expression data such as `$literal` remains untouched.
+- The integration regression confirms a real view's nested sources are staged, its `$literal: { $lookup: ... }` BSON is unchanged in the captured staging create command, and the restored view returns the same semantic results.
+- `git diff --check` is clean. Only Task 2 source/tests and this report are candidates for staging; pre-existing receipt, UI, generated, progress, Docker Compose, and temporary changes remain unstaged.
+
+### Concerns
+
+- The existing standalone-MongoDB cutover atomicity limitation remains unchanged and is outside these two findings.

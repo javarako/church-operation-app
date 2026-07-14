@@ -9,13 +9,8 @@ import org.bson.RawBsonDocument;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,7 +20,6 @@ import java.util.Map;
 import java.util.Set;
 
 final class MongoRestorePreflightPlanner {
-    private static final int MAX_NAMESPACE_BYTES = 255;
     private static final Set<String> CREATE_COMMAND_FIELDS = Set.of(
         "create",
         "capped",
@@ -73,15 +67,15 @@ final class MongoRestorePreflightPlanner {
         "prepareUnique"
     );
 
-    private final String databaseName;
     private final BsonStreamCodec bsonStreamCodec;
+    private final MongoRestoreNamespacePolicy namespacePolicy;
 
     MongoRestorePreflightPlanner(String databaseName) {
         if (databaseName == null || databaseName.isBlank()) {
             throw new IllegalArgumentException("MongoDB database name is required for restore preflight.");
         }
-        this.databaseName = databaseName;
         this.bsonStreamCodec = new BsonStreamCodec();
+        this.namespacePolicy = new MongoRestoreNamespacePolicy(databaseName);
     }
 
     RestorePlan preflight(ArchivePackageService.ValidatedArchive archive) throws IOException {
@@ -392,14 +386,7 @@ final class MongoRestorePreflightPlanner {
     }
 
     void validateNamespaceName(String name) {
-        if (name == null || name.isBlank() || name.indexOf('$') >= 0
-            || name.startsWith("system.") || name.contains(".system.")
-            || name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX)
-            || name.startsWith(MongoDatabaseExportService.RESTORE_BACKUP_PREFIX)
-            || name.codePoints().anyMatch(Character::isISOControl)
-            || namespaceBytes(name) > MAX_NAMESPACE_BYTES) {
-            throw new IllegalArgumentException("Backup collection name is invalid or reserved.");
-        }
+        namespacePolicy.validate(name);
     }
 
     Set<String> viewDependencies(BsonDocument createCommand) {
@@ -412,7 +399,7 @@ final class MongoRestorePreflightPlanner {
             if (!createCommand.get("pipeline").isArray()) {
                 throw new IllegalArgumentException("Backup view pipeline is invalid.");
             }
-            transform(createCommand.getArray("pipeline"), dependencies, null);
+            transformPipeline(createCommand.getArray("pipeline"), dependencies, null);
         }
         return Set.copyOf(dependencies);
     }
@@ -462,32 +449,40 @@ final class MongoRestorePreflightPlanner {
             staged.getString("viewOn").getValue(), stagingNames
         )));
         if (staged.containsKey("pipeline")) {
-            staged.put("pipeline", transform(staged.getArray("pipeline"), new LinkedHashSet<>(), stagingNames));
+            staged.put(
+                "pipeline",
+                transformPipeline(staged.getArray("pipeline"), new LinkedHashSet<>(), stagingNames)
+            );
         }
         return staged;
     }
 
-    private BsonValue transform(
+    private BsonArray transformPipeline(
+        BsonArray source,
+        Set<String> dependencies,
+        Map<String, String> stagingNames
+    ) {
+        BsonArray transformed = new BsonArray();
+        source.forEach(stage -> transformed.add(transformStage(stage, dependencies, stagingNames)));
+        return transformed;
+    }
+
+    private BsonDocument transformStage(
         BsonValue source,
         Set<String> dependencies,
         Map<String, String> stagingNames
     ) {
-        if (source.isArray()) {
-            BsonArray transformed = new BsonArray();
-            source.asArray().forEach(value -> transformed.add(transform(value, dependencies, stagingNames)));
-            return transformed;
-        }
         if (!source.isDocument()) {
-            return source;
+            throw new IllegalArgumentException("Backup view pipeline is invalid.");
         }
-
         BsonDocument transformed = new BsonDocument();
         source.asDocument().forEach((key, value) -> transformed.append(
             key,
             switch (key) {
                 case "$lookup", "$graphLookup" -> transformFromOperator(value, dependencies, stagingNames);
                 case "$unionWith" -> transformUnionWith(value, dependencies, stagingNames);
-                default -> transform(value, dependencies, stagingNames);
+                case "$facet" -> transformFacet(value, dependencies, stagingNames);
+                default -> value;
             }
         ));
         return transformed;
@@ -505,8 +500,10 @@ final class MongoRestorePreflightPlanner {
         source.asDocument().forEach((key, value) -> {
             if ("from".equals(key)) {
                 transformed.append(key, transformedDependency(value, dependencies, stagingNames));
+            } else if ("pipeline".equals(key)) {
+                transformed.append(key, transformPipelineValue(value, dependencies, stagingNames));
             } else {
-                transformed.append(key, transform(value, dependencies, stagingNames));
+                transformed.append(key, value);
             }
         });
         return transformed;
@@ -527,11 +524,40 @@ final class MongoRestorePreflightPlanner {
         source.asDocument().forEach((key, value) -> {
             if ("coll".equals(key)) {
                 transformed.append(key, transformedDependency(value, dependencies, stagingNames));
+            } else if ("pipeline".equals(key)) {
+                transformed.append(key, transformPipelineValue(value, dependencies, stagingNames));
             } else {
-                transformed.append(key, transform(value, dependencies, stagingNames));
+                transformed.append(key, value);
             }
         });
         return transformed;
+    }
+
+    private BsonValue transformFacet(
+        BsonValue source,
+        Set<String> dependencies,
+        Map<String, String> stagingNames
+    ) {
+        if (!source.isDocument()) {
+            throw new IllegalArgumentException("Backup view pipeline namespace dependency is invalid.");
+        }
+        BsonDocument transformed = new BsonDocument();
+        source.asDocument().forEach((name, pipeline) -> transformed.append(
+            name,
+            transformPipelineValue(pipeline, dependencies, stagingNames)
+        ));
+        return transformed;
+    }
+
+    private BsonArray transformPipelineValue(
+        BsonValue source,
+        Set<String> dependencies,
+        Map<String, String> stagingNames
+    ) {
+        if (!source.isArray()) {
+            throw new IllegalArgumentException("Backup view pipeline namespace dependency is invalid.");
+        }
+        return transformPipeline(source.asArray(), dependencies, stagingNames);
     }
 
     private BsonString transformedDependency(
@@ -573,18 +599,6 @@ final class MongoRestorePreflightPlanner {
         BsonDocument copy = new BsonDocument();
         source.forEach(copy::append);
         return copy;
-    }
-
-    private int namespaceBytes(String name) {
-        try {
-            ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .encode(CharBuffer.wrap(databaseName + "." + name));
-            return encoded.remaining();
-        } catch (CharacterCodingException exception) {
-            throw new IllegalArgumentException("Backup collection name is invalid or reserved.", exception);
-        }
     }
 
     enum NamespaceType {

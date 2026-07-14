@@ -184,6 +184,11 @@ class MongoDatabaseRoundTripIntegrationTest {
         try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
             MongoDatabase database = client.getDatabase("system_namespace_policy");
             database.getCollection("members").insertOne(new Document("name", "Ada"));
+            database.getCollection("ordinary.dotted").insertOne(new Document("name", "Grace"));
+            database.getCollection(MongoDatabaseExportService.RESTORE_STAGING_PREFIX + "leftover")
+                .insertOne(new Document("name", "Staging"));
+            database.getCollection(MongoDatabaseExportService.RESTORE_BACKUP_PREFIX + "leftover")
+                .insertOne(new Document("name", "Backup"));
             database.runCommand(new Document("profile", 2));
             database.getCollection("members").find().first();
             database.runCommand(new Document("profile", 0));
@@ -199,8 +204,8 @@ class MongoDatabaseRoundTripIntegrationTest {
 
             assertThat(manifest.collections())
                 .extracting(entry -> entry.collection())
-                .contains("members")
-                .allMatch(name -> !name.startsWith("system."));
+                .contains("members", "ordinary.dotted")
+                .allMatch(new MongoRestoreNamespacePolicy(database.getName())::isRestorable);
             try (MongoDatabaseImportService.ValidatedArchive ignored = importer.validateFull(archive, PASSWORD)) {
                 // Export policy must never produce an archive rejected by restore namespace policy.
             }
@@ -208,7 +213,7 @@ class MongoDatabaseRoundTripIntegrationTest {
     }
 
     @Test
-    void restoresViewsWithLookupAndNestedPipelineUnionDependencies() throws Exception {
+    void restoresViewsWithNestedDependenciesWithoutRewritingLiteralLookupData() throws Exception {
         RecordingCommandListener commandListener = new RecordingCommandListener();
         MongoClientSettings settings = MongoClientSettings.builder()
             .applyConnectionString(new ConnectionString(MONGODB.getConnectionString()))
@@ -231,6 +236,8 @@ class MongoDatabaseRoundTripIntegrationTest {
             database.getCollection("archived_members").insertOne(
                 new Document("_id", 2).append("name", "Grace")
             );
+            Document literalLookup = new Document("$lookup", new Document("from", "literal_lookup")
+                .append("pipeline", List.of(new Document("$unionWith", "literal_union"))));
             database.runCommand(new Document("create", "member_activity")
                 .append("viewOn", "members")
                 .append("pipeline", List.of(
@@ -247,6 +254,9 @@ class MongoDatabaseRoundTripIntegrationTest {
                                 )))
                         ))
                         .append("as", "activity")),
+                    new Document("$set", new Document(
+                        "definition", new Document("$literal", literalLookup)
+                    )),
                     new Document("$unionWith", "archived_members")
                 )));
             List<BsonDocument> expected = semanticDocuments(database, "member_activity");
@@ -273,6 +283,11 @@ class MongoDatabaseRoundTripIntegrationTest {
                 .orElseThrow();
             assertThat(new MongoRestorePreflightPlanner(database.getName()).viewDependencies(stagedViewCreate))
                 .allMatch(name -> name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX));
+            BsonDocument stagedLiteral = stagedViewCreate.getArray("pipeline").get(1).asDocument()
+                .getDocument("$set")
+                .getDocument("definition")
+                .getDocument("$literal");
+            assertThat(stagedLiteral).isEqualTo(BsonDocument.parse(literalLookup.toJson()));
         }
     }
 

@@ -100,6 +100,49 @@ class MongoRestorePreflightPlannerTest {
     }
 
     @Test
+    void ignoresLiteralOperatorLikeDataWhileRewritingNestedPipelineStages() {
+        BsonDocument command = BsonDocument.parse("""
+            {
+              "create": "activity_view",
+              "viewOn": "members",
+              "pipeline": [
+                {"$project": {"definition": {"$literal": {
+                  "$lookup": {"from": "literal_lookup", "pipeline": [
+                    {"$unionWith": "literal_union"}
+                  ]}
+                }}}},
+                {"$facet": {"history": [
+                  {"$lookup": {"from": "real_lookup", "pipeline": [
+                    {"$unionWith": {"coll": "real_union", "pipeline": []}}
+                  ], "as": "history"}}
+                ]}}
+              ]
+            }
+            """);
+        Map<String, String> stagingNames = Map.of(
+            "activity_view", "staging_activity_view",
+            "members", "staging_members",
+            "real_lookup", "staging_real_lookup",
+            "real_union", "staging_real_union"
+        );
+
+        assertThat(planner.viewDependencies(command)).containsExactlyInAnyOrder(
+            "members", "real_lookup", "real_union"
+        );
+
+        BsonDocument staged = planner.stagingCreateCommand(
+            command,
+            stagingNames.get("activity_view"),
+            stagingNames
+        );
+
+        assertThat(staged.getArray("pipeline").get(0)).isEqualTo(command.getArray("pipeline").get(0));
+        assertThat(planner.viewDependencies(staged)).containsExactlyInAnyOrder(
+            "staging_members", "staging_real_lookup", "staging_real_union"
+        );
+    }
+
+    @Test
     void ordersViewsByRecursiveDependenciesAndRejectsCycles() {
         BsonDocument summary = viewCommand(
             "summary", "members", "[{\"$lookup\":{\"from\":\"details\",\"as\":\"details\"}}]"
