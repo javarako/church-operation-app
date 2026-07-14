@@ -1,5 +1,6 @@
 package com.church.operation.service;
 
+import com.church.operation.config.DataManagementProperties;
 import com.church.operation.dto.ArchiveCollectionManifest;
 import com.church.operation.dto.ArchiveManifest;
 import com.church.operation.util.ArchiveType;
@@ -19,10 +20,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.lang.reflect.Modifier;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.util.unit.DataSize;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -453,7 +458,86 @@ class ArchivePackageServiceTest {
     }
 
     @Test
-    void clearsValidationPasswordCopyWhenTempDirectoryCreationFails() {
+    void rejectsUploadedArchiveLargerThanConfiguredBoundBeforeExtraction() throws Exception {
+        Path archive = writeArchive(ArchiveType.FULL_BACKUP);
+        long archiveSize = Files.size(archive);
+        ArchivePackageService bounded = new ArchivePackageService(
+            new DataManagementProperties(
+                tempDir.resolve("upload-limit"),
+                Duration.ofMinutes(30),
+                DataSize.ofBytes(archiveSize - 1)
+            )
+        );
+
+        assertThatThrownBy(() -> bounded.validate(archive, PASSWORD, ArchiveType.FULL_BACKUP))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("archive size");
+        assertThat(tempDir.resolve("upload-limit")).doesNotExist();
+    }
+
+    @Test
+    void rejectsCumulativeExtractedBytesEvenWhenEveryEntryIsWithinTheLimit() throws Exception {
+        byte[] first = bsonBytes(new Document("payload", "a".repeat(32_000)));
+        byte[] second = bsonBytes(new Document("payload", "b".repeat(32_000)));
+        byte[] third = bsonBytes(new Document("payload", "c".repeat(32_000)));
+        List<RawEntry> entries = List.of(
+            new RawEntry("collections/one.bson", first, true, EncryptionMethod.AES),
+            new RawEntry("collections/two.bson", second, true, EncryptionMethod.AES),
+            new RawEntry("collections/three.bson", third, true, EncryptionMethod.AES)
+        );
+        Path archive = writeManualArchive(
+            "aggregate-limit.zip",
+            manifestJson(1, List.of(
+                collection("members", entries.get(0).name(), 1, first.length, sha256(first)),
+                collection("members", entries.get(1).name(), 1, second.length, sha256(second)),
+                collection("members", entries.get(2).name(), 1, third.length, sha256(third))
+            )),
+            entries
+        );
+        long limit = Math.max(Files.size(archive) + 1, first.length + 1L);
+        assertThat((long) first.length).isLessThan(limit);
+        assertThat((long) second.length).isLessThan(limit);
+        assertThat((long) third.length).isLessThan(limit);
+        assertThat((long) first.length + second.length + third.length).isGreaterThan(limit);
+        ArchivePackageService bounded = new ArchivePackageService(
+            new DataManagementProperties(
+                tempDir.resolve("aggregate-limit"),
+                Duration.ofMinutes(30),
+                DataSize.ofBytes(limit)
+            )
+        );
+
+        assertThatThrownBy(() -> bounded.validate(archive, PASSWORD, ArchiveType.FULL_BACKUP))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("cumulative extracted size");
+    }
+
+    @Test
+    void extractsValidationFilesUnderConfiguredDataManagementDirectory() throws Exception {
+        Path archive = writeArchive(ArchiveType.FULL_BACKUP);
+        Path operationsDirectory = tempDir.resolve("configured-operations");
+        ArchivePackageService configured = new ArchivePackageService(
+            new DataManagementProperties(
+                operationsDirectory,
+                Duration.ofMinutes(30),
+                DataSize.ofMegabytes(10)
+            )
+        );
+        Path extractionDirectory;
+
+        try (ArchivePackageService.ValidatedArchive validated = configured.validate(
+            archive, PASSWORD, ArchiveType.FULL_BACKUP
+        )) {
+            extractionDirectory = validated.extractionDirectory();
+            assertThat(extractionDirectory).isDirectory();
+            assertThat(extractionDirectory.normalize().startsWith(operationsDirectory.normalize())).isTrue();
+        }
+
+        assertThat(extractionDirectory).doesNotExist();
+    }
+
+    @Test
+    void clearsValidationPasswordCopyWhenTempDirectoryCreationFails() throws Exception {
         IOException creationFailure = new IOException("temp directory unavailable");
         class FailingTempDirectoryService extends ArchivePackageService {
             private char[] capturedPasswordCopy;
@@ -471,9 +555,10 @@ class ArchivePackageServiceTest {
         }
         FailingTempDirectoryService failingService = new FailingTempDirectoryService();
         char[] suppliedPassword = "validation secret".toCharArray();
+        Path unreadArchive = Files.createFile(tempDir.resolve("unread.zip"));
 
         assertThatThrownBy(() -> failingService.validate(
-            tempDir.resolve("unread.zip"), suppliedPassword, ArchiveType.FULL_BACKUP
+            unreadArchive, suppliedPassword, ArchiveType.FULL_BACKUP
         )).isSameAs(creationFailure);
 
         assertThat(failingService.capturedPasswordCopy).containsOnly('\0');
@@ -508,6 +593,14 @@ class ArchivePackageServiceTest {
         assertThatThrownBy(() -> failingCleanup.validate(archive, PASSWORD, ArchiveType.RESTORE))
             .isInstanceOf(IllegalArgumentException.class)
             .satisfies(exception -> assertThat(exception.getSuppressed()).containsExactly(cleanupFailure));
+    }
+
+    @Test
+    void validatedArchiveHandlesCannotBePubliclyConstructed() {
+        assertThat(ArchivePackageService.ValidatedArchive.class.getDeclaredConstructors())
+            .allSatisfy(constructor -> assertThat(Modifier.isPublic(constructor.getModifiers())).isFalse());
+        assertThat(MongoDatabaseImportService.ValidatedArchive.class.getDeclaredConstructors())
+            .allSatisfy(constructor -> assertThat(Modifier.isPublic(constructor.getModifiers())).isFalse());
     }
 
     private Path writeArchive(ArchiveType archiveType) throws Exception {

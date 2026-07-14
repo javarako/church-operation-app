@@ -60,6 +60,10 @@ public class BsonStreamCodec {
         return documents;
     }
 
+    RawBatchReader rawBatchReader(InputStream input, int maxDocuments, int maxBytes) {
+        return new RawBatchReader(input, maxDocuments, maxBytes);
+    }
+
     public long count(InputStream input) throws IOException {
         long count = 0;
         while (readRaw(input) != null) {
@@ -104,6 +108,50 @@ public class BsonStreamCodec {
                 throw new EOFException("Truncated BSON document.");
             }
             total += read;
+        }
+    }
+
+    final class RawBatchReader {
+        private final InputStream input;
+        private final int maxDocuments;
+        private final int maxBytes;
+        private RawBsonDocument pending;
+
+        private RawBatchReader(InputStream input, int maxDocuments, int maxBytes) {
+            if (input == null || maxDocuments < 1 || maxBytes < 1) {
+                throw new IllegalArgumentException("BSON batch limits and input are required.");
+            }
+            this.input = input;
+            this.maxDocuments = maxDocuments;
+            this.maxBytes = maxBytes;
+        }
+
+        List<RawBsonDocument> readBatch() throws IOException {
+            List<RawBsonDocument> documents = new ArrayList<>(maxDocuments);
+            int bytes = 0;
+            while (documents.size() < maxDocuments) {
+                RawBsonDocument document = pending != null ? takePending() : readRaw(input);
+                if (document == null) {
+                    break;
+                }
+                int documentBytes = document.getByteBuffer().remaining();
+                if (documentBytes > maxBytes) {
+                    throw new IOException("BSON document exceeds the batch byte limit.");
+                }
+                if (!documents.isEmpty() && bytes > maxBytes - documentBytes) {
+                    pending = document;
+                    break;
+                }
+                documents.add(document);
+                bytes += documentBytes;
+            }
+            return documents;
+        }
+
+        private RawBsonDocument takePending() {
+            RawBsonDocument document = pending;
+            pending = null;
+            return document;
         }
     }
 }

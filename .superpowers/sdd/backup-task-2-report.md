@@ -110,3 +110,115 @@ No unrelated receipt, UI, generated, target, progress, Docker Compose, or tempor
 ## Concerns
 
 - The brief names `org.testcontainers:junit-jupiter`, but Spring Boot 4.0.0's imported Testcontainers 2.0.2 BOM does not manage that coordinate. The managed 2.0.2 module is `org.testcontainers:testcontainers-junit-jupiter`, so that artifact is used with no explicit version. The MongoDB module matches the brief exactly.
+
+## Review Remediation - 2026-07-13
+
+### Status
+
+DONE_WITH_CONCERNS
+
+### RED Evidence
+
+Initial archive, batch, and integration boundary run:
+
+```text
+mvn -Dtest=ArchivePackageServiceTest,BsonStreamCodecTest,MongoDatabaseRoundTripIntegrationTest test
+Tests run: 37, Failures: 1, Errors: 4, Skipped: 0
+BUILD FAILURE
+```
+
+Relevant failures before implementation:
+
+```text
+BsonStreamCodec.RawBatchReader cannot be resolved to a type
+The method rawBatchReader(ByteArrayInputStream, int, int) is undefined
+ArchivePackageServiceTest.rejectsUploadedArchiveLargerThanConfiguredBoundBeforeExtraction:
+Expecting code to raise a throwable.
+```
+
+The same run also confirmed validation extraction did not use the configured data-management directory. Its Docker-backed class was blocked in the sandbox; all Docker runs below were repeated with approved Docker access.
+
+Index-version semantic preflight RED:
+
+```text
+mvn -Dtest=MongoDatabaseRoundTripIntegrationTest#rejectsUnsupportedArchivedIndexVersionDuringValidationWithoutDatabaseMutation test
+Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+Expecting code to raise a throwable.
+BUILD FAILURE
+```
+
+Primary-exception preservation RED:
+
+```text
+mvn -Dtest=MongoDatabaseExportServiceTest test
+COMPILATION ERROR
+no suitable constructor found for MongoDatabaseExportService(..., DirectoryCleaner)
+BUILD FAILURE
+```
+
+These tests were added before their production APIs and behavior. The integration additions also covered view/time-series catalog replay, malformed sidecars, and forced cutover failure before the importer implementation was replaced.
+
+### GREEN Evidence
+
+Focused Task 2 plus archive-contract suite:
+
+```text
+mvn -Dtest=MongoDatabaseRoundTripIntegrationTest,ArchivePackageServiceTest,BsonStreamCodecTest,MongoDatabaseExportServiceTest test
+Tests run: 42, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Exact Task 1 regressions:
+
+```text
+mvn -Dtest=BsonStreamCodecTest,ArchivePackageServiceTest test
+Tests run: 37, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Complete backend suite:
+
+```text
+mvn test
+Tests run: 144, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Diff hygiene:
+
+```text
+git diff --check
+(no output)
+```
+
+### Review Fixes
+
+- Export now discovers full catalog records through `listCollections`, preserves ordinary collection, view, and time-series options, and omits only MongoDB-owned `system.views` and `system.buckets.*` companions plus reserved recovery namespaces.
+- Views export empty data/index sidecars and replay from validated `viewOn`/pipeline definitions. Time-series collections stage with their options, data, and indexes, then use an explicit live replay path because MongoDB does not support renaming them.
+- `validateFull` now returns an importer-owned `ValidatedArchive` with a private constructor after canonical sidecar relationships, counts, BSON, names, command shapes/targets, namespace types/options, view dependencies, and index specs have all passed semantic preflight. The package-level archive handle also has no public constructor.
+- Every namespace is staged and verified before live mutation. Ordinary live collections move to operation-specific backup names, promoted ordinary collections roll back to staging on failure, and originals roll back from backup names where possible.
+- Cutover failure raises `RestoreCutoverException` with `maintenanceRequired() == true` and retained staging/backup namespace evidence. Existing recovery namespaces block a new restore instead of being silently deleted.
+- Upload validation enforces the compressed archive size, each entry size, declared aggregate extraction size, and actual cumulative bytes written. Export and validation extraction both use `church.data-management.temp-directory`.
+- Index `v` is retained in sidecars, signatures, staging commands, and live replay. Only namespace-owned `ns` is removed. MongoDB 7 integration command capture confirms replayed index specs contain `v`.
+- Import batches are bounded at 500 documents and 16 MiB of BSON, with a stateful reader that retains the next document when the byte boundary is reached.
+- Export and validation cleanup failures are attached as suppressed exceptions. Cutover failures retain recovery evidence instead of running destructive staging cleanup.
+
+### Self-Review
+
+- Confirmed ordinary collection raw BSON, options, custom indexes, GridFS metadata/chunks, and GridFS bytes still round-trip exactly.
+- Confirmed time-series documents round-trip semantically; raw field layout is not asserted because MongoDB rebuckets measurements during replay.
+- Confirmed view/time-series catalog types and options are identical after restore and MongoDB-owned companion namespaces are not archived independently.
+- Confirmed malformed options sidecars and unsupported index versions fail in `validateFull` before any database mutation.
+- Confirmed a forced cutover failure restores the original ordinary collection, reports the original exception as its cause, and leaves staging namespaces present.
+- Confirmed archive upload, per-entry, cumulative extraction, configured temp-directory, controlled-construction, BSON batch, and suppressed-cleanup tests pass.
+- Confirmed only Task 2 and minimal Task 1 archive-contract source/tests plus this report are selected for commit. Receipt, UI, generated, target, progress, Docker Compose, and temporary files remain unstaged.
+
+### Commit
+
+- Message: `fix: harden complete database restore`
+- Final hash is supplied in the task handoff because a commit cannot include its own hash.
+
+### Concerns
+
+- Standalone MongoDB cannot make this multi-namespace cutover atomic. Ordinary collections have backup/rollback protection; views and time-series namespaces use a validated replay path and retain staging/recovery evidence on failure. Task 3 must take the mandatory safety backup first and map `maintenanceRequired()` failures to `FAILED_MAINTENANCE`.
+- `operationExpiry` remains intentionally unused until Task 3 and is not a Task 2 defect.

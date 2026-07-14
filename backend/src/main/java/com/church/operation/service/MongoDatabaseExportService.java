@@ -33,7 +33,11 @@ import java.util.Map;
 @Service
 public class MongoDatabaseExportService {
     public static final String RESTORE_STAGING_PREFIX = "__church_restore_staging__";
+    public static final String RESTORE_BACKUP_PREFIX = "__church_restore_backup__";
 
+    private static final String COLLECTION_TYPE = "collection";
+    private static final String VIEW_TYPE = "view";
+    private static final String TIMESERIES_TYPE = "timeseries";
     private static final String DATA_SUFFIX = "/data.bson";
     private static final String OPTIONS_SUFFIX = "/options.bson";
     private static final String INDEXES_SUFFIX = "/indexes.bson";
@@ -43,6 +47,7 @@ public class MongoDatabaseExportService {
     private final ArchivePackageService archivePackageService;
     private final DataManagementProperties properties;
     private final BsonStreamCodec bsonStreamCodec;
+    private final DirectoryCleaner directoryCleaner;
 
     @Autowired
     public MongoDatabaseExportService(
@@ -58,26 +63,34 @@ public class MongoDatabaseExportService {
         ArchivePackageService archivePackageService,
         DataManagementProperties properties
     ) {
+        this(database, archivePackageService, properties, MongoDatabaseExportService::deleteDirectory);
+    }
+
+    MongoDatabaseExportService(
+        MongoDatabase database,
+        ArchivePackageService archivePackageService,
+        DataManagementProperties properties,
+        DirectoryCleaner directoryCleaner
+    ) {
         this.database = database;
         this.archivePackageService = archivePackageService;
         this.properties = properties;
         this.bsonStreamCodec = new BsonStreamCodec();
+        this.directoryCleaner = directoryCleaner;
     }
 
     public ArchiveManifest exportFull(Path output, char[] password) throws IOException {
         Files.createDirectories(properties.tempDirectory());
         Path workingDirectory = Files.createTempDirectory(properties.tempDirectory(), "mongo-export-");
+        Throwable failure = null;
         try {
-            List<String> collectionNames = new ArrayList<>();
-            database.listCollectionNames().into(collectionNames);
-            collectionNames.removeIf(name -> name.startsWith(RESTORE_STAGING_PREFIX));
-            collectionNames.sort(String::compareTo);
+            List<NamespaceCatalog> namespaces = discoverNamespaces();
 
             List<ArchiveCollectionManifest> manifestEntries = new ArrayList<>();
             Map<String, Path> packageEntries = new HashMap<>();
-            for (String collectionName : collectionNames) {
+            for (NamespaceCatalog namespace : namespaces) {
                 addCollectionEntries(
-                    collectionName, workingDirectory, manifestEntries, packageEntries
+                    namespace, workingDirectory, manifestEntries, packageEntries
                 );
             }
 
@@ -92,17 +105,59 @@ public class MongoDatabaseExportService {
             )) {
                 return validated.manifest();
             }
+        } catch (IOException | RuntimeException | Error exception) {
+            failure = exception;
+            throw exception;
         } finally {
-            deleteDirectory(workingDirectory);
+            try {
+                directoryCleaner.delete(workingDirectory);
+            } catch (IOException cleanupFailure) {
+                if (failure != null) {
+                    failure.addSuppressed(cleanupFailure);
+                } else {
+                    throw cleanupFailure;
+                }
+            }
         }
     }
 
+    private List<NamespaceCatalog> discoverNamespaces() {
+        List<RawBsonDocument> catalogEntries = new ArrayList<>();
+        database.listCollections(RawBsonDocument.class).into(catalogEntries);
+        return catalogEntries.stream()
+            .map(this::namespaceCatalog)
+            .filter(namespace -> !isMongoOwnedCompanion(namespace.name()))
+            .filter(namespace -> !namespace.name().startsWith(RESTORE_STAGING_PREFIX))
+            .filter(namespace -> !namespace.name().startsWith(RESTORE_BACKUP_PREFIX))
+            .sorted(Comparator.comparing(NamespaceCatalog::name))
+            .toList();
+    }
+
+    private NamespaceCatalog namespaceCatalog(RawBsonDocument catalog) {
+        if (!catalog.containsKey("name") || !catalog.get("name").isString()
+            || !catalog.containsKey("type") || !catalog.get("type").isString()
+            || !catalog.containsKey("options") || !catalog.get("options").isDocument()) {
+            throw new IllegalStateException("MongoDB returned an invalid collection catalog entry.");
+        }
+        String name = catalog.getString("name").getValue();
+        String type = catalog.getString("type").getValue();
+        if (!COLLECTION_TYPE.equals(type) && !VIEW_TYPE.equals(type) && !TIMESERIES_TYPE.equals(type)) {
+            throw new IllegalStateException("MongoDB returned an unsupported namespace type: " + type);
+        }
+        return new NamespaceCatalog(name, type, catalog.getDocument("options").clone());
+    }
+
+    private boolean isMongoOwnedCompanion(String name) {
+        return "system.views".equals(name) || name.startsWith("system.buckets.");
+    }
+
     private void addCollectionEntries(
-        String collectionName,
+        NamespaceCatalog namespace,
         Path workingDirectory,
         List<ArchiveCollectionManifest> manifestEntries,
         Map<String, Path> packageEntries
     ) throws IOException {
+        String collectionName = namespace.name();
         String dataEntry = dataEntryName(collectionName);
         String optionsEntry = optionsEntryName(collectionName);
         String indexesEntry = indexesEntryName(collectionName);
@@ -111,9 +166,9 @@ public class MongoDatabaseExportService {
         Path indexesPath = workingDirectory.resolve(indexesEntry);
         Files.createDirectories(dataPath.getParent());
 
-        writeCollectionData(collectionName, dataPath);
-        writeCreateCommand(collectionName, optionsPath);
-        writeCreateIndexesCommand(collectionName, indexesPath);
+        writeCollectionData(namespace, dataPath);
+        writeCreateCommand(namespace, optionsPath);
+        writeCreateIndexesCommand(namespace, indexesPath);
 
         addPackageEntry(collectionName, dataEntry, dataPath, manifestEntries, packageEntries);
         addPackageEntry(collectionName, optionsEntry, optionsPath, manifestEntries, packageEntries);
@@ -131,11 +186,15 @@ public class MongoDatabaseExportService {
         packageEntries.put(entryName, path);
     }
 
-    private void writeCollectionData(String collectionName, Path output) throws IOException {
+    private void writeCollectionData(NamespaceCatalog namespace, Path output) throws IOException {
+        if (VIEW_TYPE.equals(namespace.type())) {
+            Files.createFile(output);
+            return;
+        }
         try (
             OutputStream stream = Files.newOutputStream(output);
             MongoCursor<RawBsonDocument> cursor = database
-                .getCollection(collectionName, RawBsonDocument.class)
+                .getCollection(namespace.name(), RawBsonDocument.class)
                 .find()
                 .iterator()
         ) {
@@ -145,29 +204,25 @@ public class MongoDatabaseExportService {
         }
     }
 
-    private void writeCreateCommand(String collectionName, Path output) throws IOException {
-        RawBsonDocument catalog = database.listCollections(RawBsonDocument.class)
-            .filter(new BsonDocument("name", new BsonString(collectionName)))
-            .first();
-        if (catalog == null) {
-            throw new IllegalStateException("Collection disappeared during export: " + collectionName);
-        }
-        BsonDocument command = new BsonDocument("create", new BsonString(collectionName));
-        catalog.getDocument("options").forEach(command::append);
+    private void writeCreateCommand(NamespaceCatalog namespace, Path output) throws IOException {
+        BsonDocument command = new BsonDocument("create", new BsonString(namespace.name()));
+        namespace.options().forEach(command::append);
         writeCommand(command, output);
     }
 
-    private void writeCreateIndexesCommand(String collectionName, Path output) throws IOException {
+    private void writeCreateIndexesCommand(NamespaceCatalog namespace, Path output) throws IOException {
+        if (VIEW_TYPE.equals(namespace.type())) {
+            Files.createFile(output);
+            return;
+        }
         BsonArray indexes = new BsonArray();
-        BsonDocument collectionOptions = collectionOptions(collectionName);
-        database.getCollection(collectionName, RawBsonDocument.class)
+        database.getCollection(namespace.name(), RawBsonDocument.class)
             .listIndexes(RawBsonDocument.class)
             .forEach(index -> {
                 if (!"_id_".equals(index.getString("name").getValue())) {
                     BsonDocument specification = mutableCopy(index);
-                    specification.remove("v");
                     specification.remove("ns");
-                    addRequiredTextCollation(specification, collectionOptions);
+                    addRequiredTextCollation(specification, namespace.options());
                     indexes.add(specification);
                 }
             });
@@ -175,18 +230,8 @@ public class MongoDatabaseExportService {
             Files.createFile(output);
             return;
         }
-        writeCommand(new BsonDocument("createIndexes", new BsonString(collectionName))
+        writeCommand(new BsonDocument("createIndexes", new BsonString(namespace.name()))
             .append("indexes", indexes), output);
-    }
-
-    private BsonDocument collectionOptions(String collectionName) {
-        RawBsonDocument catalog = database.listCollections(RawBsonDocument.class)
-            .filter(new BsonDocument("name", new BsonString(collectionName)))
-            .first();
-        if (catalog == null) {
-            throw new IllegalStateException("Collection disappeared during export: " + collectionName);
-        }
-        return catalog.getDocument("options");
     }
 
     private void addRequiredTextCollation(BsonDocument index, BsonDocument collectionOptions) {
@@ -228,7 +273,7 @@ public class MongoDatabaseExportService {
         return "collections/" + HexFormat.of().formatHex(collectionName.getBytes(StandardCharsets.UTF_8));
     }
 
-    private void deleteDirectory(Path directory) throws IOException {
+    private static void deleteDirectory(Path directory) throws IOException {
         if (!Files.exists(directory)) {
             return;
         }
@@ -251,5 +296,13 @@ public class MongoDatabaseExportService {
         if (failure != null) {
             throw failure;
         }
+    }
+
+    private record NamespaceCatalog(String name, String type, BsonDocument options) {
+    }
+
+    @FunctionalInterface
+    interface DirectoryCleaner {
+        void delete(Path directory) throws IOException;
     }
 }

@@ -1,6 +1,7 @@
 package com.church.operation.service;
 
 import org.bson.Document;
+import org.bson.RawBsonDocument;
 import org.bson.types.Binary;
 import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
@@ -72,5 +73,32 @@ class BsonStreamCodecTest {
         assertThatThrownBy(() -> codec.count(new ByteArrayInputStream(truncated)))
             .isInstanceOf(IOException.class)
             .hasMessageContaining("Truncated");
+    }
+
+    @Test
+    void rawBatchesRespectBothDocumentCountAndTotalBsonBytes() throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        codec.write(List.of(
+            new Document("value", "a".repeat(900)),
+            new Document("value", "b".repeat(900)),
+            new Document("value", "c".repeat(900))
+        ), output);
+        BsonStreamCodec.RawBatchReader reader = codec.rawBatchReader(
+            new ByteArrayInputStream(output.toByteArray()),
+            500,
+            2_000
+        );
+
+        List<RawBsonDocument> first = reader.readBatch();
+        List<RawBsonDocument> second = reader.readBatch();
+
+        assertThat(first).hasSize(2);
+        assertThat(first.stream().mapToInt(this::rawSize).sum()).isLessThanOrEqualTo(2_000);
+        assertThat(second).hasSize(1);
+        assertThat(reader.readBatch()).isEmpty();
+    }
+
+    private int rawSize(RawBsonDocument document) {
+        return document.getByteBuffer().remaining();
     }
 }

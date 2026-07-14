@@ -54,28 +54,77 @@ public class ArchivePackageService {
 
     private final BsonStreamCodec bsonStreamCodec;
     private final int maxManifestBytes;
+    private final long maxArchiveBytes;
     private final long maxEntryBytes;
+    private final Path tempDirectory;
     private final DirectoryCleaner directoryCleaner;
 
     public ArchivePackageService() {
-        this(new BsonStreamCodec(), DEFAULT_MAX_MANIFEST_BYTES, DEFAULT_MAX_ENTRY_BYTES);
+        this(
+            new BsonStreamCodec(),
+            DEFAULT_MAX_MANIFEST_BYTES,
+            DEFAULT_MAX_ENTRY_BYTES,
+            DEFAULT_MAX_ENTRY_BYTES,
+            Path.of(System.getProperty("java.io.tmpdir"))
+        );
     }
 
     @Autowired
     public ArchivePackageService(DataManagementProperties properties) {
-        this(new BsonStreamCodec(), DEFAULT_MAX_MANIFEST_BYTES, properties.maxUploadSize().toBytes());
+        this(
+            new BsonStreamCodec(),
+            DEFAULT_MAX_MANIFEST_BYTES,
+            properties.maxUploadSize().toBytes(),
+            properties.maxUploadSize().toBytes(),
+            properties.tempDirectory()
+        );
     }
 
     public ArchivePackageService(int maxManifestBytes, long maxEntryBytes) {
-        this(new BsonStreamCodec(), maxManifestBytes, maxEntryBytes);
+        this(
+            new BsonStreamCodec(),
+            maxManifestBytes,
+            DEFAULT_MAX_ENTRY_BYTES,
+            maxEntryBytes,
+            Path.of(System.getProperty("java.io.tmpdir"))
+        );
     }
 
     ArchivePackageService(BsonStreamCodec bsonStreamCodec) {
-        this(bsonStreamCodec, DEFAULT_MAX_MANIFEST_BYTES, DEFAULT_MAX_ENTRY_BYTES);
+        this(
+            bsonStreamCodec,
+            DEFAULT_MAX_MANIFEST_BYTES,
+            DEFAULT_MAX_ENTRY_BYTES,
+            DEFAULT_MAX_ENTRY_BYTES,
+            Path.of(System.getProperty("java.io.tmpdir"))
+        );
     }
 
     ArchivePackageService(BsonStreamCodec bsonStreamCodec, int maxManifestBytes, long maxEntryBytes) {
-        this(bsonStreamCodec, maxManifestBytes, maxEntryBytes, ArchivePackageService::deleteDirectory);
+        this(
+            bsonStreamCodec,
+            maxManifestBytes,
+            DEFAULT_MAX_ENTRY_BYTES,
+            maxEntryBytes,
+            Path.of(System.getProperty("java.io.tmpdir"))
+        );
+    }
+
+    private ArchivePackageService(
+        BsonStreamCodec bsonStreamCodec,
+        int maxManifestBytes,
+        long maxArchiveBytes,
+        long maxEntryBytes,
+        Path tempDirectory
+    ) {
+        this(
+            bsonStreamCodec,
+            maxManifestBytes,
+            maxArchiveBytes,
+            maxEntryBytes,
+            tempDirectory,
+            ArchivePackageService::deleteDirectory
+        );
     }
 
     ArchivePackageService(
@@ -84,12 +133,33 @@ public class ArchivePackageService {
         long maxEntryBytes,
         DirectoryCleaner directoryCleaner
     ) {
-        if (bsonStreamCodec == null || directoryCleaner == null || maxManifestBytes < 1 || maxEntryBytes < 1) {
+        this(
+            bsonStreamCodec,
+            maxManifestBytes,
+            DEFAULT_MAX_ENTRY_BYTES,
+            maxEntryBytes,
+            Path.of(System.getProperty("java.io.tmpdir")),
+            directoryCleaner
+        );
+    }
+
+    ArchivePackageService(
+        BsonStreamCodec bsonStreamCodec,
+        int maxManifestBytes,
+        long maxArchiveBytes,
+        long maxEntryBytes,
+        Path tempDirectory,
+        DirectoryCleaner directoryCleaner
+    ) {
+        if (bsonStreamCodec == null || directoryCleaner == null || tempDirectory == null
+            || maxManifestBytes < 1 || maxArchiveBytes < 1 || maxEntryBytes < 1) {
             throw new IllegalArgumentException("Archive validation limits and dependencies are required.");
         }
         this.bsonStreamCodec = bsonStreamCodec;
         this.maxManifestBytes = maxManifestBytes;
+        this.maxArchiveBytes = maxArchiveBytes;
         this.maxEntryBytes = maxEntryBytes;
+        this.tempDirectory = tempDirectory;
         this.directoryCleaner = directoryCleaner;
     }
 
@@ -126,6 +196,17 @@ public class ArchivePackageService {
                     encryptedParameters(MANIFEST_ENTRY)
                 );
             }
+            if (Files.size(output) > maxArchiveBytes) {
+                IllegalArgumentException failure = new IllegalArgumentException(
+                    "Generated archive size exceeds the configured maximum."
+                );
+                try {
+                    Files.deleteIfExists(output);
+                } catch (IOException cleanupFailure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+                throw failure;
+            }
         } catch (ZipException exception) {
             throw new IOException("Unable to write encrypted archive.", exception);
         } finally {
@@ -137,8 +218,12 @@ public class ArchivePackageService {
         char[] passwordCopy = copyPassword(password);
         Path extractionDirectory = null;
         try {
+            if (Files.size(archive) > maxArchiveBytes) {
+                throw new IllegalArgumentException("Uploaded archive size exceeds the configured maximum.");
+            }
             extractionDirectory = createExtractionDirectory();
             try (ZipFile zipFile = new ZipFile(archive.toFile(), passwordCopy)) {
+                ExtractionBudget extractionBudget = new ExtractionBudget(maxArchiveBytes);
                 Map<String, FileHeader> headers = validatedHeaders(zipFile);
                 FileHeader manifestHeader = headers.get(MANIFEST_ENTRY);
                 if (manifestHeader == null) {
@@ -147,8 +232,14 @@ public class ArchivePackageService {
                 validateManifestHeader(manifestHeader);
                 ArchiveManifest manifest;
                 try (InputStream input = zipFile.getInputStream(manifestHeader)) {
-                    byte[] bytes = readBounded(input, maxManifestBytes, "Archive manifest size exceeds the limit.");
+                    byte[] bytes = readBounded(
+                        input,
+                        maxManifestBytes,
+                        "Archive manifest size exceeds the limit.",
+                        extractionBudget
+                    );
                     manifest = parseManifest(new String(bytes, StandardCharsets.UTF_8));
+                    validateCumulativeExtractedSize(bytes.length, manifest.collections());
                 }
                 validateManifest(manifest, expected);
                 Set<String> declaredEntries = new HashSet<>();
@@ -170,7 +261,7 @@ public class ArchivePackageService {
                     }
                     Files.createDirectories(extracted.getParent());
                     try (InputStream input = zipFile.getInputStream(header)) {
-                        writeAndVerify(input, extracted, collection);
+                        writeAndVerify(input, extracted, collection, extractionBudget);
                     }
                     extractedEntries.put(entryName, extracted);
                 }
@@ -204,6 +295,7 @@ public class ArchivePackageService {
             throw new IllegalArgumentException("Archive type is required.");
         }
         Set<String> names = new HashSet<>();
+        long cumulativeSize = 0;
         for (ArchiveCollectionManifest collection : manifest.collections()) {
             if (collection == null || !names.add(normalizeEntryName(collection.entryName()))
                 || !entries.containsKey(collection.entryName())) {
@@ -215,9 +307,16 @@ public class ArchivePackageService {
             if (collection.documentCount() < 0 || collection.sizeBytes() < 0) {
                 throw new IllegalArgumentException("Archive manifest contains an invalid number.");
             }
-            if (Files.size(entries.get(collection.entryName())) > maxEntryBytes) {
+            long entrySize = Files.size(entries.get(collection.entryName()));
+            if (entrySize > maxEntryBytes) {
                 throw new IllegalArgumentException("Archive entry size exceeds the limit.");
             }
+            cumulativeSize = addBounded(
+                cumulativeSize,
+                entrySize,
+                maxArchiveBytes,
+                "Cumulative archive entry size exceeds the limit."
+            );
         }
         if (entries.size() != names.size() || entries.containsKey(MANIFEST_ENTRY)) {
             throw new IllegalArgumentException("Archive entries must match the manifest.");
@@ -349,7 +448,34 @@ public class ArchivePackageService {
         }
     }
 
-    private byte[] readBounded(InputStream input, long limit, String message) throws IOException {
+    private void validateCumulativeExtractedSize(
+        long manifestSize,
+        List<ArchiveCollectionManifest> collections
+    ) {
+        long cumulativeSize = manifestSize;
+        for (ArchiveCollectionManifest collection : collections) {
+            cumulativeSize = addBounded(
+                cumulativeSize,
+                collection.sizeBytes(),
+                maxArchiveBytes,
+                "Archive cumulative extracted size exceeds the configured maximum."
+            );
+        }
+    }
+
+    private long addBounded(long current, long addition, long limit, String message) {
+        if (addition < 0 || current > limit - addition) {
+            throw new IllegalArgumentException(message);
+        }
+        return current + addition;
+    }
+
+    private byte[] readBounded(
+        InputStream input,
+        long limit,
+        String message,
+        ExtractionBudget extractionBudget
+    ) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
         long size = 0;
@@ -360,13 +486,19 @@ public class ArchivePackageService {
             if (size > limit - read) {
                 throw new IllegalArgumentException(message);
             }
+            extractionBudget.consume(read);
             output.write(buffer, 0, read);
             size += read;
         }
         return output.toByteArray();
     }
 
-    private void writeAndVerify(InputStream input, Path output, ArchiveCollectionManifest collection) throws IOException {
+    private void writeAndVerify(
+        InputStream input,
+        Path output,
+        ArchiveCollectionManifest collection,
+        ExtractionBudget extractionBudget
+    ) throws IOException {
         MessageDigest digest = sha256Digest();
         long size = 0;
         try (var target = Files.newOutputStream(output, StandardOpenOption.CREATE_NEW)) {
@@ -378,6 +510,7 @@ public class ArchivePackageService {
                 if (size > maxEntryBytes - read) {
                     throw new IllegalArgumentException("Archive entry size exceeds the limit.");
                 }
+                extractionBudget.consume(read);
                 target.write(buffer, 0, read);
                 digest.update(buffer, 0, read);
                 size += read;
@@ -429,7 +562,8 @@ public class ArchivePackageService {
     }
 
     Path createExtractionDirectory() throws IOException {
-        return Files.createTempDirectory("church-archive-");
+        Files.createDirectories(tempDirectory);
+        return Files.createTempDirectory(tempDirectory, "church-archive-");
     }
 
     private long documentCount(Path source) throws IOException {
@@ -506,19 +640,29 @@ public class ArchivePackageService {
         void delete(Path directory) throws IOException;
     }
 
+    private static final class ExtractionBudget {
+        private final long limit;
+        private long consumed;
+
+        private ExtractionBudget(long limit) {
+            this.limit = limit;
+        }
+
+        private void consume(long bytes) {
+            if (bytes < 0 || consumed > limit - bytes) {
+                throw new IllegalArgumentException(
+                    "Archive cumulative extracted size exceeds the configured maximum."
+                );
+            }
+            consumed += bytes;
+        }
+    }
+
     public static final class ValidatedArchive implements AutoCloseable {
         private final ArchiveManifest manifest;
         private final Map<String, Path> entries;
         private final Path extractionDirectory;
         private final DirectoryCleaner directoryCleaner;
-
-        public ValidatedArchive(
-            ArchiveManifest manifest,
-            Map<String, Path> entries,
-            Path extractionDirectory
-        ) {
-            this(manifest, entries, extractionDirectory, ArchivePackageService::deleteDirectory);
-        }
 
         ValidatedArchive(
             ArchiveManifest manifest,

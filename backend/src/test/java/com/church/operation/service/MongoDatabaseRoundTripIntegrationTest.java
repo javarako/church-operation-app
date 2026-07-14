@@ -1,15 +1,22 @@
 package com.church.operation.service;
 
 import com.church.operation.config.DataManagementProperties;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.gridfs.GridFSBucket;
 import com.mongodb.client.gridfs.GridFSBuckets;
+import com.mongodb.event.CommandStartedEvent;
+import com.mongodb.event.CommandListener;
+import org.bson.BsonArray;
 import org.bson.BsonDocument;
+import org.bson.BsonInt32;
 import org.bson.Document;
 import org.bson.RawBsonDocument;
+import org.bson.codecs.BsonDocumentCodec;
 import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -21,16 +28,22 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 class MongoDatabaseRoundTripIntegrationTest {
@@ -46,7 +59,12 @@ class MongoDatabaseRoundTripIntegrationTest {
 
     @Test
     void exportsAndRestoresEveryCollectionWithRawDocumentsOptionsIndexesAndGridFsBytes() throws Exception {
-        try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
+        RecordingCommandListener commandListener = new RecordingCommandListener();
+        MongoClientSettings settings = MongoClientSettings.builder()
+            .applyConnectionString(new ConnectionString(MONGODB.getConnectionString()))
+            .addCommandListener(commandListener)
+            .build();
+        try (MongoClient client = MongoClients.create(settings)) {
             MongoDatabase database = client.getDatabase("round_trip");
             seedDatabase(database);
             DatabaseSnapshot expected = snapshot(database);
@@ -66,23 +84,133 @@ class MongoDatabaseRoundTripIntegrationTest {
             Path archive = tempDirectory.resolve("full-backup.zip");
 
             var manifest = exporter.exportFull(archive, PASSWORD);
+            assertArchivedIndexVersions(archivePackageService, archive);
             dropAllCollections(database);
             database.getCollection("collection_created_after_backup")
                 .insertOne(new Document("mustDisappear", true));
+            commandListener.clear();
 
-            try (ArchivePackageService.ValidatedArchive validated = importer.validateFull(archive, PASSWORD)) {
+            try (MongoDatabaseImportService.ValidatedArchive validated = importer.validateFull(archive, PASSWORD)) {
                 var verification = importer.replaceAll(validated);
-                assertThat(verification.collectionCount()).isEqualTo(expected.documents().size());
+                assertThat(verification.collectionCount()).isEqualTo(expected.types().size());
                 assertThat(verification.documentCount()).isEqualTo(expected.totalDocumentCount());
                 assertThat(verification.indexCount()).isEqualTo(expected.totalCustomIndexCount());
             }
 
-            assertThat(manifest.collections()).hasSize(expected.documents().size() * 3);
+            assertThat(manifest.collections()).hasSize(expected.types().size() * 3);
+            assertThat(manifest.collections())
+                .filteredOn(entry -> entry.collection().equals("active_members"))
+                .filteredOn(entry -> entry.entryName().endsWith("/data.bson"))
+                .singleElement()
+                .extracting(entry -> entry.documentCount())
+                .isEqualTo(0L);
             assertThat(snapshot(database)).usingRecursiveComparison().isEqualTo(expected);
             assertThat(downloadGridFs(database, expected.gridFsId())).isEqualTo(expected.gridFsBytes());
+            assertThat(commandListener.createIndexesCommands()).isNotEmpty();
+            assertThat(commandListener.createIndexesCommands())
+                .allSatisfy(command -> assertThat(command.getArray("indexes"))
+                    .allSatisfy(value -> assertThat(value.asDocument()).containsKey("v")));
             assertThat(database.listCollectionNames())
                 .doesNotContain("collection_created_after_backup")
+                .allMatch(name -> !name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX))
+                .allMatch(name -> !name.startsWith(MongoDatabaseExportService.RESTORE_BACKUP_PREFIX));
+        }
+    }
+
+    @Test
+    void rejectsMalformedSemanticSidecarDuringValidationWithoutDatabaseMutation() throws Exception {
+        try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
+            MongoDatabase database = client.getDatabase("semantic_preflight");
+            database.getCollection("members").insertOne(new Document("name", "Ada"));
+            DataManagementProperties properties = properties("semantic-operations");
+            ArchivePackageService packages = new ArchivePackageService(properties);
+            MongoDatabaseExportService exporter = new MongoDatabaseExportService(database, packages, properties);
+            MongoDatabaseImportService importer = new MongoDatabaseImportService(database, packages);
+            Path archive = tempDirectory.resolve("semantic-valid.zip");
+            Path malformed = tempDirectory.resolve("semantic-malformed.zip");
+            exporter.exportFull(archive, PASSWORD);
+            appendSecondCreateCommand(packages, archive, malformed, "members");
+            DatabaseSnapshot before = snapshot(database);
+
+            assertThatThrownBy(() -> {
+                try (MongoDatabaseImportService.ValidatedArchive ignored = importer.validateFull(malformed, PASSWORD)) {
+                    // Validation must reject this archive before replaceAll is possible.
+                }
+            }).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("single create command");
+
+            assertThat(snapshot(database)).usingRecursiveComparison().isEqualTo(before);
+            assertThat(database.listCollectionNames())
+                .allMatch(name -> !name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX))
+                .allMatch(name -> !name.startsWith(MongoDatabaseExportService.RESTORE_BACKUP_PREFIX));
+        }
+    }
+
+    @Test
+    void rejectsUnsupportedArchivedIndexVersionDuringValidationWithoutDatabaseMutation() throws Exception {
+        try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
+            MongoDatabase database = client.getDatabase("index_version_preflight");
+            database.getCollection("members").insertOne(new Document("email", "ada@example.test"));
+            database.getCollection("members").createIndex(new Document("email", 1));
+            DataManagementProperties properties = properties("index-version-operations");
+            ArchivePackageService packages = new ArchivePackageService(properties);
+            MongoDatabaseExportService exporter = new MongoDatabaseExportService(database, packages, properties);
+            MongoDatabaseImportService importer = new MongoDatabaseImportService(database, packages);
+            Path archive = tempDirectory.resolve("index-version-valid.zip");
+            Path malformed = tempDirectory.resolve("index-version-malformed.zip");
+            exporter.exportFull(archive, PASSWORD);
+            replaceArchivedIndexVersion(packages, archive, malformed, "members", 0);
+            DatabaseSnapshot before = snapshot(database);
+
+            assertThatThrownBy(() -> {
+                try (MongoDatabaseImportService.ValidatedArchive ignored = importer.validateFull(malformed, PASSWORD)) {
+                    // Unsupported versions must never reach staging.
+                }
+            }).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("index version");
+
+            assertThat(snapshot(database)).usingRecursiveComparison().isEqualTo(before);
+            assertThat(database.listCollectionNames())
                 .allMatch(name -> !name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX));
+        }
+    }
+
+    @Test
+    void forcedCutoverFailureRestoresOrdinaryOriginalsAndRetainsStagingEvidence() throws Exception {
+        try (MongoClient client = MongoClients.create(MONGODB.getConnectionString())) {
+            MongoDatabase database = client.getDatabase("forced_cutover_failure");
+            database.getCollection("members").insertOne(new Document("version", "archive"));
+            DataManagementProperties properties = properties("cutover-operations");
+            ArchivePackageService packages = new ArchivePackageService(properties);
+            MongoDatabaseExportService exporter = new MongoDatabaseExportService(database, packages, properties);
+            Path archive = tempDirectory.resolve("cutover.zip");
+            exporter.exportFull(archive, PASSWORD);
+
+            database.getCollection("members").drop();
+            database.getCollection("members").insertOne(new Document("version", "original-at-cutover"));
+            DatabaseSnapshot before = snapshot(database);
+            IllegalStateException forced = new IllegalStateException("forced cutover failure");
+            MongoDatabaseImportService importer = new MongoDatabaseImportService(
+                database,
+                packages,
+                () -> { throw forced; }
+            );
+
+            assertThatThrownBy(() -> {
+                try (MongoDatabaseImportService.ValidatedArchive validated = importer.validateFull(archive, PASSWORD)) {
+                    importer.replaceAll(validated);
+                }
+            }).isInstanceOf(RestoreCutoverException.class)
+                .hasCause(forced)
+                .satisfies(failure -> {
+                    RestoreCutoverException cutoverFailure = (RestoreCutoverException) failure;
+                    assertThat(cutoverFailure.maintenanceRequired()).isTrue();
+                    assertThat(cutoverFailure.stagingNamespaces()).isNotEmpty();
+                });
+
+            assertThat(snapshot(database)).usingRecursiveComparison().isEqualTo(before);
+            assertThat(database.listCollectionNames())
+                .anyMatch(name -> name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX));
         }
     }
 
@@ -136,6 +264,32 @@ class MongoDatabaseRoundTripIntegrationTest {
 
         database.getCollection("audit_events").insertOne(new Document("event", "member-created")
             .append("payload", new Document("memberId", new ObjectId("65a000000000000000000001"))));
+
+        database.runCommand(new Document("create", "attendance_series")
+            .append("timeseries", new Document("timeField", "recordedAt")
+                .append("metaField", "ministry")
+                .append("granularity", "minutes"))
+            .append("expireAfterSeconds", 31_536_000L));
+        database.getCollection("attendance_series").insertMany(List.of(
+            new Document("recordedAt", java.util.Date.from(Instant.parse("2029-01-07T15:00:00Z")))
+                .append("ministry", "children")
+                .append("count", 24),
+            new Document("recordedAt", java.util.Date.from(Instant.parse("2029-01-14T15:00:00Z")))
+                .append("ministry", "children")
+                .append("count", 27)
+        ));
+        database.runCommand(new Document("createIndexes", "attendance_series").append("indexes", List.of(
+            new Document("key", new Document("ministry", 1).append("recordedAt", -1))
+                .append("name", "ministry_recorded_at")
+                .append("v", 2)
+        )));
+
+        database.runCommand(new Document("create", "active_members")
+            .append("viewOn", "members")
+            .append("pipeline", List.of(
+                new Document("$match", new Document("status", "ACTIVE")),
+                new Document("$project", new Document("name", 1).append("status", 1))
+            )));
         database.getCollection(MongoDatabaseExportService.RESTORE_STAGING_PREFIX + "leftover")
             .insertOne(new Document("excluded", true));
 
@@ -150,33 +304,67 @@ class MongoDatabaseRoundTripIntegrationTest {
     }
 
     private DatabaseSnapshot snapshot(MongoDatabase database) {
-        Map<String, List<byte[]>> documents = new LinkedHashMap<>();
+        Map<String, List<BsonDocument>> documents = new LinkedHashMap<>();
+        Map<String, List<byte[]>> rawCollectionDocuments = new LinkedHashMap<>();
         Map<String, BsonDocument> options = new LinkedHashMap<>();
         Map<String, List<BsonDocument>> indexes = new LinkedHashMap<>();
-        List<String> names = new ArrayList<>();
-        database.listCollectionNames().into(names);
-        names.stream()
-            .filter(name -> !name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX))
-            .sorted()
-            .forEach(name -> {
-                documents.put(name, rawDocuments(database, name));
+        Map<String, String> types = namespaceTypes(database);
+        types.forEach((name, type) -> {
+                documents.put(name, semanticDocuments(database, name));
+                if ("collection".equals(type)) {
+                    rawCollectionDocuments.put(name, rawDocuments(database, name));
+                }
                 options.put(name, collectionOptions(database, name));
-                indexes.put(name, customIndexSignatures(database, name));
+                indexes.put(name, "view".equals(type) ? List.of() : customIndexSignatures(database, name));
             });
 
         RawBsonDocument gridFsFile = database.getCollection("fs.files", RawBsonDocument.class)
             .find().first();
-        assertThat(gridFsFile).isNotNull();
-        ObjectId gridFsId = gridFsFile.getObjectId("_id").getValue();
+        ObjectId gridFsId = gridFsFile == null ? null : gridFsFile.getObjectId("_id").getValue();
         return new DatabaseSnapshot(
+            types,
             documents,
+            rawCollectionDocuments,
             options,
             indexes,
             gridFsId,
-            downloadGridFs(database, gridFsId),
-            documents.values().stream().mapToLong(List::size).sum(),
+            gridFsId == null ? new byte[0] : downloadGridFs(database, gridFsId),
+            types.entrySet().stream()
+                .filter(entry -> !"view".equals(entry.getValue()))
+                .mapToLong(entry -> documents.get(entry.getKey()).size())
+                .sum(),
             indexes.values().stream().mapToLong(List::size).sum()
         );
+    }
+
+    private List<BsonDocument> semanticDocuments(MongoDatabase database, String collectionName) {
+        List<BsonDocument> result = new ArrayList<>();
+        database.getCollection(collectionName, BsonDocument.class)
+            .find()
+            .forEach(document -> result.add(document.clone()));
+        result.sort(Comparator.comparing(BsonDocument::toJson));
+        return result;
+    }
+
+    private Map<String, String> namespaceTypes(MongoDatabase database) {
+        List<RawBsonDocument> catalog = new ArrayList<>();
+        database.listCollections(RawBsonDocument.class).into(catalog);
+        Map<String, String> result = new LinkedHashMap<>();
+        catalog.stream()
+            .filter(entry -> isApplicationNamespace(entry.getString("name").getValue()))
+            .sorted(Comparator.comparing(entry -> entry.getString("name").getValue()))
+            .forEach(entry -> result.put(
+                entry.getString("name").getValue(),
+                entry.getString("type").getValue()
+            ));
+        return result;
+    }
+
+    private boolean isApplicationNamespace(String name) {
+        return !"system.views".equals(name)
+            && !name.startsWith("system.buckets.")
+            && !name.startsWith(MongoDatabaseExportService.RESTORE_STAGING_PREFIX)
+            && !name.startsWith(MongoDatabaseExportService.RESTORE_BACKUP_PREFIX);
     }
 
     private List<byte[]> rawDocuments(MongoDatabase database, String collectionName) {
@@ -208,7 +396,6 @@ class MongoDatabaseRoundTripIntegrationTest {
             .forEach(index -> {
                 if (!"_id_".equals(index.getString("name").getValue())) {
                     BsonDocument signature = BsonDocument.parse(index.toJson());
-                    signature.remove("v");
                     signature.remove("ns");
                     signatures.add(signature);
                 }
@@ -218,20 +405,117 @@ class MongoDatabaseRoundTripIntegrationTest {
     }
 
     private byte[] downloadGridFs(MongoDatabase database, ObjectId id) {
+        if (id == null) {
+            return new byte[0];
+        }
         GridFSBucket bucket = GridFSBuckets.create(database);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         bucket.downloadToStream(id, output);
         return output.toByteArray();
     }
 
+    private DataManagementProperties properties(String directory) {
+        return new DataManagementProperties(
+            tempDirectory.resolve(directory),
+            Duration.ofMinutes(30),
+            DataSize.ofGigabytes(2)
+        );
+    }
+
+    private void assertArchivedIndexVersions(ArchivePackageService packages, Path archive) throws Exception {
+        BsonStreamCodec codec = new BsonStreamCodec();
+        try (ArchivePackageService.ValidatedArchive validated = packages.validate(
+            archive, PASSWORD, com.church.operation.util.ArchiveType.FULL_BACKUP
+        )) {
+            List<Path> indexSidecars = validated.manifest().collections().stream()
+                .filter(entry -> entry.entryName().endsWith("/indexes.bson"))
+                .map(entry -> validated.entries().get(entry.entryName()))
+                .toList();
+            List<BsonDocument> specifications = new ArrayList<>();
+            for (Path sidecar : indexSidecars) {
+                try (var input = Files.newInputStream(sidecar)) {
+                    List<RawBsonDocument> commands = codec.readRawBatch(input, 2);
+                    if (!commands.isEmpty()) {
+                        BsonArray indexes = commands.getFirst().getArray("indexes");
+                        indexes.forEach(value -> specifications.add(value.asDocument()));
+                    }
+                }
+            }
+            assertThat(specifications).isNotEmpty().allSatisfy(index -> assertThat(index).containsKey("v"));
+        }
+    }
+
+    private void appendSecondCreateCommand(
+        ArchivePackageService packages,
+        Path sourceArchive,
+        Path outputArchive,
+        String collectionName
+    ) throws Exception {
+        BsonStreamCodec codec = new BsonStreamCodec();
+        Map<String, Path> copiedEntries = new HashMap<>();
+        try (ArchivePackageService.ValidatedArchive validated = packages.validate(
+            sourceArchive, PASSWORD, com.church.operation.util.ArchiveType.FULL_BACKUP
+        )) {
+            for (var entry : validated.entries().entrySet()) {
+                Path copy = tempDirectory.resolve("semantic-copy").resolve(entry.getKey());
+                Files.createDirectories(copy.getParent());
+                Files.copy(entry.getValue(), copy);
+                copiedEntries.put(entry.getKey(), copy);
+            }
+            Path options = copiedEntries.get(MongoDatabaseExportService.optionsEntryName(collectionName));
+            try (OutputStream output = Files.newOutputStream(options, StandardOpenOption.APPEND)) {
+                codec.write(List.of(new Document("create", collectionName)), output);
+            }
+            packages.write(outputArchive, PASSWORD, validated.manifest(), copiedEntries);
+        }
+    }
+
+    private void replaceArchivedIndexVersion(
+        ArchivePackageService packages,
+        Path sourceArchive,
+        Path outputArchive,
+        String collectionName,
+        int version
+    ) throws Exception {
+        BsonStreamCodec codec = new BsonStreamCodec();
+        Map<String, Path> copiedEntries = new HashMap<>();
+        try (ArchivePackageService.ValidatedArchive validated = packages.validate(
+            sourceArchive, PASSWORD, com.church.operation.util.ArchiveType.FULL_BACKUP
+        )) {
+            for (var entry : validated.entries().entrySet()) {
+                Path copy = tempDirectory.resolve("index-version-copy").resolve(entry.getKey());
+                Files.createDirectories(copy.getParent());
+                Files.copy(entry.getValue(), copy);
+                copiedEntries.put(entry.getKey(), copy);
+            }
+            Path indexes = copiedEntries.get(MongoDatabaseExportService.indexesEntryName(collectionName));
+            BsonDocument command;
+            try (var input = Files.newInputStream(indexes)) {
+                command = BsonDocument.parse(codec.readRaw(input).toJson());
+            }
+            command.getArray("indexes").getFirst().asDocument().put("v", new BsonInt32(version));
+            try (OutputStream output = Files.newOutputStream(indexes)) {
+                codec.writeRaw(new RawBsonDocument(command, new BsonDocumentCodec()), output);
+            }
+            packages.write(outputArchive, PASSWORD, validated.manifest(), copiedEntries);
+        }
+    }
+
     private void dropAllCollections(MongoDatabase database) {
-        List<String> names = new ArrayList<>();
-        database.listCollectionNames().into(names);
-        names.forEach(name -> database.getCollection(name).drop());
+        List<RawBsonDocument> catalog = new ArrayList<>();
+        database.listCollections(RawBsonDocument.class).into(catalog);
+        catalog.stream()
+            .filter(entry -> !"system.views".equals(entry.getString("name").getValue()))
+            .filter(entry -> !entry.getString("name").getValue().startsWith("system.buckets."))
+            .sorted(Comparator.comparing(entry -> "view".equals(entry.getString("type").getValue()) ? 0 : 1))
+            .map(entry -> entry.getString("name").getValue())
+            .forEach(name -> database.getCollection(name).drop());
     }
 
     private record DatabaseSnapshot(
-        Map<String, List<byte[]>> documents,
+        Map<String, String> types,
+        Map<String, List<BsonDocument>> documents,
+        Map<String, List<byte[]>> rawCollectionDocuments,
         Map<String, BsonDocument> options,
         Map<String, List<BsonDocument>> indexes,
         ObjectId gridFsId,
@@ -239,5 +523,24 @@ class MongoDatabaseRoundTripIntegrationTest {
         long totalDocumentCount,
         long totalCustomIndexCount
     ) {
+    }
+
+    private static final class RecordingCommandListener implements CommandListener {
+        private final List<BsonDocument> createIndexesCommands = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void commandStarted(CommandStartedEvent event) {
+            if ("createIndexes".equals(event.getCommandName())) {
+                createIndexesCommands.add(event.getCommand().clone());
+            }
+        }
+
+        private List<BsonDocument> createIndexesCommands() {
+            return List.copyOf(createIndexesCommands);
+        }
+
+        private void clear() {
+            createIndexesCommands.clear();
+        }
     }
 }
