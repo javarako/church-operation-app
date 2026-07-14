@@ -10,11 +10,16 @@ import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.bson.Document;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -34,7 +39,14 @@ public class ArchivePackageService {
 
     private static final String MANIFEST_ENTRY = "manifest.json";
     private static final int DEFAULT_MAX_MANIFEST_BYTES = 1024 * 1024;
-    private static final long DEFAULT_MAX_ENTRY_BYTES = 1024L * 1024 * 1024;
+    private static final long DEFAULT_MAX_ENTRY_BYTES = 2L * 1024 * 1024 * 1024;
+    private static final ObjectReader MANIFEST_READER = new ObjectMapper().rebuild()
+        .enable(
+            DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS,
+            DeserializationFeature.USE_BIG_INTEGER_FOR_INTS
+        )
+        .build()
+        .reader();
 
     private final BsonStreamCodec bsonStreamCodec;
     private final int maxManifestBytes;
@@ -43,6 +55,10 @@ public class ArchivePackageService {
 
     public ArchivePackageService() {
         this(new BsonStreamCodec(), DEFAULT_MAX_MANIFEST_BYTES, DEFAULT_MAX_ENTRY_BYTES);
+    }
+
+    public ArchivePackageService(int maxManifestBytes, long maxEntryBytes) {
+        this(new BsonStreamCodec(), maxManifestBytes, maxEntryBytes);
     }
 
     ArchivePackageService(BsonStreamCodec bsonStreamCodec) {
@@ -70,32 +86,36 @@ public class ArchivePackageService {
 
     public void write(Path output, char[] password, ArchiveManifest manifest, Map<String, Path> entries) throws IOException {
         validateWriteInput(manifest, entries);
-        char[] passwordCopy = Arrays.copyOf(password, password.length);
+        List<ArchiveCollectionManifest> collections = new ArrayList<>();
+        for (ArchiveCollectionManifest collection : manifest.collections()) {
+            Path source = entries.get(collection.entryName());
+            collections.add(new ArchiveCollectionManifest(
+                collection.collection(),
+                collection.entryName(),
+                documentCount(source),
+                Files.size(source),
+                sha256(source)
+            ));
+        }
+        ArchiveManifest computedManifest = new ArchiveManifest(
+            manifest.formatVersion(), manifest.archiveType(), List.copyOf(collections)
+        );
+        byte[] manifestBytes = manifestDocument(computedManifest).toJson().getBytes(StandardCharsets.UTF_8);
+        if (manifestBytes.length > maxManifestBytes) {
+            throw new IllegalArgumentException("Archive manifest size exceeds the limit.");
+        }
+        char[] passwordCopy = copyPassword(password);
         try {
             Files.deleteIfExists(output);
             try (ZipFile zipFile = new ZipFile(output.toFile(), passwordCopy)) {
-                List<ArchiveCollectionManifest> collections = new ArrayList<>();
                 for (ArchiveCollectionManifest collection : manifest.collections()) {
                     Path source = entries.get(collection.entryName());
                     zipFile.addFile(source.toFile(), encryptedParameters(collection.entryName()));
-                    collections.add(new ArchiveCollectionManifest(
-                        collection.collection(),
-                        collection.entryName(),
-                        documentCount(source),
-                        Files.size(source),
-                        sha256(source)
-                    ));
                 }
-                ArchiveManifest computedManifest = new ArchiveManifest(
-                    manifest.formatVersion(), manifest.archiveType(), List.copyOf(collections)
+                zipFile.addStream(
+                    new ByteArrayInputStream(manifestBytes),
+                    encryptedParameters(MANIFEST_ENTRY)
                 );
-                Path manifestFile = Files.createTempFile("church-archive-manifest-", ".json");
-                try {
-                    Files.writeString(manifestFile, manifestDocument(computedManifest).toJson(), StandardCharsets.UTF_8);
-                    zipFile.addFile(manifestFile.toFile(), encryptedParameters(MANIFEST_ENTRY));
-                } finally {
-                    Files.deleteIfExists(manifestFile);
-                }
             }
         } catch (ZipException exception) {
             throw new IOException("Unable to write encrypted archive.", exception);
@@ -105,9 +125,10 @@ public class ArchivePackageService {
     }
 
     public ValidatedArchive validate(Path archive, char[] password, ArchiveType expected) throws IOException {
-        char[] passwordCopy = Arrays.copyOf(password, password.length);
-        Path extractionDirectory = Files.createTempDirectory("church-archive-");
+        char[] passwordCopy = copyPassword(password);
+        Path extractionDirectory = null;
         try {
+            extractionDirectory = createExtractionDirectory();
             try (ZipFile zipFile = new ZipFile(archive.toFile(), passwordCopy)) {
                 Map<String, FileHeader> headers = validatedHeaders(zipFile);
                 FileHeader manifestHeader = headers.get(MANIFEST_ENTRY);
@@ -163,7 +184,7 @@ public class ArchivePackageService {
         }
     }
 
-    private void validateWriteInput(ArchiveManifest manifest, Map<String, Path> entries) {
+    private void validateWriteInput(ArchiveManifest manifest, Map<String, Path> entries) throws IOException {
         if (manifest == null || manifest.collections() == null || entries == null) {
             throw new IllegalArgumentException("Archive manifest and entries are required.");
         }
@@ -186,6 +207,9 @@ public class ArchivePackageService {
             }
             if (collection.documentCount() < 0 || collection.sizeBytes() < 0) {
                 throw new IllegalArgumentException("Archive manifest contains an invalid number.");
+            }
+            if (Files.size(entries.get(collection.entryName())) > maxEntryBytes) {
+                throw new IllegalArgumentException("Archive entry size exceeds the limit.");
             }
         }
         if (entries.size() != names.size() || entries.containsKey(MANIFEST_ENTRY)) {
@@ -247,46 +271,58 @@ public class ArchivePackageService {
     }
 
     private ArchiveManifest parseManifest(String json) {
-        Document document;
+        JsonNode document;
         try {
-            document = Document.parse(json);
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("Archive manifest contains an invalid number.", exception);
+            document = MANIFEST_READER.readTree(json);
+        } catch (JacksonException exception) {
+            throw new IllegalArgumentException("Archive manifest is invalid.", exception);
         }
-        List<Document> collectionDocuments = document.getList("collections", Document.class);
-        List<ArchiveCollectionManifest> collections = collectionDocuments.stream()
-            .map(collection -> new ArchiveCollectionManifest(
-                collection.getString("collection"),
-                collection.getString("entryName"),
+        JsonNode collectionDocuments = document == null ? null : document.get("collections");
+        if (collectionDocuments == null || !collectionDocuments.isArray()) {
+            throw new IllegalArgumentException("Archive manifest collections are missing.");
+        }
+        List<ArchiveCollectionManifest> collections = new ArrayList<>();
+        for (JsonNode collection : collectionDocuments) {
+            collections.add(new ArchiveCollectionManifest(
+                textValue(collection, "collection"),
+                textValue(collection, "entryName"),
                 nonNegativeLong(collection, "documentCount"),
                 nonNegativeLong(collection, "sizeBytes"),
-                collection.getString("sha256")
-            ))
-            .toList();
+                textValue(collection, "sha256")
+            ));
+        }
         return new ArchiveManifest(
             nonNegativeInt(document, "formatVersion"),
-            ArchiveType.valueOf(document.getString("archiveType")),
-            collections
+            ArchiveType.valueOf(textValue(document, "archiveType")),
+            List.copyOf(collections)
         );
     }
 
-    private long nonNegativeLong(Document document, String key) {
-        Object value = document.get(key);
-        if (!(value instanceof Number number)) {
+    private String textValue(JsonNode document, String key) {
+        JsonNode value = document == null ? null : document.get(key);
+        if (value == null || !value.isString()) {
+            throw new IllegalArgumentException("Archive manifest is invalid.");
+        }
+        return value.stringValue();
+    }
+
+    private long nonNegativeLong(JsonNode document, String key) {
+        JsonNode value = document == null ? null : document.get(key);
+        if (value == null || !value.isNumber()) {
             throw new IllegalArgumentException("Archive manifest contains an invalid number.");
         }
         try {
-            long result = new BigDecimal(number.toString()).longValueExact();
+            long result = value.decimalValue().longValueExact();
             if (result < 0) {
                 throw new ArithmeticException("negative");
             }
             return result;
-        } catch (ArithmeticException | NumberFormatException exception) {
+        } catch (ArithmeticException exception) {
             throw new IllegalArgumentException("Archive manifest contains an invalid number.", exception);
         }
     }
 
-    private int nonNegativeInt(Document document, String key) {
+    private int nonNegativeInt(JsonNode document, String key) {
         long value = nonNegativeLong(document, key);
         if (value > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Archive manifest contains an invalid number.");
@@ -383,6 +419,14 @@ public class ArchivePackageService {
         return parameters;
     }
 
+    char[] copyPassword(char[] password) {
+        return Arrays.copyOf(password, password.length);
+    }
+
+    Path createExtractionDirectory() throws IOException {
+        return Files.createTempDirectory("church-archive-");
+    }
+
     private long documentCount(Path source) throws IOException {
         try (InputStream input = Files.newInputStream(source)) {
             return bsonStreamCodec.count(input);
@@ -417,6 +461,9 @@ public class ArchivePackageService {
     }
 
     private void cleanupAfterFailure(Path directory, Throwable failure) {
+        if (directory == null) {
+            return;
+        }
         try {
             directoryCleaner.delete(directory);
         } catch (IOException cleanupFailure) {

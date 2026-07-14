@@ -151,6 +151,30 @@ class ArchivePackageServiceTest {
     }
 
     @Test
+    void rejectsExactFractionalTokensBeforeFloatingPointRounding() throws Exception {
+        byte[] entry = bsonBytes(new Document("member", "Ada"));
+        String fractionalToken = "0.99999999999999999";
+        List<String> manifests = List.of(
+            manifestJson(fractionalToken, "1", Long.toString(entry.length), entry),
+            manifestJson("1", fractionalToken, Long.toString(entry.length), entry),
+            manifestJson("1", "1", fractionalToken, entry)
+        );
+
+        for (int index = 0; index < manifests.size(); index++) {
+            Path archive = writeManualArchive(
+                "exact-fractional-" + index + ".zip",
+                manifests.get(index),
+                List.of(new RawEntry(ENTRY_NAME, entry, true, EncryptionMethod.AES))
+            );
+
+            assertThatThrownBy(() -> service.validate(archive, PASSWORD, ArchiveType.FULL_BACKUP))
+                .as("numeric field index %s", index)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("number");
+        }
+    }
+
+    @Test
     void rejectsFractionalNegativeAndOverflowingDocumentCounts() throws Exception {
         byte[] entry = bsonBytes(new Document("member", "Ada"));
         List<String> invalidCounts = List.of("1.5", "-1", "9223372036854775808");
@@ -356,11 +380,28 @@ class ArchivePackageServiceTest {
             manifestJson(1, List.of(collection("members", ENTRY_NAME, 1, entry.length, sha256(entry)))),
             List.of(new RawEntry(ENTRY_NAME, entry, true, EncryptionMethod.AES))
         );
-        ArchivePackageService bounded = new ArchivePackageService(codec, 64, 1024);
+        ArchivePackageService bounded = new ArchivePackageService(64, 1024);
 
         assertThatThrownBy(() -> bounded.validate(archive, PASSWORD, ArchiveType.FULL_BACKUP))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("manifest size");
+    }
+
+    @Test
+    void writeRejectsManifestLargerThanConfiguredBound() throws Exception {
+        Path entry = writeEntry("writer-large-manifest.bson", new Document("member", "Ada"));
+        Path archive = tempDir.resolve("writer-large-manifest.zip");
+        ArchivePackageService bounded = new ArchivePackageService(codec, 64, 1024);
+        ArchiveManifest manifest = new ArchiveManifest(
+            1,
+            ArchiveType.FULL_BACKUP,
+            List.of(new ArchiveCollectionManifest("members", ENTRY_NAME))
+        );
+
+        assertThatThrownBy(() -> bounded.write(archive, PASSWORD, manifest, Map.of(ENTRY_NAME, entry)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("manifest size");
+        assertThat(archive).doesNotExist();
     }
 
     @Test
@@ -379,6 +420,23 @@ class ArchivePackageServiceTest {
     }
 
     @Test
+    void writeRejectsEntryLargerThanConfiguredBound() throws Exception {
+        Path entry = writeEntry("writer-large-entry.bson", new Document("member", "Ada"));
+        Path archive = tempDir.resolve("writer-large-entry.zip");
+        ArchivePackageService bounded = new ArchivePackageService(codec, 4096, Files.size(entry) - 1);
+        ArchiveManifest manifest = new ArchiveManifest(
+            1,
+            ArchiveType.FULL_BACKUP,
+            List.of(new ArchiveCollectionManifest("members", ENTRY_NAME))
+        );
+
+        assertThatThrownBy(() -> bounded.write(archive, PASSWORD, manifest, Map.of(ENTRY_NAME, entry)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("entry size");
+        assertThat(archive).doesNotExist();
+    }
+
+    @Test
     void rejectsEntryHeaderThatDisagreesWithDeclaredSize() throws Exception {
         byte[] entry = bsonBytes(new Document("member", "Ada"));
         Path archive = writeManualArchive(
@@ -390,6 +448,34 @@ class ArchivePackageServiceTest {
         assertThatThrownBy(() -> service.validate(archive, PASSWORD, ArchiveType.FULL_BACKUP))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("entry size");
+    }
+
+    @Test
+    void clearsValidationPasswordCopyWhenTempDirectoryCreationFails() {
+        IOException creationFailure = new IOException("temp directory unavailable");
+        class FailingTempDirectoryService extends ArchivePackageService {
+            private char[] capturedPasswordCopy;
+
+            @Override
+            char[] copyPassword(char[] password) {
+                capturedPasswordCopy = super.copyPassword(password);
+                return capturedPasswordCopy;
+            }
+
+            @Override
+            Path createExtractionDirectory() throws IOException {
+                throw creationFailure;
+            }
+        }
+        FailingTempDirectoryService failingService = new FailingTempDirectoryService();
+        char[] suppliedPassword = "validation secret".toCharArray();
+
+        assertThatThrownBy(() -> failingService.validate(
+            tempDir.resolve("unread.zip"), suppliedPassword, ArchiveType.FULL_BACKUP
+        )).isSameAs(creationFailure);
+
+        assertThat(failingService.capturedPasswordCopy).containsOnly('\0');
+        assertThat(suppliedPassword).containsExactly("validation secret".toCharArray());
     }
 
     @Test
