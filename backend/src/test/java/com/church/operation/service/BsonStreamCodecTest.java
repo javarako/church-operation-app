@@ -8,13 +8,17 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BsonStreamCodecTest {
     private final BsonStreamCodec codec = new BsonStreamCodec();
@@ -36,5 +40,37 @@ class BsonStreamCodecTest {
 
         assertThat(codec.read(new ByteArrayInputStream(output.toByteArray())))
             .containsExactly(document, second);
+    }
+
+    @Test
+    void countsConcatenatedDocumentsWithoutMaterializingThem() throws Exception {
+        byte[] emptyDocument = new byte[] {5, 0, 0, 0, 0};
+        ByteArrayOutputStream input = new ByteArrayOutputStream();
+        input.write(emptyDocument);
+        input.write(emptyDocument);
+        input.write(emptyDocument);
+
+        assertThat(codec.count(new ByteArrayInputStream(input.toByteArray()))).isEqualTo(3);
+    }
+
+    @Test
+    void rejectsOversizedDocumentBeforeReadingItsPayload() {
+        byte[] length = ByteBuffer.allocate(Integer.BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(BsonStreamCodec.MAX_DOCUMENT_SIZE + 1)
+            .array();
+
+        assertThatThrownBy(() -> codec.count(new ByteArrayInputStream(length)))
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("length");
+    }
+
+    @Test
+    void rejectsTruncatedDocumentWhileStreamingCount() {
+        byte[] truncated = new byte[] {8, 0, 0, 0, 1, 2};
+
+        assertThatThrownBy(() -> codec.count(new ByteArrayInputStream(truncated)))
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("Truncated");
     }
 }

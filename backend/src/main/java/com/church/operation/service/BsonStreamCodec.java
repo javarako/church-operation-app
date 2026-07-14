@@ -33,20 +33,38 @@ public class BsonStreamCodec {
 
     public List<Document> read(InputStream input) throws IOException {
         List<Document> documents = new ArrayList<>();
-        byte[] lengthBytes = new byte[Integer.BYTES];
-        while (readLength(input, lengthBytes)) {
-            int length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
-            if (length < 5 || length > MAX_DOCUMENT_SIZE) {
-                throw new IOException("Invalid BSON document length.");
-            }
-            byte[] bson = new byte[length];
-            System.arraycopy(lengthBytes, 0, bson, 0, lengthBytes.length);
-            readFully(input, bson, lengthBytes.length, length - lengthBytes.length);
-            try (BsonBinaryReader reader = new BsonBinaryReader(ByteBuffer.wrap(bson))) {
-                documents.add(documentCodec.decode(reader, DecoderContext.builder().build()));
-            }
+        for (Document document; (document = readDocument(input)) != null;) {
+            documents.add(document);
         }
         return documents;
+    }
+
+    public long count(InputStream input) throws IOException {
+        long count = 0;
+        while (readDocument(input) != null) {
+            if (count == Long.MAX_VALUE) {
+                throw new IOException("BSON document count exceeds the supported limit.");
+            }
+            count++;
+        }
+        return count;
+    }
+
+    private Document readDocument(InputStream input) throws IOException {
+        byte[] lengthBytes = new byte[Integer.BYTES];
+        if (!readLength(input, lengthBytes)) {
+            return null;
+        }
+        int length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        if (length < 5 || length > MAX_DOCUMENT_SIZE) {
+            throw new IOException("Invalid BSON document length.");
+        }
+        byte[] bson = new byte[length];
+        System.arraycopy(lengthBytes, 0, bson, 0, lengthBytes.length);
+        readFully(input, bson, lengthBytes.length, length - lengthBytes.length);
+        try (BsonBinaryReader reader = new BsonBinaryReader(ByteBuffer.wrap(bson))) {
+            return documentCodec.decode(reader, DecoderContext.builder().build());
+        }
     }
 
     private boolean readLength(InputStream input, byte[] lengthBytes) throws IOException {
