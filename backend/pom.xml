@@ -5,12 +5,14 @@
 
   <groupId>com.church</groupId>
   <artifactId>operation</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>1.0.0-SNAPSHOT</version>
   <name>church-operation-backend</name>
 
   <properties>
     <java.version>21</java.version>
-    <spring-boot.version>4.0.0</spring-boot.version>
+    <spring-boot.version>4.0.7</spring-boot.version>
+    <tomcat.version>11.0.23</tomcat.version>
+    <logback.version>1.5.36</logback.version>
   </properties>
 
   <dependencyManagement>
