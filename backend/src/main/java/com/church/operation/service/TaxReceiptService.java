@@ -14,6 +14,7 @@ import com.church.operation.repo.TaxReceiptRepository;
 import com.church.operation.util.GivingType;
 import com.church.operation.util.Role;
 import com.church.operation.util.TaxReceiptStatus;
+import com.church.operation.util.SystemAuditOperation;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -42,6 +43,7 @@ public class TaxReceiptService {
     private final TaxReceiptRepository receiptRepository;
     private final TaxReceiptCounterService counterService;
     private final ChurchInformationProperties churchProperties;
+    private final SystemAuditService audit;
     private final Clock clock;
 
     @Autowired
@@ -50,9 +52,11 @@ public class TaxReceiptService {
         MemberRepository memberRepository,
         TaxReceiptRepository receiptRepository,
         TaxReceiptCounterService counterService,
-        ChurchInformationProperties churchProperties
+        ChurchInformationProperties churchProperties,
+        SystemAuditService audit
     ) {
-        this(offeringRepository, memberRepository, receiptRepository, counterService, churchProperties, Clock.systemDefaultZone());
+        this(offeringRepository, memberRepository, receiptRepository, counterService, churchProperties, audit,
+            Clock.systemDefaultZone());
     }
 
     TaxReceiptService(
@@ -61,6 +65,7 @@ public class TaxReceiptService {
         TaxReceiptRepository receiptRepository,
         TaxReceiptCounterService counterService,
         ChurchInformationProperties churchProperties,
+        SystemAuditService audit,
         Clock clock
     ) {
         this.offeringRepository = offeringRepository;
@@ -68,6 +73,7 @@ public class TaxReceiptService {
         this.receiptRepository = receiptRepository;
         this.counterService = counterService;
         this.churchProperties = churchProperties;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -88,6 +94,23 @@ public class TaxReceiptService {
     }
 
     public TaxReceipt issue(Member actor, int taxYear, String offeringNumber, String thankYouNote) {
+        Map<String, ?> metadata = isBlank(offeringNumber)
+            ? Map.of("taxYear", taxYear)
+            : Map.of("taxYear", taxYear, "offeringNumber", offeringNumber);
+        try {
+            TaxReceipt receipt = issueReceipt(actor, taxYear, offeringNumber, thankYouNote);
+            audit.recordSuccess(actor, SystemAuditOperation.TAX_RECEIPT_ISSUE, Map.of(
+                "taxYear", taxYear, "offeringNumber", offeringNumber,
+                "receiptNumber", receipt.getReceiptNumber()
+            ));
+            return receipt;
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.TAX_RECEIPT_ISSUE, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private TaxReceipt issueReceipt(Member actor, int taxYear, String offeringNumber, String thankYouNote) {
         requireTaxAccess(actor);
         validateYear(taxYear);
         if (isBlank(offeringNumber)) {
@@ -108,6 +131,20 @@ public class TaxReceiptService {
     }
 
     public List<TaxReceipt> issueBatch(Member actor, int taxYear, String thankYouNote) {
+        try {
+            List<TaxReceipt> receipts = issueBatchReceipts(actor, taxYear, thankYouNote);
+            audit.recordSuccess(actor, SystemAuditOperation.TAX_RECEIPT_ISSUE_BATCH, Map.of(
+                "taxYear", taxYear, "receiptCount", receipts.size()
+            ));
+            return receipts;
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.TAX_RECEIPT_ISSUE_BATCH,
+                Map.of("taxYear", taxYear), exception);
+            throw exception;
+        }
+    }
+
+    private List<TaxReceipt> issueBatchReceipts(Member actor, int taxYear, String thankYouNote) {
         requireTaxAccess(actor);
         List<TaxReceiptSummaryRow> rows = summary(actor, taxYear, null);
         List<TaxReceiptValidationError> errors = new ArrayList<>();
@@ -139,6 +176,18 @@ public class TaxReceiptService {
     }
 
     public TaxReceipt voidReceipt(Member actor, String receiptId, String reason) {
+        Map<String, ?> metadata = receiptId == null ? Map.of() : Map.of("receiptId", receiptId);
+        try {
+            TaxReceipt receipt = voidReceiptOperation(actor, receiptId, reason);
+            audit.recordSuccess(actor, SystemAuditOperation.TAX_RECEIPT_VOID, metadata);
+            return receipt;
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.TAX_RECEIPT_VOID, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private TaxReceipt voidReceiptOperation(Member actor, String receiptId, String reason) {
         requireTaxAccess(actor);
         if (isBlank(reason)) {
             throw new IllegalArgumentException("A void reason is required.");
@@ -156,6 +205,21 @@ public class TaxReceiptService {
     }
 
     public TaxReceipt replaceReceipt(Member actor, String receiptId, String thankYouNote) {
+        Map<String, ?> metadata = receiptId == null ? Map.of() : Map.of("receiptId", receiptId);
+        try {
+            TaxReceipt receipt = replaceReceiptOperation(actor, receiptId, thankYouNote);
+            audit.recordSuccess(actor, SystemAuditOperation.TAX_RECEIPT_REPLACE, Map.of(
+                "receiptId", receiptId, "receiptNumber", receipt.getReceiptNumber(),
+                "taxYear", receipt.getTaxYear()
+            ));
+            return receipt;
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.TAX_RECEIPT_REPLACE, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private TaxReceipt replaceReceiptOperation(Member actor, String receiptId, String thankYouNote) {
         requireTaxAccess(actor);
         TaxReceipt original = findById(actor, receiptId);
         if (original.getStatus() != TaxReceiptStatus.VOID) {

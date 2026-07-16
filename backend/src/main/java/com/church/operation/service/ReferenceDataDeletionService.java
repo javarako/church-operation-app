@@ -11,6 +11,7 @@ import com.church.operation.repo.ReferenceDataRepository;
 import com.church.operation.util.ReferenceDataType;
 import com.church.operation.util.Role;
 import com.church.operation.util.FiscalArchiveStatus;
+import com.church.operation.util.SystemAuditOperation;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -18,18 +19,36 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ReferenceDataDeletionService {
     private final ReferenceDataRepository referenceDataRepository;
     private final MongoTemplate mongoTemplate;
+    private final SystemAuditService audit;
 
-    public ReferenceDataDeletionService(ReferenceDataRepository referenceDataRepository, MongoTemplate mongoTemplate) {
+    public ReferenceDataDeletionService(
+        ReferenceDataRepository referenceDataRepository,
+        MongoTemplate mongoTemplate,
+        SystemAuditService audit
+    ) {
         this.referenceDataRepository = referenceDataRepository;
         this.mongoTemplate = mongoTemplate;
+        this.audit = audit;
     }
 
     public void delete(Member actor, String id) {
+        Map<String, ?> metadata = id == null ? Map.of() : Map.of("referenceDataId", id);
+        try {
+            deleteReferenceData(actor, id);
+            audit.recordSuccess(actor, SystemAuditOperation.REFERENCE_DATA_DELETE, metadata);
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.REFERENCE_DATA_DELETE, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private void deleteReferenceData(Member actor, String id) {
         requireReferenceDataManager(actor);
         ReferenceData reference = referenceDataRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Reference data was not found."));

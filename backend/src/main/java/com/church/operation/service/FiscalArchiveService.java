@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.church.operation.util.FiscalArchiveStatus;
 import com.church.operation.util.Role;
 import com.church.operation.util.ReferenceDataType;
+import com.church.operation.util.SystemAuditOperation;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -45,6 +46,7 @@ public class FiscalArchiveService {
     private final ReferenceDataRepository references;
     private final DataOperationStore operationStore;
     private final FiscalArchiveCodec codec;
+    private final SystemAuditService audit;
     private final Path tempDirectory;
     private final Map<String, StagedArchive> stagedArchives = new ConcurrentHashMap<>();
     private final Map<String, StagedRestore> stagedRestores = new ConcurrentHashMap<>();
@@ -60,10 +62,11 @@ public class FiscalArchiveService {
         ReferenceDataRepository references,
         DataOperationStore operationStore,
         FiscalArchiveCodec codec,
+        SystemAuditService audit,
         DataManagementProperties properties
     ) {
         this(offerings, transactions, budgets, registries, fiscalYearProperties, members, references, operationStore,
-            codec, properties.tempDirectory(), Clock.systemUTC());
+            codec, audit, properties.tempDirectory(), Clock.systemUTC());
     }
 
     FiscalArchiveService(
@@ -76,6 +79,7 @@ public class FiscalArchiveService {
         ReferenceDataRepository references,
         DataOperationStore operationStore,
         FiscalArchiveCodec codec,
+        SystemAuditService audit,
         Path tempDirectory,
         Clock clock
     ) {
@@ -89,6 +93,7 @@ public class FiscalArchiveService {
         this.references = references;
         this.operationStore = operationStore;
         this.codec = codec;
+        this.audit = audit;
         this.tempDirectory = tempDirectory;
     }
 
@@ -104,6 +109,20 @@ public class FiscalArchiveService {
     }
 
     public DownloadArtifact createArchive(Member actor, int fiscalYear, char[] password) throws IOException {
+        try {
+            DownloadArtifact artifact = createArchiveOperation(actor, fiscalYear, password);
+            audit.recordSuccess(actor, SystemAuditOperation.FISCAL_ARCHIVE, Map.of(
+                "archiveId", artifact.archiveId(), "fiscalYear", fiscalYear
+            ));
+            return artifact;
+        } catch (IOException | RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.FISCAL_ARCHIVE,
+                Map.of("fiscalYear", fiscalYear), exception);
+            throw exception;
+        }
+    }
+
+    private DownloadArtifact createArchiveOperation(Member actor, int fiscalYear, char[] password) throws IOException {
         requireAdmin(actor);
         requirePassword(password);
         String archiveId = UUID.randomUUID().toString();
@@ -130,6 +149,21 @@ public class FiscalArchiveService {
     }
 
     public FiscalArchiveRegistry clean(Member actor, String archiveId, String confirmation) {
+        Map<String, ?> metadata = archiveId == null ? Map.of() : Map.of("archiveId", archiveId);
+        try {
+            FiscalArchiveRegistry registry = cleanOperation(actor, archiveId, confirmation);
+            audit.recordSuccess(actor, SystemAuditOperation.FISCAL_CLEAN, Map.of(
+                "archiveId", archiveId, "fiscalYear", registry.getFiscalYear(),
+                "recordCount", recordCount(registry)
+            ));
+            return registry;
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.FISCAL_CLEAN, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private FiscalArchiveRegistry cleanOperation(Member actor, String archiveId, String confirmation) {
         requireAdmin(actor);
         StagedArchive staged = requireStaged(actor, archiveId);
         String expected = "CLEAN FISCAL YEAR " + staged.payload.fiscalYear();
@@ -166,6 +200,20 @@ public class FiscalArchiveService {
     }
 
     public RestorePreview validateRestore(Member actor, Path archive, char[] password) throws IOException {
+        try {
+            RestorePreview preview = validateRestoreOperation(actor, archive, password);
+            audit.recordSuccess(actor, SystemAuditOperation.FISCAL_RESTORE_VALIDATE, Map.of(
+                "operationId", preview.id(), "archiveId", preview.archiveId(),
+                "fiscalYear", preview.fiscalYear(), "recordCount", preview.totalRecordCount()
+            ));
+            return preview;
+        } catch (IOException | RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.FISCAL_RESTORE_VALIDATE, Map.of(), exception);
+            throw exception;
+        }
+    }
+
+    private RestorePreview validateRestoreOperation(Member actor, Path archive, char[] password) throws IOException {
         requireAdmin(actor);
         requirePassword(password);
         try {
@@ -240,6 +288,21 @@ public class FiscalArchiveService {
     }
 
     public FiscalArchiveRegistry executeRestore(Member actor, String id, String confirmation) {
+        Map<String, ?> metadata = id == null ? Map.of() : Map.of("operationId", id);
+        try {
+            FiscalArchiveRegistry registry = executeRestoreOperation(actor, id, confirmation);
+            audit.recordSuccess(actor, SystemAuditOperation.FISCAL_RESTORE_EXECUTE, Map.of(
+                "operationId", id, "archiveId", registry.getArchiveId(),
+                "fiscalYear", registry.getFiscalYear(), "recordCount", recordCount(registry)
+            ));
+            return registry;
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.FISCAL_RESTORE_EXECUTE, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private FiscalArchiveRegistry executeRestoreOperation(Member actor, String id, String confirmation) {
         requireAdmin(actor);
         StagedRestore restore = stagedRestores.get(id);
         if (restore == null || !restore.actorId.equals(actor.getId())) {
@@ -348,6 +411,11 @@ public class FiscalArchiveService {
         if (password == null || password.length == 0) {
             throw new IllegalArgumentException("Archive password is required.");
         }
+    }
+
+    private long recordCount(FiscalArchiveRegistry registry) {
+        return registry.getOfferingCount() + registry.getLinkedIncomeCount()
+            + registry.getExpenseCount() + registry.getBudgetCount();
     }
 
     DateRange range(int fiscalYear) {

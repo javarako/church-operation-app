@@ -28,15 +28,19 @@ Church information is configured in `backend/src/main/resources/application.yml`
 - `CHURCH_ADDRESS`
 - `CHURCH_CONTACT_INFO`
 - `CHURCH_TREASURER_NAME`
+- `CHURCH_CHARITY_REGISTRATION_NUMBER`
+- `CHURCH_RECEIPT_ISSUE_LOCATION`
+- `CHURCH_WEBSITE`
+
+Copy `.env.example` to `.env` for local Docker configuration. The example also documents the fiscal-year start month, list page size, member-image limit, and the maximum encrypted backup upload size. Do not commit `.env`, SMTP credentials, or backup/archive passwords.
+
+Full backup and restore operations use the `church-temp` Docker volume at `/var/lib/church-operation/temp`. It is temporary working space only, not a backup destination. Downloaded backup files must be retained separately by the church. Completed and expired operations clean their temporary files; the volume can also be removed when the application is fully stopped and no restore is pending.
 
 Branding assets are served from `backend/src/main/resources/static/branding`.
 
 ## Password reset email
 
-Local Docker runs include Mailpit. Password reset messages are captured at
-`http://localhost:8025` and are not delivered outside the local machine.
-
-For production delivery through Brevo, configure these environment variables
+For delivery through Brevo or another SMTP provider, configure these environment variables
 without committing the SMTP credentials:
 
 ```text

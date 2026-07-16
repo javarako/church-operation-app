@@ -7,6 +7,7 @@ import com.church.operation.exception.DeletionBlockedException;
 import com.church.operation.repo.ReferenceDataRepository;
 import com.church.operation.util.ReferenceDataType;
 import com.church.operation.util.Role;
+import com.church.operation.util.SystemAuditOperation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.when;
 class ReferenceDataDeletionServiceTest {
     @Mock private ReferenceDataRepository referenceDataRepository;
     @Mock private MongoTemplate mongoTemplate;
+    @Mock private SystemAuditService audit;
 
     @Test
     void deletesUnusedReferenceData() {
@@ -37,6 +39,9 @@ class ReferenceDataDeletionServiceTest {
         service().delete(actor, "ref-id");
 
         verify(referenceDataRepository).delete(reference);
+        verify(audit).recordSuccess(
+            eq(actor), eq(SystemAuditOperation.REFERENCE_DATA_DELETE), any(java.util.Map.class)
+        );
     }
 
     @Test
@@ -45,9 +50,14 @@ class ReferenceDataDeletionServiceTest {
         when(referenceDataRepository.findById("ref-id")).thenReturn(Optional.of(reference));
         when(mongoTemplate.exists(any(Query.class), eq(Member.class))).thenReturn(true);
 
-        assertThatThrownBy(() -> service().delete(actor(Role.MEMBERSHIP), "ref-id"))
+        Member actor = actor(Role.MEMBERSHIP);
+        assertThatThrownBy(() -> service().delete(actor, "ref-id"))
             .isInstanceOf(DeletionBlockedException.class)
             .hasMessageContaining("member");
+        verify(audit).recordFailure(
+            eq(actor), eq(SystemAuditOperation.REFERENCE_DATA_DELETE), any(java.util.Map.class),
+            any(DeletionBlockedException.class)
+        );
     }
 
     @Test
@@ -75,7 +85,7 @@ class ReferenceDataDeletionServiceTest {
     }
 
     private ReferenceDataDeletionService service() {
-        return new ReferenceDataDeletionService(referenceDataRepository, mongoTemplate);
+        return new ReferenceDataDeletionService(referenceDataRepository, mongoTemplate, audit);
     }
 
     private Member actor(Role role) {

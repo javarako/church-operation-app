@@ -8,6 +8,7 @@ import com.church.operation.exception.DeletionBlockedException;
 import com.church.operation.repo.MemberRepository;
 import com.church.operation.repo.PasswordResetTokenRepository;
 import com.church.operation.util.Role;
+import com.church.operation.util.SystemAuditOperation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,6 +31,7 @@ class MemberDeletionServiceTest {
     @Mock private PasswordResetTokenRepository tokenRepository;
     @Mock private MemberImageService memberImageService;
     @Mock private MongoTemplate mongoTemplate;
+    @Mock private SystemAuditService audit;
 
     @Test
     void deletesAnUnreferencedMemberAndRelatedCredentials() {
@@ -44,6 +46,9 @@ class MemberDeletionServiceTest {
         verify(memberImageService).remove(actor, "member-id");
         verify(tokenRepository).deleteByMemberEmail("member@example.com");
         verify(memberRepository).delete(target);
+        verify(audit).recordSuccess(
+            eq(actor), eq(SystemAuditOperation.MEMBER_DELETE), any(java.util.Map.class)
+        );
     }
 
     @Test
@@ -54,6 +59,10 @@ class MemberDeletionServiceTest {
         assertThatThrownBy(() -> service().delete(actor, "member-id"))
             .isInstanceOf(DeletionBlockedException.class)
             .hasMessageContaining("signed-in member");
+        verify(audit).recordFailure(
+            eq(actor), eq(SystemAuditOperation.MEMBER_DELETE), any(java.util.Map.class),
+            any(DeletionBlockedException.class)
+        );
     }
 
     @Test
@@ -93,7 +102,7 @@ class MemberDeletionServiceTest {
     }
 
     private MemberDeletionService service() {
-        return new MemberDeletionService(memberRepository, tokenRepository, memberImageService, mongoTemplate);
+        return new MemberDeletionService(memberRepository, tokenRepository, memberImageService, mongoTemplate, audit);
     }
 
     private Member member(String id, String email, Role role) {

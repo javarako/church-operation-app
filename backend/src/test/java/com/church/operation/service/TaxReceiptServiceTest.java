@@ -13,6 +13,7 @@ import com.church.operation.repo.TaxReceiptRepository;
 import com.church.operation.util.GivingType;
 import com.church.operation.util.Role;
 import com.church.operation.util.TaxReceiptStatus;
+import com.church.operation.util.SystemAuditOperation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,7 @@ class TaxReceiptServiceTest {
     @Mock private MemberRepository memberRepository;
     @Mock private TaxReceiptRepository receiptRepository;
     @Mock private TaxReceiptCounterService counterService;
+    @Mock private SystemAuditService audit;
     private TaxReceiptService service;
 
     @BeforeEach
@@ -61,6 +63,7 @@ class TaxReceiptServiceTest {
             receiptRepository,
             counterService,
             properties,
+            audit,
             Clock.fixed(Instant.parse("2027-02-15T15:00:00Z"), ZoneOffset.UTC)
         );
     }
@@ -134,7 +137,8 @@ class TaxReceiptServiceTest {
         when(receiptRepository.save(org.mockito.ArgumentMatchers.any(TaxReceipt.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        TaxReceipt receipt = service.issue(treasurer(), 2026, "1001", DEFAULT_NOTE);
+        Member actor = treasurer();
+        TaxReceipt receipt = service.issue(actor, 2026, "1001", DEFAULT_NOTE);
 
         assertThat(receipt.getReceiptNumber()).isEqualTo("2026-000001");
         assertThat(receipt.getDonorName()).isEqualTo("Ada Wong");
@@ -147,6 +151,11 @@ class TaxReceiptServiceTest {
         assertThat(receipt.getSourceOfferingIds()).containsExactly("o1", "o2");
         assertThat(receipt.getSourceChecksum()).isNotBlank();
         assertThat(receipt.getThankYouNote()).isEqualTo(DEFAULT_NOTE);
+        verify(audit).recordSuccess(
+            org.mockito.ArgumentMatchers.eq(actor),
+            org.mockito.ArgumentMatchers.eq(SystemAuditOperation.TAX_RECEIPT_ISSUE),
+            org.mockito.ArgumentMatchers.anyMap()
+        );
     }
 
     @Test

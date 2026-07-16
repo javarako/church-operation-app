@@ -7,6 +7,7 @@ import com.church.operation.dto.DataOperationResponse;
 import com.church.operation.entity.Member;
 import com.church.operation.util.DataOperationStatus;
 import com.church.operation.util.Role;
+import com.church.operation.util.SystemAuditOperation;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -15,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -27,6 +29,7 @@ public class DataManagementService {
     private final DataOperationStore operationStore;
     private final MaintenanceModeService maintenanceMode;
     private final DataManagementProperties properties;
+    private final SystemAuditService audit;
     private final Clock clock;
 
     @Autowired
@@ -36,7 +39,8 @@ public class DataManagementService {
         AuthTokenService authTokenService,
         DataOperationStore operationStore,
         MaintenanceModeService maintenanceMode,
-        DataManagementProperties properties
+        DataManagementProperties properties,
+        SystemAuditService audit
     ) {
         this(
             exporter,
@@ -63,6 +67,7 @@ public class DataManagementService {
             operationStore,
             maintenanceMode,
             properties,
+            audit,
             Clock.systemUTC()
         );
     }
@@ -74,6 +79,7 @@ public class DataManagementService {
         DataOperationStore operationStore,
         MaintenanceModeService maintenanceMode,
         DataManagementProperties properties,
+        SystemAuditService audit,
         Clock clock
     ) {
         this.exporter = exporter;
@@ -82,15 +88,16 @@ public class DataManagementService {
         this.operationStore = operationStore;
         this.maintenanceMode = maintenanceMode;
         this.properties = properties;
+        this.audit = audit;
         this.clock = clock;
     }
 
     public DataOperationResponse validateRestore(Member actor, Path uploadedArchive, char[] password) throws IOException {
-        requireAdmin(actor);
-        requirePassword(password);
-        Objects.requireNonNull(uploadedArchive, "Uploaded archive is required.");
         RestoreSession validated = null;
         try {
+            requireAdmin(actor);
+            requirePassword(password);
+            Objects.requireNonNull(uploadedArchive, "Uploaded archive is required.");
             validated = restoreValidator.validate(uploadedArchive, password);
             ArchiveManifest manifest = validated.manifest();
             long collections = manifest.collections().stream()
@@ -105,9 +112,13 @@ public class DataManagementService {
                 .filter(entry -> entry.entryName().endsWith("/indexes.bson"))
                 .mapToLong(ArchiveCollectionManifest::documentCount)
                 .sum();
-            return operationStore.create(
+            DataOperationResponse response = operationStore.create(
                 actor.getId(), uploadedArchive, validated, collections, documents, indexes
             ).response();
+            audit.recordSuccess(actor, SystemAuditOperation.FULL_RESTORE_VALIDATE, Map.of(
+                "operationId", response.id(), "recordCount", documents
+            ));
+            return response;
         } catch (IOException | RuntimeException | Error exception) {
             if (validated != null) {
                 try {
@@ -116,6 +127,7 @@ public class DataManagementService {
                     exception.addSuppressed(closeFailure);
                 }
             }
+            audit.recordFailure(actor, SystemAuditOperation.FULL_RESTORE_VALIDATE, Map.of(), exception);
             throw exception;
         } finally {
             clear(password);
@@ -123,24 +135,61 @@ public class DataManagementService {
     }
 
     public DownloadArtifact createFullBackup(Member actor, char[] password) throws IOException {
-        requireAdmin(actor);
-        return export(password, "church-full-backup-" + clock.instant().toString().replace(':', '-') + ".zip");
+        try {
+            requireAdmin(actor);
+            DownloadArtifact artifact = export(
+                password, "church-full-backup-" + clock.instant().toString().replace(':', '-') + ".zip"
+            );
+            audit.recordSuccess(actor, SystemAuditOperation.FULL_BACKUP, Map.of());
+            return artifact;
+        } catch (IOException | RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.FULL_BACKUP, Map.of(), exception);
+            throw exception;
+        } finally {
+            clear(password);
+        }
     }
 
     public DownloadArtifact createSafetyBackup(Member actor, String operationId, char[] password) throws IOException {
-        requireAdmin(actor);
-        DataOperationStore.Operation operation = operationStore.require(operationId, actor.getId());
-        if (operation.status() != DataOperationStatus.VALIDATED) {
+        Map<String, ?> metadata = operationId == null ? Map.of() : Map.of("operationId", operationId);
+        try {
+            requireAdmin(actor);
+            DataOperationStore.Operation operation = operationStore.require(operationId, actor.getId());
+            if (operation.status() != DataOperationStatus.VALIDATED) {
+                throw new IllegalStateException("Safety backup is not available in the current operation state.");
+            }
+            DownloadArtifact artifact = export(password, "pre-restore-safety-backup.zip");
+            operation.status(DataOperationStatus.SAFETY_BACKUP_DOWNLOADED);
+            operation.message("Safety backup generated. Verify the downloaded file before restoring.");
+            audit.recordSuccess(actor, SystemAuditOperation.FULL_RESTORE_SAFETY_BACKUP, metadata);
+            return artifact;
+        } catch (IOException | RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.FULL_RESTORE_SAFETY_BACKUP, metadata, exception);
+            throw exception;
+        } finally {
             clear(password);
-            throw new IllegalStateException("Safety backup is not available in the current operation state.");
         }
-        DownloadArtifact artifact = export(password, "pre-restore-safety-backup.zip");
-        operation.status(DataOperationStatus.SAFETY_BACKUP_DOWNLOADED);
-        operation.message("Safety backup generated. Verify the downloaded file before restoring.");
-        return artifact;
     }
 
     public DataOperationResponse executeRestore(Member actor, String operationId, String confirmation) throws IOException {
+        Map<String, ?> metadata = operationId == null ? Map.of() : Map.of("operationId", operationId);
+        try {
+            DataOperationResponse response = executeRestoreOperation(actor, operationId, confirmation);
+            audit.recordSuccess(actor, SystemAuditOperation.FULL_RESTORE_EXECUTE, Map.of(
+                "operationId", operationId, "recordCount", response.documentCount()
+            ));
+            return response;
+        } catch (IOException | RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.FULL_RESTORE_EXECUTE, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private DataOperationResponse executeRestoreOperation(
+        Member actor,
+        String operationId,
+        String confirmation
+    ) throws IOException {
         requireAdmin(actor);
         if (!RESTORE_CONFIRMATION.equals(confirmation)) {
             throw new IllegalArgumentException("The restore confirmation phrase does not match.");

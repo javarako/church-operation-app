@@ -7,6 +7,7 @@ import com.church.operation.entity.Member;
 import com.church.operation.util.ArchiveType;
 import com.church.operation.util.DataOperationStatus;
 import com.church.operation.util.Role;
+import com.church.operation.util.SystemAuditOperation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,6 +25,8 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -40,6 +43,7 @@ class DataManagementServiceTest {
     private final AuthTokenService authTokenService = mock(AuthTokenService.class);
     private final DataManagementService.RestoreSession restoreSession =
         mock(DataManagementService.RestoreSession.class);
+    private final SystemAuditService audit = mock(SystemAuditService.class);
     private DataOperationStore store;
     private MaintenanceModeService maintenanceMode;
     private DataManagementService service;
@@ -55,7 +59,7 @@ class DataManagementServiceTest {
         maintenanceMode = new MaintenanceModeService();
         service = new DataManagementService(
             exporter, (archive, password) -> restoreSession,
-            authTokenService, store, maintenanceMode, properties, clock
+            authTokenService, store, maintenanceMode, properties, audit, clock
         );
         admin = member("admin-1", Role.ADMIN);
 
@@ -98,6 +102,9 @@ class DataManagementServiceTest {
         assertThat(completed.documentCount()).isEqualTo(25);
         assertThat(maintenanceMode.isActive()).isFalse();
         verify(authTokenService).revokeAll();
+        verify(audit).recordSuccess(eq(admin), eq(SystemAuditOperation.FULL_RESTORE_VALIDATE), anyMap());
+        verify(audit).recordSuccess(eq(admin), eq(SystemAuditOperation.FULL_RESTORE_SAFETY_BACKUP), anyMap());
+        verify(audit).recordSuccess(eq(admin), eq(SystemAuditOperation.FULL_RESTORE_EXECUTE), anyMap());
     }
 
     @Test
@@ -135,6 +142,12 @@ class DataManagementServiceTest {
         assertThat(service.status(admin, operation.id()).status())
             .isEqualTo(DataOperationStatus.FAILED_MAINTENANCE);
         verify(authTokenService, never()).revokeAll();
+        verify(audit).recordFailure(
+            org.mockito.ArgumentMatchers.eq(admin),
+            org.mockito.ArgumentMatchers.eq(SystemAuditOperation.FULL_RESTORE_EXECUTE),
+            anyMap(),
+            any(IllegalStateException.class)
+        );
     }
 
     private Member member(String id, Role role) {

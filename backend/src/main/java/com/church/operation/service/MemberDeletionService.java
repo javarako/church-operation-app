@@ -9,6 +9,7 @@ import com.church.operation.repo.MemberRepository;
 import com.church.operation.repo.PasswordResetTokenRepository;
 import com.church.operation.util.Role;
 import com.church.operation.util.FiscalArchiveStatus;
+import com.church.operation.util.SystemAuditOperation;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
 
 @Service
 public class MemberDeletionService {
@@ -24,20 +26,34 @@ public class MemberDeletionService {
     private final PasswordResetTokenRepository tokenRepository;
     private final MemberImageService memberImageService;
     private final MongoTemplate mongoTemplate;
+    private final SystemAuditService audit;
 
     public MemberDeletionService(
         MemberRepository memberRepository,
         PasswordResetTokenRepository tokenRepository,
         MemberImageService memberImageService,
-        MongoTemplate mongoTemplate
+        MongoTemplate mongoTemplate,
+        SystemAuditService audit
     ) {
         this.memberRepository = memberRepository;
         this.tokenRepository = tokenRepository;
         this.memberImageService = memberImageService;
         this.mongoTemplate = mongoTemplate;
+        this.audit = audit;
     }
 
     public void delete(Member actor, String id) {
+        Map<String, ?> metadata = id == null ? Map.of() : Map.of("memberId", id);
+        try {
+            deleteMember(actor, id);
+            audit.recordSuccess(actor, SystemAuditOperation.MEMBER_DELETE, metadata);
+        } catch (RuntimeException | Error exception) {
+            audit.recordFailure(actor, SystemAuditOperation.MEMBER_DELETE, metadata, exception);
+            throw exception;
+        }
+    }
+
+    private void deleteMember(Member actor, String id) {
         requireMembershipManager(actor);
         Member target = memberRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Member was not found."));

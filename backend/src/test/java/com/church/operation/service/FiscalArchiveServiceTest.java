@@ -44,6 +44,7 @@ class FiscalArchiveServiceTest {
     private final MemberRepository members = mock(MemberRepository.class);
     private final ReferenceDataRepository references = mock(ReferenceDataRepository.class);
     private final DataOperationStore operations = mock(DataOperationStore.class);
+    private final SystemAuditService audit = mock(SystemAuditService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2027-04-15T12:00:00Z"), ZoneOffset.UTC);
 
     @Test
@@ -331,7 +332,7 @@ class FiscalArchiveServiceTest {
     private FiscalArchiveService service(int startMonth, FiscalArchiveCodec codec) {
         return new FiscalArchiveService(
             offerings, transactions, budgets, registries, new FiscalYearProperties(startMonth),
-            members, references, operations, codec, tempDirectory, clock
+            members, references, operations, codec, audit, tempDirectory, clock
         );
     }
 
