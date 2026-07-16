@@ -2,6 +2,7 @@ package com.church.operation.service;
 
 import com.church.operation.entity.Member;
 import com.church.operation.entity.ReferenceData;
+import com.church.operation.entity.FiscalArchiveRegistry;
 import com.church.operation.exception.DeletionBlockedException;
 import com.church.operation.repo.ReferenceDataRepository;
 import com.church.operation.util.ReferenceDataType;
@@ -59,6 +60,18 @@ class ReferenceDataDeletionServiceTest {
         assertThatThrownBy(() -> service().delete(actor(Role.ADMIN), "ref-id"))
             .isInstanceOf(DeletionBlockedException.class)
             .hasMessageContaining("sub-categories");
+    }
+
+    @Test
+    void blocksDeletingAReferenceRequiredByACleanedFiscalArchive() {
+        ReferenceData reference = reference(ReferenceDataType.PAYMENT_METHOD, "CASH");
+        when(referenceDataRepository.findById("ref-id")).thenReturn(Optional.of(reference));
+        when(mongoTemplate.exists(any(Query.class), any(Class.class)))
+            .thenAnswer(invocation -> invocation.getArgument(1).equals(FiscalArchiveRegistry.class));
+
+        assertThatThrownBy(() -> service().delete(actor(Role.ADMIN), "ref-id"))
+            .isInstanceOf(DeletionBlockedException.class)
+            .hasMessageContaining("fiscal archive");
     }
 
     private ReferenceDataDeletionService service() {

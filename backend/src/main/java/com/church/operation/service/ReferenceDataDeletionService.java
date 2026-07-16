@@ -5,10 +5,12 @@ import com.church.operation.entity.FinancialTransaction;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.Offering;
 import com.church.operation.entity.ReferenceData;
+import com.church.operation.entity.FiscalArchiveRegistry;
 import com.church.operation.exception.DeletionBlockedException;
 import com.church.operation.repo.ReferenceDataRepository;
 import com.church.operation.util.ReferenceDataType;
 import com.church.operation.util.Role;
+import com.church.operation.util.FiscalArchiveStatus;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -62,6 +64,19 @@ public class ReferenceDataDeletionService {
                 addIfUsed(dependencies, FinancialTransaction.class, "subCategory", code, "financial transactions");
                 addIfUsed(dependencies, Budget.class, "subCategory", code, "budgets");
             }
+        }
+        String archiveField = switch (reference.getType()) {
+            case GROUP_CODE -> "groupCodes";
+            case MEMBERSHIP_STATUS -> "membershipStatuses";
+            case OFFERING_FUND_CATEGORY -> "fundCategories";
+            case PAYMENT_METHOD -> "paymentMethods";
+            case FINANCIAL_CATEGORY -> "categories";
+            case FINANCIAL_SUB_CATEGORY -> "subCategories";
+        };
+        Query archivedReference = Query.query(Criteria.where(archiveField).is(code)
+            .and("status").is(FiscalArchiveStatus.CLEANED));
+        if (mongoTemplate.exists(archivedReference, FiscalArchiveRegistry.class)) {
+            dependencies.add("a cleaned fiscal archive");
         }
         return dependencies;
     }

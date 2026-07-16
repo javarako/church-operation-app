@@ -16,3 +16,7 @@ Full Backup Task 3: complete (staged restore workflow, actor ownership, maintena
 Full Backup Task 4: complete (ADMIN full-backup and staged-restore APIs with streaming downloads and upload limits; 5 controller tests passing)
 Full Backup Task 5: complete (responsive System Administration backup/restore UI; 4 focused UI tests passing and production build successful)
 Full Backup Task 6: complete (202 backend tests and 51 frontend tests passing; disposable MongoDB round trip verified; Docker application healthy; encrypted live backup verified; desktop/mobile UI screenshots captured)
+Fiscal Archive Task 1: complete (fiscal preview, encrypted archive, download-gated cleanup, archive registry, and member/reference dependency protection)
+Fiscal Archive Task 2: complete (conflict-safe merge restore, dependency preflight, exact-ID restoration, compensation on failure, and shared data-mutation lock)
+Fiscal Archive Task 3: complete (responsive ADMIN Fiscal Archive workflow for archive/clean and restore, with explicit fiscal-year confirmation phrases)
+Fiscal Archive Task 4: complete (216 backend tests and 53 frontend tests passing; production frontend build successful; disposable MongoDB fiscal round trip verified; Docker application healthy; desktop/mobile UI screenshots captured with no overflow or console errors)

@@ -2,9 +2,13 @@ package com.church.operation.rest;
 
 import com.church.operation.config.DataManagementProperties;
 import com.church.operation.dto.DataOperationResponse;
+import com.church.operation.dto.FiscalArchivePreview;
+import com.church.operation.entity.FiscalArchiveRegistry;
 import com.church.operation.entity.Member;
 import com.church.operation.exception.GlobalExceptionHandler;
 import com.church.operation.service.DataManagementService;
+import com.church.operation.service.FiscalArchiveService;
+import com.church.operation.util.FiscalArchiveStatus;
 import com.church.operation.util.DataOperationStatus;
 import com.church.operation.util.DataOperationType;
 import com.church.operation.util.Role;
@@ -20,8 +24,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -41,6 +48,7 @@ class DataManagementControllerTest {
     Path tempDirectory;
 
     private final DataManagementService service = mock(DataManagementService.class);
+    private final FiscalArchiveService fiscalService = mock(FiscalArchiveService.class);
     private MockMvc mockMvc;
     private Member admin;
 
@@ -49,7 +57,7 @@ class DataManagementControllerTest {
         DataManagementProperties properties = new DataManagementProperties(
             tempDirectory, Duration.ofMinutes(30), DataSize.ofMegabytes(20)
         );
-        mockMvc = standaloneSetup(new DataManagementController(service, properties))
+        mockMvc = standaloneSetup(new DataManagementController(service, fiscalService, properties))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
         admin = member("admin-1", Role.ADMIN);
@@ -135,6 +143,67 @@ class DataManagementControllerTest {
                 .contentType("application/json")
                 .content("{}"))
             .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void previewsDownloadsAndCleansFiscalArchive() throws Exception {
+        when(fiscalService.preview(any(Member.class), org.mockito.ArgumentMatchers.eq(2026))).thenReturn(new FiscalArchivePreview(
+            2026, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), 2, 2, 1, 1, 6
+        ));
+        Path archive = Files.writeString(tempDirectory.resolve("fiscal.zip"), "fiscal-archive");
+        AtomicBoolean downloaded = new AtomicBoolean();
+        when(fiscalService.createArchive(any(Member.class), org.mockito.ArgumentMatchers.eq(2026), any(char[].class)))
+            .thenReturn(new FiscalArchiveService.DownloadArtifact(
+                archive, "church-fiscal-2026.zip", "archive-1", () -> downloaded.set(true)
+            ));
+        FiscalArchiveRegistry cleaned = new FiscalArchiveRegistry();
+        cleaned.setArchiveId("archive-1");
+        cleaned.setFiscalYear(2026);
+        cleaned.setStatus(FiscalArchiveStatus.CLEANED);
+        when(fiscalService.clean(any(Member.class), org.mockito.ArgumentMatchers.eq("archive-1"), anyString()))
+            .thenReturn(cleaned);
+
+        mockMvc.perform(get("/api/admin/data-management/fiscal/2026/preview")
+                .principal(authentication(admin)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalRecordCount").value(6));
+        mockMvc.perform(post("/api/admin/data-management/fiscal/2026/archive")
+                .principal(authentication(admin))
+                .contentType("application/json")
+                .content("{\"password\":\"archive password\"}"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Fiscal-Archive-Id", "archive-1"))
+            .andExpect(content().bytes("fiscal-archive".getBytes()));
+        assertThat(downloaded).isTrue();
+        mockMvc.perform(post("/api/admin/data-management/fiscal/archive-1/clean")
+                .principal(authentication(admin))
+                .contentType("application/json")
+                .content("{\"confirmation\":\"CLEAN FISCAL YEAR 2026\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CLEANED"));
+    }
+
+    @Test
+    void validatesAndExecutesFiscalRestore() throws Exception {
+        when(fiscalService.validateRestore(any(Member.class), any(Path.class), any(char[].class)))
+            .thenReturn(new FiscalArchiveService.RestorePreview("restore-1", "archive-1", 2026, 6, "VALIDATED"));
+        FiscalArchiveRegistry restored = new FiscalArchiveRegistry();
+        restored.setArchiveId("archive-1");
+        restored.setStatus(FiscalArchiveStatus.RESTORED);
+        when(fiscalService.executeRestore(any(Member.class), anyString(), anyString())).thenReturn(restored);
+
+        mockMvc.perform(multipart("/api/admin/data-management/fiscal/restore/validate")
+                .file(new MockMultipartFile("file", "fiscal.zip", "application/zip", new byte[] {1}))
+                .param("password", "archive password")
+                .principal(authentication(admin)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("VALIDATED"));
+        mockMvc.perform(post("/api/admin/data-management/fiscal/restore/restore-1/execute")
+                .principal(authentication(admin))
+                .contentType("application/json")
+                .content("{\"confirmation\":\"RESTORE FISCAL YEAR 2026\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("RESTORED"));
     }
 
     private DataOperationResponse operation(DataOperationStatus status) {

@@ -3,10 +3,12 @@ package com.church.operation.service;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.Offering;
 import com.church.operation.entity.TaxReceipt;
+import com.church.operation.entity.FiscalArchiveRegistry;
 import com.church.operation.exception.DeletionBlockedException;
 import com.church.operation.repo.MemberRepository;
 import com.church.operation.repo.PasswordResetTokenRepository;
 import com.church.operation.util.Role;
+import com.church.operation.util.FiscalArchiveStatus;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -54,6 +56,11 @@ public class MemberDeletionService {
         }
         if (mongoTemplate.exists(memberReference, TaxReceipt.class)) {
             dependencies.add("official tax receipts");
+        }
+        Query archivedMember = Query.query(Criteria.where("memberIds").is(id)
+            .and("status").is(FiscalArchiveStatus.CLEANED));
+        if (mongoTemplate.exists(archivedMember, FiscalArchiveRegistry.class)) {
+            dependencies.add("a cleaned fiscal archive");
         }
         if (!dependencies.isEmpty()) {
             throw new DeletionBlockedException(

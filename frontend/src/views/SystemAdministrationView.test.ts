@@ -6,6 +6,11 @@ import {
   downloadFullBackup,
   downloadSafetyBackup,
   executeFullRestore,
+  cleanFiscalArchive,
+  downloadFiscalArchive,
+  executeFiscalRestore,
+  getFiscalArchivePreview,
+  validateFiscalRestore,
   validateFullRestore,
 } from '../api/dataManagement';
 
@@ -21,12 +26,22 @@ vi.mock('../api/dataManagement', () => ({
   downloadSafetyBackup: vi.fn(),
   executeFullRestore: vi.fn(),
   getRestoreStatus: vi.fn(),
+  getFiscalArchivePreview: vi.fn(),
+  downloadFiscalArchive: vi.fn(),
+  cleanFiscalArchive: vi.fn(),
+  validateFiscalRestore: vi.fn(),
+  executeFiscalRestore: vi.fn(),
 }));
 
 const backupMock = vi.mocked(downloadFullBackup);
 const validateMock = vi.mocked(validateFullRestore);
 const safetyMock = vi.mocked(downloadSafetyBackup);
 const executeMock = vi.mocked(executeFullRestore);
+const fiscalPreviewMock = vi.mocked(getFiscalArchivePreview);
+const fiscalDownloadMock = vi.mocked(downloadFiscalArchive);
+const fiscalCleanMock = vi.mocked(cleanFiscalArchive);
+const fiscalValidateMock = vi.mocked(validateFiscalRestore);
+const fiscalExecuteMock = vi.mocked(executeFiscalRestore);
 
 const validatedOperation = {
   id: 'op-1',
@@ -52,6 +67,18 @@ describe('SystemAdministrationView', () => {
     validateMock.mockResolvedValue(validatedOperation);
     safetyMock.mockResolvedValue(new Blob(['safety'], { type: 'application/zip' }));
     executeMock.mockResolvedValue({ ...validatedOperation, status: 'COMPLETE', message: 'Restore completed.' });
+    fiscalPreviewMock.mockResolvedValue({
+      fiscalYear: 2026, startDate: '2026-01-01', endDate: '2026-12-31', offeringCount: 4,
+      linkedIncomeCount: 4, expenseCount: 2, budgetCount: 3, totalRecordCount: 13,
+    });
+    fiscalDownloadMock.mockResolvedValue({
+      blob: new Blob(['fiscal'], { type: 'application/zip' }), archiveId: 'archive-1',
+    });
+    fiscalCleanMock.mockResolvedValue({ archiveId: 'archive-1', fiscalYear: 2026, status: 'CLEANED' });
+    fiscalValidateMock.mockResolvedValue({
+      id: 'fiscal-restore-1', archiveId: 'archive-1', fiscalYear: 2026, totalRecordCount: 13, status: 'VALIDATED',
+    });
+    fiscalExecuteMock.mockResolvedValue({ archiveId: 'archive-1', fiscalYear: 2026, status: 'RESTORED' });
     URL.createObjectURL = vi.fn(() => 'blob:download');
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
@@ -133,5 +160,39 @@ describe('SystemAdministrationView', () => {
     expect(executeMock).toHaveBeenCalledWith('op-1', 'RESTORE FULL DATABASE');
     expect(authState.currentUser).toBeNull();
     expect(routerPush).toHaveBeenCalledWith('/login');
+  });
+
+  it('previews fiscal counts and gates cleanup behind the downloaded archive and exact phrase', async () => {
+    render(SystemAdministrationView);
+    await fireEvent.click(screen.getByRole('tab', { name: 'Fiscal Archive' }));
+    expect((await screen.findByLabelText('Fiscal archive preview')).textContent).toContain('13 total records');
+    expect(fiscalPreviewMock).toHaveBeenCalledWith(2026);
+
+    await fireEvent.update(screen.getByLabelText('Fiscal archive password'), 'fiscal password');
+    await fireEvent.update(screen.getByLabelText('Confirm fiscal archive password'), 'fiscal password');
+    await fireEvent.click(screen.getByRole('button', { name: 'Download fiscal archive' }));
+    expect(fiscalDownloadMock).toHaveBeenCalledWith(2026, 'fiscal password');
+
+    const cleanButton = screen.getByRole('button', { name: 'Clean archived fiscal data' }) as HTMLButtonElement;
+    expect(cleanButton.disabled).toBe(true);
+    await fireEvent.update(screen.getByLabelText('Fiscal cleanup confirmation'), 'CLEAN FISCAL YEAR 2026');
+    expect(cleanButton.disabled).toBe(false);
+    await fireEvent.click(cleanButton);
+    expect(fiscalCleanMock).toHaveBeenCalledWith('archive-1', 'CLEAN FISCAL YEAR 2026');
+  });
+
+  it('validates and restores a fiscal archive with the exact year phrase', async () => {
+    render(SystemAdministrationView);
+    await fireEvent.click(screen.getByRole('tab', { name: 'Fiscal Archive' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore Archive' }));
+    const file = new File(['zip'], 'fiscal.zip', { type: 'application/zip' });
+    await fireEvent.change(screen.getByLabelText('Fiscal archive ZIP file'), { target: { files: [file] } });
+    await fireEvent.update(screen.getByLabelText('Fiscal restore password'), 'fiscal password');
+    await fireEvent.click(screen.getByRole('button', { name: 'Validate fiscal archive' }));
+    await fireEvent.update(screen.getByLabelText('Fiscal restore confirmation'), 'RESTORE FISCAL YEAR 2026');
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore fiscal archive' }));
+
+    expect(fiscalValidateMock).toHaveBeenCalledWith(file, 'fiscal password');
+    expect(fiscalExecuteMock).toHaveBeenCalledWith('fiscal-restore-1', 'RESTORE FISCAL YEAR 2026');
   });
 });

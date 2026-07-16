@@ -580,6 +580,54 @@ tbody tr.read-only-row {
   width: min(520px, 100%);
 }
 
+.fiscal-mode-switch {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid #c8d0d9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.fiscal-mode-switch button {
+  min-height: 38px;
+  border: 0;
+  border-right: 1px solid #c8d0d9;
+  border-radius: 0;
+  padding: 0 14px;
+  background: white;
+  color: #52606d;
+}
+
+.fiscal-mode-switch button:last-child {
+  border-right: 0;
+}
+
+.fiscal-mode-switch button.active {
+  background: #087d8f;
+  color: white;
+  font-weight: 700;
+}
+
+.fiscal-year-field {
+  display: grid;
+  gap: 7px;
+  width: min(220px, 100%);
+  color: #344054;
+}
+
+.fiscal-year-field input {
+  min-height: 40px;
+  box-sizing: border-box;
+  border: 1px solid #c8d0d9;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.fiscal-summary {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 @media (max-width: 980px) {
   .layout,
   .two-column {

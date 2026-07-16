@@ -4,8 +4,11 @@ import com.church.operation.config.DataManagementProperties;
 import com.church.operation.dto.BackupRequest;
 import com.church.operation.dto.DataOperationResponse;
 import com.church.operation.dto.RestoreExecuteRequest;
+import com.church.operation.dto.FiscalArchivePreview;
+import com.church.operation.entity.FiscalArchiveRegistry;
 import com.church.operation.entity.Member;
 import com.church.operation.service.DataManagementService;
+import com.church.operation.service.FiscalArchiveService;
 import jakarta.validation.Valid;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -36,13 +39,16 @@ public class DataManagementController {
     private static final MediaType ZIP = MediaType.parseMediaType("application/zip");
 
     private final DataManagementService dataManagementService;
+    private final FiscalArchiveService fiscalArchiveService;
     private final DataManagementProperties properties;
 
     public DataManagementController(
         DataManagementService dataManagementService,
+        FiscalArchiveService fiscalArchiveService,
         DataManagementProperties properties
     ) {
         this.dataManagementService = dataManagementService;
+        this.fiscalArchiveService = fiscalArchiveService;
         this.properties = properties;
     }
 
@@ -112,6 +118,57 @@ public class DataManagementController {
         return dataManagementService.status(actor(authentication), id);
     }
 
+    @GetMapping("/fiscal/{year}/preview")
+    FiscalArchivePreview fiscalPreview(Authentication authentication, @PathVariable("year") int year) {
+        return fiscalArchiveService.preview(actor(authentication), year);
+    }
+
+    @PostMapping("/fiscal/{year}/archive")
+    ResponseEntity<Resource> fiscalArchive(
+        Authentication authentication,
+        @PathVariable("year") int year,
+        @Valid @RequestBody BackupRequest request
+    ) throws IOException {
+        FiscalArchiveService.DownloadArtifact artifact = fiscalArchiveService.createArchive(
+            actor(authentication), year, request.password().toCharArray()
+        );
+        return download(artifact);
+    }
+
+    @PostMapping("/fiscal/{id}/clean")
+    FiscalArchiveRegistry cleanFiscalArchive(
+        Authentication authentication,
+        @PathVariable("id") String id,
+        @Valid @RequestBody RestoreExecuteRequest request
+    ) {
+        return fiscalArchiveService.clean(actor(authentication), id, request.confirmation());
+    }
+
+    @PostMapping(path = "/fiscal/restore/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    FiscalArchiveService.RestorePreview validateFiscalRestore(Authentication authentication,
+        @RequestPart("file") MultipartFile file, @RequestParam("password") String password) throws IOException {
+        if (file == null || file.isEmpty() || password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Fiscal archive and password are required.");
+        }
+        if (file.getSize() > properties.maxUploadSize().toBytes()) {
+            throw new IllegalArgumentException("Fiscal archive exceeds the configured upload limit.");
+        }
+        Files.createDirectories(properties.tempDirectory());
+        Path staged = Files.createTempFile(properties.tempDirectory(), "fiscal-restore-", ".zip");
+        try {
+            file.transferTo(staged);
+            return fiscalArchiveService.validateRestore(actor(authentication), staged, password.toCharArray());
+        } finally {
+            Files.deleteIfExists(staged);
+        }
+    }
+
+    @PostMapping("/fiscal/restore/{id}/execute")
+    FiscalArchiveRegistry executeFiscalRestore(Authentication authentication, @PathVariable("id") String id,
+        @Valid @RequestBody RestoreExecuteRequest request) {
+        return fiscalArchiveService.executeRestore(actor(authentication), id, request.confirmation());
+    }
+
     private ResponseEntity<Resource> download(DataManagementService.DownloadArtifact artifact) throws IOException {
         long size = Files.size(artifact.path());
         InputStream stream = new FilterInputStream(Files.newInputStream(artifact.path())) {
@@ -133,6 +190,35 @@ public class DataManagementController {
         return ResponseEntity.ok()
             .contentType(ZIP)
             .contentLength(size)
+            .header(
+                HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition.attachment().filename(artifact.filename()).build().toString()
+            )
+            .body(resource);
+    }
+
+    private ResponseEntity<Resource> download(FiscalArchiveService.DownloadArtifact artifact) throws IOException {
+        long size = Files.size(artifact.path());
+        InputStream stream = new FilterInputStream(Files.newInputStream(artifact.path())) {
+            @Override
+            public void close() throws IOException {
+                try {
+                    super.close();
+                } finally {
+                    artifact.close();
+                }
+            }
+        };
+        Resource resource = new InputStreamResource(stream) {
+            @Override
+            public long contentLength() {
+                return size;
+            }
+        };
+        return ResponseEntity.ok()
+            .contentType(ZIP)
+            .contentLength(size)
+            .header("X-Fiscal-Archive-Id", artifact.archiveId())
             .header(
                 HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment().filename(artifact.filename()).build().toString()

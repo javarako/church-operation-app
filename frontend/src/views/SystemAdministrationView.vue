@@ -28,6 +28,16 @@
         <DatabaseZap :size="18" aria-hidden="true" />
         Full Restore
       </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'fiscal'"
+        :class="{ active: activeTab === 'fiscal' }"
+        @click="openFiscal"
+      >
+        <Archive :size="18" aria-hidden="true" />
+        Fiscal Archive
+      </button>
     </div>
 
     <p v-if="error" class="error administration-message" role="alert">{{ error }}</p>
@@ -64,7 +74,7 @@
       </div>
     </form>
 
-    <section v-else class="panel administration-form restore-workflow">
+    <section v-else-if="activeTab === 'restore'" class="panel administration-form restore-workflow">
       <header class="administration-section-header danger-heading">
         <div>
           <h3>Complete database restore</h3>
@@ -147,6 +157,102 @@
         </div>
       </section>
     </section>
+
+    <section v-else class="panel administration-form fiscal-workflow">
+      <header class="administration-section-header">
+        <div>
+          <h3>Fiscal-year archive</h3>
+          <p>Download selected fiscal records, clean them from the live database, or merge them back later.</p>
+        </div>
+        <Archive :size="26" aria-hidden="true" />
+      </header>
+
+      <div class="fiscal-mode-switch" aria-label="Fiscal archive mode">
+        <button type="button" :class="{ active: fiscalMode === 'archive' }" @click="fiscalMode = 'archive'">Archive &amp; Clean</button>
+        <button type="button" :class="{ active: fiscalMode === 'restore' }" @click="fiscalMode = 'restore'">Restore Archive</button>
+      </div>
+
+      <div v-if="fiscalMode === 'archive'" class="restore-workflow">
+        <section class="restore-step">
+          <div class="restore-step-number">1</div>
+          <div class="restore-step-content">
+            <h4>Review fiscal records</h4>
+            <label class="fiscal-year-field">
+              Fiscal year
+              <input v-model.number="fiscalYear" type="number" min="2000" max="2200" @change="loadFiscalPreview" />
+            </label>
+            <div v-if="fiscalPreview" class="validation-summary fiscal-summary" aria-label="Fiscal archive preview">
+              <span><strong>{{ fiscalPreview.offeringCount }}</strong> offerings</span>
+              <span><strong>{{ fiscalPreview.linkedIncomeCount }}</strong> linked income</span>
+              <span><strong>{{ fiscalPreview.expenseCount }}</strong> expenses</span>
+              <span><strong>{{ fiscalPreview.budgetCount }}</strong> budgets</span>
+              <span><strong>{{ fiscalPreview.totalRecordCount }}</strong> total records</span>
+              <small>{{ fiscalPreview.startDate }} to {{ fiscalPreview.endDate }}</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="restore-step">
+          <div class="restore-step-number">2</div>
+          <div class="restore-step-content">
+            <h4>Download encrypted archive</h4>
+            <div class="administration-fields">
+              <label>Fiscal archive password<input v-model="fiscalPassword" type="password" autocomplete="new-password" /></label>
+              <label>Confirm fiscal archive password<input v-model="fiscalPasswordConfirmation" type="password" autocomplete="new-password" /></label>
+            </div>
+            <button type="button" class="secondary-command" :disabled="busy || !fiscalPreview" @click="runFiscalArchive">
+              <Download :size="18" aria-hidden="true" /> Download fiscal archive
+            </button>
+            <span v-if="fiscalArchiveId" class="completion-mark"><CheckCircle2 :size="17" /> Fiscal archive downloaded</span>
+          </div>
+        </section>
+
+        <section class="restore-step destructive-step" :class="{ unavailable: !fiscalArchiveId }">
+          <div class="restore-step-number">3</div>
+          <div class="restore-step-content">
+            <h4>Clean archived records</h4>
+            <label class="confirmation-field">Fiscal cleanup confirmation
+              <input v-model="fiscalCleanConfirmation" :placeholder="fiscalCleanPhrase" :disabled="!fiscalArchiveId" />
+            </label>
+            <button type="button" class="danger-command" :disabled="busy || !canCleanFiscal" @click="runFiscalClean">
+              <DatabaseZap :size="18" aria-hidden="true" /> Clean archived fiscal data
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div v-else class="restore-workflow">
+        <section class="restore-step">
+          <div class="restore-step-number">1</div>
+          <div class="restore-step-content">
+            <h4>Validate fiscal archive</h4>
+            <div class="administration-fields">
+              <label>Fiscal archive ZIP file<input type="file" accept=".zip,application/zip" @change="selectFiscalRestoreFile" /></label>
+              <label>Fiscal restore password<input v-model="fiscalRestorePassword" type="password" autocomplete="off" /></label>
+            </div>
+            <button type="button" class="secondary-command" :disabled="busy || !fiscalRestoreFile" @click="runFiscalValidation">
+              <FileCheck2 :size="18" aria-hidden="true" /> Validate fiscal archive
+            </button>
+            <div v-if="fiscalRestoreOperation" class="validation-summary">
+              <span><strong>{{ fiscalRestoreOperation.totalRecordCount }}</strong> records</span>
+              <span><strong>{{ fiscalRestoreOperation.fiscalYear }}</strong> fiscal year</span>
+            </div>
+          </div>
+        </section>
+        <section class="restore-step destructive-step" :class="{ unavailable: !fiscalRestoreOperation }">
+          <div class="restore-step-number">2</div>
+          <div class="restore-step-content">
+            <h4>Merge archive into live data</h4>
+            <label class="confirmation-field">Fiscal restore confirmation
+              <input v-model="fiscalRestoreConfirmation" :placeholder="fiscalRestorePhrase" :disabled="!fiscalRestoreOperation" />
+            </label>
+            <button type="button" class="danger-command" :disabled="busy || !canRestoreFiscal" @click="runFiscalRestore">
+              <ArchiveRestore :size="18" aria-hidden="true" /> Restore fiscal archive
+            </button>
+          </div>
+        </section>
+      </div>
+    </section>
   </section>
 </template>
 
@@ -154,6 +260,8 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
+  Archive,
+  ArchiveRestore,
   CheckCircle2,
   DatabaseBackup,
   DatabaseZap,
@@ -169,10 +277,17 @@ import {
   executeFullRestore,
   validateFullRestore,
   type DataOperationResponse,
+  cleanFiscalArchive,
+  downloadFiscalArchive,
+  executeFiscalRestore,
+  getFiscalArchivePreview,
+  validateFiscalRestore,
+  type FiscalArchivePreview,
+  type FiscalRestorePreview,
 } from '../api/dataManagement';
 
 const router = useRouter();
-const activeTab = ref<'backup' | 'restore'>('backup');
+const activeTab = ref<'backup' | 'restore' | 'fiscal'>('backup');
 const busy = ref(false);
 const error = ref('');
 const success = ref('');
@@ -189,9 +304,27 @@ const safetyConfirmation = ref('');
 const safetyDownloaded = ref(false);
 const restoreConfirmation = ref('');
 
+const fiscalMode = ref<'archive' | 'restore'>('archive');
+const fiscalYear = ref(new Date().getFullYear());
+const fiscalPreview = ref<FiscalArchivePreview | null>(null);
+const fiscalPassword = ref('');
+const fiscalPasswordConfirmation = ref('');
+const fiscalArchiveId = ref('');
+const fiscalCleanConfirmation = ref('');
+const fiscalRestoreFile = ref<File | null>(null);
+const fiscalRestorePassword = ref('');
+const fiscalRestoreOperation = ref<FiscalRestorePreview | null>(null);
+const fiscalRestoreConfirmation = ref('');
+
 const canExecuteRestore = computed(() =>
   safetyDownloaded.value && restoreConfirmation.value === 'RESTORE FULL DATABASE',
 );
+const fiscalCleanPhrase = computed(() => `CLEAN FISCAL YEAR ${fiscalYear.value}`);
+const canCleanFiscal = computed(() => !!fiscalArchiveId.value && fiscalCleanConfirmation.value === fiscalCleanPhrase.value);
+const fiscalRestorePhrase = computed(() => fiscalRestoreOperation.value
+  ? `RESTORE FISCAL YEAR ${fiscalRestoreOperation.value.fiscalYear}` : 'RESTORE FISCAL YEAR');
+const canRestoreFiscal = computed(() => !!fiscalRestoreOperation.value
+  && fiscalRestoreConfirmation.value === fiscalRestorePhrase.value);
 
 async function runBackup() {
   clearMessages();
@@ -284,6 +417,101 @@ async function runRestore() {
     error.value = message(reason, 'Restore failed. The application remains in maintenance mode.');
   } finally {
     restoreConfirmation.value = '';
+    busy.value = false;
+  }
+}
+
+async function openFiscal() {
+  activeTab.value = 'fiscal';
+  await loadFiscalPreview();
+}
+
+async function loadFiscalPreview() {
+  clearMessages();
+  fiscalArchiveId.value = '';
+  fiscalCleanConfirmation.value = '';
+  try {
+    fiscalPreview.value = await getFiscalArchivePreview(fiscalYear.value);
+  } catch (reason) {
+    error.value = message(reason, 'Could not load the fiscal archive preview.');
+  }
+}
+
+async function runFiscalArchive() {
+  clearMessages();
+  if (!fiscalPassword.value || fiscalPassword.value !== fiscalPasswordConfirmation.value) {
+    error.value = fiscalPassword.value ? 'Fiscal archive passwords must match.' : 'Fiscal archive password is required.';
+    return;
+  }
+  busy.value = true;
+  try {
+    const result = await downloadFiscalArchive(fiscalYear.value, fiscalPassword.value);
+    downloadBlob(result.blob, `church-fiscal-${fiscalYear.value}.zip`);
+    fiscalArchiveId.value = result.archiveId;
+    success.value = 'Fiscal archive downloaded. Verify the file before cleaning records.';
+  } catch (reason) {
+    error.value = message(reason, 'Could not create the fiscal archive.');
+  } finally {
+    fiscalPassword.value = '';
+    fiscalPasswordConfirmation.value = '';
+    busy.value = false;
+  }
+}
+
+async function runFiscalClean() {
+  if (!canCleanFiscal.value) return;
+  clearMessages();
+  busy.value = true;
+  try {
+    await cleanFiscalArchive(fiscalArchiveId.value, fiscalCleanConfirmation.value);
+    fiscalCleanConfirmation.value = '';
+    fiscalArchiveId.value = '';
+    await loadFiscalPreview();
+    success.value = `Fiscal year ${fiscalYear.value} records were archived and cleaned.`;
+  } catch (reason) {
+    error.value = message(reason, 'Could not clean the archived fiscal records.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+function selectFiscalRestoreFile(event: Event) {
+  fiscalRestoreFile.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+  fiscalRestoreOperation.value = null;
+  fiscalRestoreConfirmation.value = '';
+}
+
+async function runFiscalValidation() {
+  clearMessages();
+  if (!fiscalRestoreFile.value || !fiscalRestorePassword.value) {
+    error.value = 'Choose a fiscal archive ZIP file and enter its password.';
+    return;
+  }
+  busy.value = true;
+  try {
+    fiscalRestoreOperation.value = await validateFiscalRestore(fiscalRestoreFile.value, fiscalRestorePassword.value);
+    success.value = 'Fiscal archive validated with no conflicts.';
+  } catch (reason) {
+    error.value = message(reason, 'Could not validate the fiscal archive.');
+  } finally {
+    fiscalRestorePassword.value = '';
+    busy.value = false;
+  }
+}
+
+async function runFiscalRestore() {
+  if (!fiscalRestoreOperation.value || !canRestoreFiscal.value) return;
+  clearMessages();
+  busy.value = true;
+  try {
+    await executeFiscalRestore(fiscalRestoreOperation.value.id, fiscalRestoreConfirmation.value);
+    success.value = `Fiscal year ${fiscalRestoreOperation.value.fiscalYear} was restored.`;
+    fiscalRestoreOperation.value = null;
+    fiscalRestoreFile.value = null;
+    fiscalRestoreConfirmation.value = '';
+  } catch (reason) {
+    error.value = message(reason, 'Could not restore the fiscal archive.');
+  } finally {
     busy.value = false;
   }
 }

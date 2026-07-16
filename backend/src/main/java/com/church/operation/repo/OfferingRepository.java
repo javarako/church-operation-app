@@ -21,4 +21,7 @@ public interface OfferingRepository extends MongoRepository<Offering, String> {
         LocalDate start,
         LocalDate end
     );
+
+    @Query(value = "{ 'offeringDate' : { $gte : ?0, $lte : ?1 } }", sort = "{ 'offeringDate' : 1, '_id' : 1 }")
+    List<Offering> findAllByOfferingDateBetween(LocalDate start, LocalDate end);
 }

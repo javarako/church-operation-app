@@ -1,6 +1,7 @@
 package com.church.operation.service;
 
 import com.church.operation.entity.Member;
+import com.church.operation.entity.FiscalArchiveRegistry;
 import com.church.operation.entity.Offering;
 import com.church.operation.entity.TaxReceipt;
 import com.church.operation.exception.DeletionBlockedException;
@@ -76,6 +77,19 @@ class MemberDeletionServiceTest {
         assertThatThrownBy(() -> service().delete(actor, "member-id"))
             .isInstanceOf(DeletionBlockedException.class)
             .hasMessageContaining("offering");
+    }
+
+    @Test
+    void blocksDeletingAMemberRequiredByACleanedFiscalArchive() {
+        Member actor = member("manager-id", "manager@example.com", Role.MEMBERSHIP);
+        Member target = member("member-id", "member@example.com", Role.MEMBER);
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(target));
+        when(mongoTemplate.exists(any(Query.class), any(Class.class)))
+            .thenAnswer(invocation -> invocation.getArgument(1).equals(FiscalArchiveRegistry.class));
+
+        assertThatThrownBy(() -> service().delete(actor, "member-id"))
+            .isInstanceOf(DeletionBlockedException.class)
+            .hasMessageContaining("fiscal archive");
     }
 
     private MemberDeletionService service() {

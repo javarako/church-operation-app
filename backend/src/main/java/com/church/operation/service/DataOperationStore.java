@@ -84,6 +84,20 @@ public class DataOperationStore {
         operation.message(message);
     }
 
+    public synchronized void beginExternalMutation(String id) {
+        expireOperations();
+        if (activeMutationId != null && !activeMutationId.equals(id)) {
+            throw new IllegalStateException("Another data-management operation is already active.");
+        }
+        activeMutationId = id;
+    }
+
+    public synchronized void endExternalMutation(String id) {
+        if (id != null && id.equals(activeMutationId)) {
+            activeMutationId = null;
+        }
+    }
+
     private void release(Operation operation) {
         if (operation.id().equals(activeMutationId)) {
             activeMutationId = null;
