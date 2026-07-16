@@ -14,6 +14,10 @@ spring:
     properties:
       mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
       mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:false}
+  servlet:
+    multipart:
+      max-file-size: ${CHURCH_DATA_MAX_UPLOAD_SIZE:2GB}
+      max-request-size: ${CHURCH_DATA_MAX_UPLOAD_SIZE:2GB}
 
 server:
   port: 8080

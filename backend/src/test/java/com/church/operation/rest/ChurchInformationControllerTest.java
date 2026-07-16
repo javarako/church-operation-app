@@ -3,6 +3,7 @@ package com.church.operation.rest;
 import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.entity.Member;
 import com.church.operation.service.AuthTokenService;
+import com.church.operation.service.MaintenanceModeService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -56,6 +57,11 @@ class ChurchInformationControllerTest {
                     return Optional.empty();
                 }
             };
+        }
+
+        @Bean
+        MaintenanceModeService maintenanceModeService() {
+            return new MaintenanceModeService();
         }
     }
 }

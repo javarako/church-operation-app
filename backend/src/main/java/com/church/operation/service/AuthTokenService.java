@@ -42,4 +42,8 @@ public class AuthTokenService {
         String normalized = primaryEmail.trim().toLowerCase();
         tokenToPrimaryEmail.entrySet().removeIf(entry -> entry.getValue().equalsIgnoreCase(normalized));
     }
+
+    public void revokeAll() {
+        tokenToPrimaryEmail.clear();
+    }
 }

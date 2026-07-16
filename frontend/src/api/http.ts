@@ -44,6 +44,13 @@ export async function postBlob<TRequest>(path: string, body: TRequest): Promise<
   return response.blob();
 }
 
+export async function postMultipartJson<TResponse>(path: string, formData: FormData): Promise<TResponse> {
+  return requestJson<TResponse>(path, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
 export async function putFile<TResponse>(path: string, field: string, file: File): Promise<TResponse> {
   const formData = new FormData();
   formData.append(field, file);

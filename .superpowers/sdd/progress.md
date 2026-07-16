@@ -12,3 +12,7 @@ Reports V1 Task 4: complete (commits a90e700..217aa14, review approved after rol
 Reports V1 Task 5: complete (commits 217aa14..3f11a1f, review approved after date/export-test fixes)
 Full Backup Task 1: complete (commits dbf427d..ef50c2a, review approved; 32 focused tests passing)
 Full Backup Task 2: complete (commits ef50c2a..b7f5a81, review approved; 80 focused and 182 full backend tests passing)
+Full Backup Task 3: complete (staged restore workflow, actor ownership, maintenance mode, safety-backup gate, token revocation, and failure lockout; 5 focused tests passing)
+Full Backup Task 4: complete (ADMIN full-backup and staged-restore APIs with streaming downloads and upload limits; 5 controller tests passing)
+Full Backup Task 5: complete (responsive System Administration backup/restore UI; 4 focused UI tests passing and production build successful)
+Full Backup Task 6: complete (202 backend tests and 51 frontend tests passing; disposable MongoDB round trip verified; Docker application healthy; encrypted live backup verified; desktop/mobile UI screenshots captured)

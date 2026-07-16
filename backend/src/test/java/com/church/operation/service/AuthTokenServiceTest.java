@@ -31,6 +31,17 @@ class AuthTokenServiceTest {
         assertThat(service.findMember(second)).isEmpty();
     }
 
+    @Test
+    void revokingAllRemovesTokensForEveryMemberAfterDatabaseRestore() {
+        String first = service.issueToken(activeMember("first@example.com"));
+        String second = service.issueToken(activeMember("second@example.com"));
+
+        service.revokeAll();
+
+        assertThat(service.findMember(first)).isEmpty();
+        assertThat(service.findMember(second)).isEmpty();
+    }
+
     private Member activeMember(String primaryEmail) {
         Member member = new Member();
         member.setPrimaryEmail(primaryEmail);
