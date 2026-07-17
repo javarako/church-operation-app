@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import ReferenceDataView from './ReferenceDataView.vue';
 import {
   createReferenceData,
@@ -101,5 +101,67 @@ describe('ReferenceDataView', () => {
     await fireEvent.update(screen.getByLabelText('Type'), 'FINANCIAL_SUB_CATEGORY');
 
     expect(await screen.findByRole('option', { name: 'Ministry' })).toBeTruthy();
+  });
+
+  it('displays parent labels for child reference data rows', async () => {
+    listAllMock.mockImplementation(async (type) => {
+      if (type === 'OFFERING_FUND') {
+        return [{
+          id: 'fund-general',
+          type,
+          code: 'GENERAL',
+          label: 'General Fund',
+          sortOrder: 10,
+          active: true,
+        }];
+      }
+      if (type === 'OFFERING_CATEGORY') {
+        return [{
+          id: 'category-tithe',
+          type,
+          code: 'TITHE',
+          label: 'Tithe',
+          parentCode: 'GENERAL',
+          sortOrder: 10,
+          active: true,
+        }];
+      }
+      if (type === 'FINANCIAL_CATEGORY') {
+        return [{
+          id: 'category-admin',
+          type,
+          code: 'ADMIN',
+          label: 'Administration',
+          sortOrder: 10,
+          active: true,
+        }];
+      }
+      if (type === 'FINANCIAL_SUB_CATEGORY') {
+        return [{
+          id: 'subcategory-office',
+          type,
+          code: 'OFFICE',
+          label: 'Office Supplies',
+          parentCode: 'ADMIN',
+          sortOrder: 10,
+          active: true,
+        }];
+      }
+      return [];
+    });
+    render(ReferenceDataView);
+
+    const listTypeSelector = screen.getAllByRole('combobox')[0];
+    await fireEvent.update(listTypeSelector, 'OFFERING_CATEGORY');
+    const offeringRow = (await screen.findByText('Tithe')).closest('tr');
+    expect(offeringRow).not.toBeNull();
+    expect(within(offeringRow!).getByText('General Fund')).toBeTruthy();
+    expect(within(offeringRow!).queryByText('GENERAL')).toBeNull();
+
+    await fireEvent.update(listTypeSelector, 'FINANCIAL_SUB_CATEGORY');
+    const financialRow = (await screen.findByText('Office Supplies')).closest('tr');
+    expect(financialRow).not.toBeNull();
+    expect(within(financialRow!).getByText('Administration')).toBeTruthy();
+    expect(within(financialRow!).queryByText('ADMIN')).toBeNull();
   });
 });

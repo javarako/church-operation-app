@@ -41,7 +41,7 @@
               >
                 <td>{{ option.code }}</td>
                 <td>{{ option.label }}</td>
-                <td>{{ option.parentCode || '-' }}</td>
+                <td>{{ parentLabel(option) }}</td>
                 <td>{{ option.sortOrder }}</td>
                 <td>{{ option.active ? 'Yes' : 'No' }}</td>
                 <td class="row-actions">
@@ -218,6 +218,18 @@ function startCreate() {
 function selectOption(option: ReferenceDataOption) {
   selectedOption.value = option;
   applyToForm(option);
+}
+
+function parentLabel(option: ReferenceDataOption) {
+  if (!option.parentCode) {
+    return '-';
+  }
+  const parentOptions = option.type === 'OFFERING_CATEGORY'
+    ? offeringFundOptions.value
+    : option.type === 'FINANCIAL_SUB_CATEGORY'
+      ? financialCategoryOptions.value
+      : [];
+  return parentOptions.find((parent) => parent.code === option.parentCode)?.label ?? option.parentCode;
 }
 
 async function saveOption() {
