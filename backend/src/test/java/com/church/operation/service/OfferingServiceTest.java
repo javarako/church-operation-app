@@ -50,8 +50,7 @@ class OfferingServiceTest {
         OfferingRequest request = request(GivingType.MEMBER, "member-id", null);
 
         when(memberRepository.findById("member-id")).thenReturn(Optional.of(giver));
-        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
-            .thenReturn(Optional.of(activeReference("TITHE")));
+        stubOfferingHierarchy("TITHE");
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
             .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CASH")));
         saveOfferingWithId();
@@ -67,7 +66,8 @@ class OfferingServiceTest {
             transaction.getType() == FinancialTransactionType.INCOME
                 && transaction.getSourceType() == FinancialSourceType.OFFERING
                 && "offering-id".equals(transaction.getSourceId())
-                && "TITHE".equals(transaction.getCategory())
+                && "GENERAL".equals(transaction.getCategory())
+                && "TITHE".equals(transaction.getSubCategory())
         ));
     }
 
@@ -76,8 +76,7 @@ class OfferingServiceTest {
         Member actor = member("admin-id", "admin", Role.ADMIN);
         OfferingRequest request = request(GivingType.ANONYMOUS, null, "Anonymous");
 
-        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
-            .thenReturn(Optional.of(activeReference("TITHE")));
+        stubOfferingHierarchy("TITHE");
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
             .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CASH")));
         saveOfferingWithId();
@@ -136,8 +135,7 @@ class OfferingServiceTest {
         Member actor = member("admin-id", "admin", Role.ADMIN);
         OfferingRequest request = request(GivingType.ANONYMOUS, null, "Anonymous");
 
-        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
-            .thenReturn(Optional.of(activeReference("TITHE")));
+        stubOfferingHierarchy("TITHE");
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
             .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CASH")));
         saveOfferingWithId();
@@ -174,8 +172,7 @@ class OfferingServiceTest {
         Member actor = member("admin-id", "admin", Role.ADMIN);
         OfferingRequest request = request(GivingType.ANONYMOUS, null, "Anonymous");
 
-        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE"))
-            .thenReturn(Optional.of(activeReference("TITHE")));
+        stubOfferingHierarchy("TITHE");
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH"))
             .thenReturn(Optional.empty());
 
@@ -203,8 +200,7 @@ class OfferingServiceTest {
 
         when(offeringRepository.findById("offering-id")).thenReturn(Optional.of(existing));
         when(financialTransactionRepository.findById("txn-id")).thenReturn(Optional.of(transaction));
-        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "MISSION"))
-            .thenReturn(Optional.of(activeReference("MISSION")));
+        stubOfferingHierarchy("MISSION");
         when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CHEQUE"))
             .thenReturn(Optional.of(activeReference(ReferenceDataType.PAYMENT_METHOD, "CHEQUE")));
         when(offeringRepository.save(any(Offering.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -214,12 +210,15 @@ class OfferingServiceTest {
 
         assertThat(updated.getGivingType()).isEqualTo(GivingType.GROUP);
         assertThat(updated.getGiverDisplayName()).isEqualTo("Youth Group");
+        assertThat(updated.getFundCode()).isEqualTo("GENERAL");
+        assertThat(updated.getCategoryCode()).isEqualTo("MISSION");
         assertThat(updated.getFundCategory()).isEqualTo("MISSION");
         assertThat(updated.getPaymentMethod()).isEqualTo("CHEQUE");
         verify(financialTransactionRepository).save(argThat(saved ->
             saved.getTransactionDate().equals(LocalDate.of(2026, 7, 9))
                 && saved.getAmount().compareTo(new BigDecimal("40.00")) == 0
-                && "MISSION".equals(saved.getCategory())
+                && "GENERAL".equals(saved.getCategory())
+                && "MISSION".equals(saved.getSubCategory())
                 && "Updated memo".equals(saved.getMemo())
         ));
     }
@@ -305,16 +304,28 @@ class OfferingServiceTest {
     }
 
     private ReferenceData activeReference(String code) {
-        return activeReference(ReferenceDataType.OFFERING_FUND_CATEGORY, code);
+        return activeReference(ReferenceDataType.OFFERING_CATEGORY, code, "GENERAL");
     }
 
     private ReferenceData activeReference(ReferenceDataType type, String code) {
+        return activeReference(type, code, null);
+    }
+
+    private ReferenceData activeReference(ReferenceDataType type, String code, String parentCode) {
         ReferenceData referenceData = new ReferenceData();
         referenceData.setType(type);
         referenceData.setCode(code);
         referenceData.setLabel(code);
+        referenceData.setParentCode(parentCode);
         referenceData.setActive(true);
         return referenceData;
+    }
+
+    private void stubOfferingHierarchy(String categoryCode) {
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND, "GENERAL"))
+            .thenReturn(Optional.of(activeReference(ReferenceDataType.OFFERING_FUND, "GENERAL")));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_CATEGORY, categoryCode))
+            .thenReturn(Optional.of(activeReference(categoryCode)));
     }
 
     private void saveOfferingWithId() {

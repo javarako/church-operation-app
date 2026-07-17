@@ -31,6 +31,8 @@ public class FiscalArchiveRegistry {
     private Set<String> memberIds = new HashSet<>();
     private Set<String> groupCodes = new HashSet<>();
     private Set<String> membershipStatuses = new HashSet<>();
+    private Set<String> offeringFunds = new HashSet<>();
+    private Set<String> offeringCategories = new HashSet<>();
     private Set<String> fundCategories = new HashSet<>();
     private Set<String> paymentMethods = new HashSet<>();
     private Set<String> categories = new HashSet<>();
@@ -69,6 +71,10 @@ public class FiscalArchiveRegistry {
     public void setGroupCodes(Set<String> groupCodes) { this.groupCodes = groupCodes; }
     public Set<String> getMembershipStatuses() { return membershipStatuses; }
     public void setMembershipStatuses(Set<String> membershipStatuses) { this.membershipStatuses = membershipStatuses; }
+    public Set<String> getOfferingFunds() { return offeringFunds; }
+    public void setOfferingFunds(Set<String> offeringFunds) { this.offeringFunds = offeringFunds; }
+    public Set<String> getOfferingCategories() { return offeringCategories; }
+    public void setOfferingCategories(Set<String> offeringCategories) { this.offeringCategories = offeringCategories; }
     public Set<String> getFundCategories() { return fundCategories; }
     public void setFundCategories(Set<String> fundCategories) { this.fundCategories = fundCategories; }
     public Set<String> getPaymentMethods() { return paymentMethods; }

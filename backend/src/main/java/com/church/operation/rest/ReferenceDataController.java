@@ -37,6 +37,16 @@ public class ReferenceDataController {
 
     @GetMapping("/{type}")
     List<ReferenceDataResponse> listReferenceData(
+        @PathVariable("type") ReferenceDataType type,
+        @RequestParam(name = "parentCode", required = false) String parentCode
+    ) {
+        return referenceDataService.listActive(type, parentCode).stream()
+            .map(ReferenceDataResponse::from)
+            .toList();
+    }
+
+    @GetMapping("/maintenance/{type}")
+    List<ReferenceDataResponse> listAllReferenceData(
         Authentication authentication,
         @PathVariable("type") ReferenceDataType type,
         @RequestParam(name = "parentCode", required = false) String parentCode

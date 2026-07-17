@@ -168,7 +168,7 @@ const churchName = computed(() => churchInfo.value?.name || 'Church Operations')
 const churchAddress = computed(() => churchInfo.value?.address || 'Address not configured');
 const churchContactInfo = computed(() => churchInfo.value?.contactInfo || 'Contact info not configured');
 const treasurerLabel = computed(() => `Treasurer: ${churchInfo.value?.treasurerName || 'Not configured'}`);
-const currentRoleLabel = computed(() => authState.currentUser?.roles[0] ?? 'User');
+const currentRoleLabel = computed(() => authState.currentUser?.roles.join(', ') || 'User');
 const userInitials = computed(() => {
   const source = authState.currentUser?.displayName || authState.currentUser?.primaryEmail || 'User';
   return source
@@ -305,7 +305,6 @@ function progressWidth(value: number | null) {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  white-space: nowrap;
 }
 
 .user-role span {
@@ -322,6 +321,8 @@ function progressWidth(value: number | null) {
 .user-role strong {
   padding-top: 10px;
   font-size: 0.9rem;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .dashboard-error {

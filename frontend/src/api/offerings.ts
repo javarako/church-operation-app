@@ -10,7 +10,8 @@ export interface Offering {
   giverDisplayName?: string;
   offeringDate: string;
   offeringSunday: string;
-  fundCategory: string;
+  fundCode: string;
+  categoryCode: string;
   amount: number;
   paymentMethod?: string;
   memo?: string;
@@ -23,7 +24,8 @@ export interface OfferingPayload {
   giverLabel?: string;
   offeringDate: string;
   offeringSunday?: string;
-  fundCategory: string;
+  fundCode: string;
+  categoryCode: string;
   amount: number;
   paymentMethod?: string;
   memo?: string;

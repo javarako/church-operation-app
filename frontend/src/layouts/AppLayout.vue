@@ -13,7 +13,7 @@
         <RouterLink v-if="hasAny(['ADMIN', 'TREASURER'])" to="/offerings"><HandHeart :size="20" aria-hidden="true" /><span>Offerings</span></RouterLink>
         <RouterLink v-if="hasAny(['ADMIN', 'TREASURER'])" to="/finance"><Landmark :size="20" aria-hidden="true" /><span>Finance</span></RouterLink>
         <RouterLink v-if="hasAny(['ADMIN', 'TREASURER'])" to="/budgets"><ChartPie :size="20" aria-hidden="true" /><span>Budgets</span></RouterLink>
-        <RouterLink v-if="hasAny(['ADMIN', 'TREASURER', 'MEMBERSHIP'])" to="/reference-data"><BookOpen :size="20" aria-hidden="true" /><span>Reference Data</span></RouterLink>
+        <RouterLink v-if="hasAny(['ADMIN'])" to="/reference-data"><BookOpen :size="20" aria-hidden="true" /><span>Reference Data</span></RouterLink>
         <RouterLink v-if="hasAny(['ADMIN', 'TREASURER', 'PASTOR', 'VIEWER'])" to="/reports"><ChartColumn :size="20" aria-hidden="true" /><span>Reports</span></RouterLink>
         <RouterLink v-if="hasAny(['ADMIN', 'MEMBER'])" to="/profile"><UserRound :size="20" aria-hidden="true" /><span>My Profile</span></RouterLink>
         <RouterLink v-if="hasAny(['ADMIN'])" to="/system-administration"><Settings :size="20" aria-hidden="true" /><span>System Administration</span></RouterLink>

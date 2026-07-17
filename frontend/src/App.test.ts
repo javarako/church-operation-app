@@ -112,6 +112,13 @@ describe('App', () => {
     }
   });
 
+  it('keeps Reference Data restricted to administrators', async () => {
+    expect(await navigateAs('ADMIN', '/reference-data')).toBe('/reference-data');
+    for (const role of ['TREASURER', 'PASTOR', 'MEMBERSHIP', 'VIEWER'] as Role[]) {
+      expect(await navigateAs(role, '/reference-data')).toBe('/');
+    }
+  });
+
   it('allows administrators and treasurers to reach official-receipt reports', async () => {
     expect(await navigateAs('ADMIN', '/reports')).toBe('/reports');
     expect(await navigateAs('TREASURER', '/reports')).toBe('/reports');

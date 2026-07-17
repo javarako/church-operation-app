@@ -5,7 +5,8 @@ export type BudgetType = 'CARRY_OVER' | 'OFFERING_INCOME' | 'EXPENSE';
 
 export interface WeeklyOfferingReportRow {
   offeringSunday: string;
-  fundCategory: string;
+  fundCode: string;
+  categoryCode: string;
   givingType: GivingType;
   paymentMethod: string;
   count: number;
@@ -17,7 +18,8 @@ export interface MemberOfferingSummaryReportRow {
   memberName: string;
   primaryEmail: string;
   offeringNumber?: string;
-  fundCategory: string;
+  fundCode: string;
+  categoryCode: string;
   count: number;
   totalAmount: number;
 }
@@ -58,7 +60,8 @@ export interface FinancialBudgetReportRow {
 interface WeeklyOfferingReportFilters {
   start: string;
   end: string;
-  fundCategory?: string;
+  fundCode?: string;
+  categoryCode?: string;
   paymentMethod?: string;
 }
 
@@ -66,7 +69,8 @@ interface MemberOfferingSummaryReportFilters {
   start: string;
   end: string;
   offeringNumber?: string;
-  fundCategory?: string;
+  fundCode?: string;
+  categoryCode?: string;
 }
 
 interface TaxReceiptSummaryFilters {

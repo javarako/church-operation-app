@@ -28,6 +28,7 @@ public class Member {
     private LocalDate birthDate;
     private String groupCode;
     private String membershipStatus;
+    private Set<String> committeeCodes = new LinkedHashSet<>();
 
     @Indexed(unique = true, sparse = true)
     private String offeringNumber;
@@ -66,6 +67,17 @@ public class Member {
     public void setGroupCode(String groupCode) { this.groupCode = groupCode; }
     public String getMembershipStatus() { return membershipStatus; }
     public void setMembershipStatus(String membershipStatus) { this.membershipStatus = membershipStatus; }
+    public Set<String> getCommitteeCodes() {
+        if (committeeCodes == null) {
+            committeeCodes = new LinkedHashSet<>();
+        }
+        return committeeCodes;
+    }
+    public void setCommitteeCodes(Set<String> committeeCodes) {
+        this.committeeCodes = committeeCodes == null
+            ? new LinkedHashSet<>()
+            : new LinkedHashSet<>(committeeCodes);
+    }
     public String getOfferingNumber() { return offeringNumber; }
     public void setOfferingNumber(String offeringNumber) { this.offeringNumber = offeringNumber; }
     public String getFaceImageAttachmentId() { return faceImageAttachmentId; }

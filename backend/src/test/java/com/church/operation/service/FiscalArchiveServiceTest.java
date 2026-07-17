@@ -186,6 +186,9 @@ class FiscalArchiveServiceTest {
         offering.setMemberId("member-restore");
         offering.setFundCategory("GENERAL");
         FinancialTransaction income = transaction("income-restore");
+        income.setCategory("GENERAL");
+        income.setSourceType(com.church.operation.util.FinancialSourceType.OFFERING);
+        income.setSourceId("offering-restore");
         Budget budget = new Budget();
         budget.setId("budget-restore");
         FiscalArchivePayload payload = new FiscalArchivePayload(
@@ -312,6 +315,33 @@ class FiscalArchiveServiceTest {
         assertThatThrownBy(() -> service.validateRestore(admin(), upload, "password".toCharArray()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("financial category");
+    }
+
+    @Test
+    void blocksRestoreWithIncompleteOfferingHierarchy() throws Exception {
+        FiscalArchiveCodec codec = mock(FiscalArchiveCodec.class);
+        FiscalArchiveService service = service(1, codec);
+        Offering offering = offering("offering-incomplete");
+        offering.setFundCode("MISSIONS");
+        offering.setFundCategory("TITHE");
+        FiscalArchivePayload payload = new FiscalArchivePayload(
+            "archive-incomplete", 2026, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            List.of(offering), List.of(), List.of(), List.of()
+        );
+        Path upload = java.nio.file.Files.writeString(tempDirectory.resolve("incomplete.zip"), "zip");
+        when(codec.validate(any(), any())).thenReturn(new FiscalArchiveCodec.Validated(payload, "checksum"));
+        FiscalArchiveRegistry registry = new FiscalArchiveRegistry();
+        registry.setArchiveId("archive-incomplete");
+        registry.setChecksum("checksum");
+        registry.setStatus(com.church.operation.util.FiscalArchiveStatus.CLEANED);
+        when(registries.findByArchiveId("archive-incomplete")).thenReturn(Optional.of(registry));
+        when(references.existsByTypeAndCode(
+            com.church.operation.util.ReferenceDataType.OFFERING_FUND, "MISSIONS"
+        )).thenReturn(true);
+
+        assertThatThrownBy(() -> service.validateRestore(admin(), upload, "password".toCharArray()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("hierarchy");
     }
 
     @Test

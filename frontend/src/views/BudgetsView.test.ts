@@ -59,4 +59,31 @@ describe('BudgetsView', () => {
       expect(values).toContain('EXPENSE');
     });
   });
+
+  it('displays offering income budgets as Income', async () => {
+    listBudgetsMock.mockResolvedValue([{
+      id: 'budget-1',
+      fiscalYear: new Date().getFullYear(),
+      budgetType: 'OFFERING_INCOME',
+      category: 'GENERAL',
+      subCategory: 'TITHE',
+      budget: 1000,
+    }]);
+
+    render(BudgetsView);
+
+    await screen.findByText('Refreshed');
+
+    const budgetTypeSelectors = screen.getAllByRole('combobox').filter((select) =>
+      Array.from((select as HTMLSelectElement).options).some((option) => option.value === 'OFFERING_INCOME'),
+    );
+    expect(budgetTypeSelectors).toHaveLength(2);
+    budgetTypeSelectors.forEach((select) => {
+      const incomeOption = Array.from((select as HTMLSelectElement).options)
+        .find((option) => option.value === 'OFFERING_INCOME');
+      expect(incomeOption?.textContent).toBe('Income');
+    });
+    expect(screen.getByRole('cell', { name: 'Income' })).toBeTruthy();
+    expect(screen.queryByText('Offering income')).toBeNull();
+  });
 });

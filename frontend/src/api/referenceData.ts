@@ -3,7 +3,9 @@ import { deleteEmpty, getJson, postJson, putJson } from './http';
 export type ReferenceDataType =
   | 'GROUP_CODE'
   | 'MEMBERSHIP_STATUS'
-  | 'OFFERING_FUND_CATEGORY'
+  | 'COMMITTEE_CODE'
+  | 'OFFERING_FUND'
+  | 'OFFERING_CATEGORY'
   | 'PAYMENT_METHOD'
   | 'FINANCIAL_CATEGORY'
   | 'FINANCIAL_SUB_CATEGORY';
@@ -30,6 +32,11 @@ export interface ReferenceDataPayload {
 export function listReferenceData(type: ReferenceDataType, parentCode?: string) {
   const query = parentCode ? `?parentCode=${encodeURIComponent(parentCode)}` : '';
   return getJson<ReferenceDataOption[]>(`/api/reference-data/${type}${query}`);
+}
+
+export function listAllReferenceData(type: ReferenceDataType, parentCode?: string) {
+  const query = parentCode ? `?parentCode=${encodeURIComponent(parentCode)}` : '';
+  return getJson<ReferenceDataOption[]>(`/api/reference-data/maintenance/${type}${query}`);
 }
 
 export function createReferenceData(payload: ReferenceDataPayload) {

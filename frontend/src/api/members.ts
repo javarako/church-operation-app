@@ -22,6 +22,7 @@ export interface MemberPayload {
   birthDate?: string;
   groupCode?: string;
   membershipStatus?: string;
+  committeeCodes?: string[];
   offeringNumber?: string;
   faceImageAttachmentId?: string;
   householdName?: string;

@@ -55,7 +55,8 @@ public class ReportService {
         Member actor,
         LocalDate start,
         LocalDate end,
-        String fundCategory,
+        String fundCode,
+        String categoryCode,
         String paymentMethod
     ) {
         requireReportAccess(actor);
@@ -63,13 +64,16 @@ public class ReportService {
 
         Map<WeeklyOfferingKey, Summary> grouped = new LinkedHashMap<>();
         for (Offering offering : offeringRepository.findByDeletedFalseAndOfferingSundayBetweenOrderByOfferingSundayAscFundCategoryAscPaymentMethodAsc(start, end)) {
-            if (!matches(offering.getFundCategory(), fundCategory) || !matches(offering.getPaymentMethod(), paymentMethod)) {
+            if (!matches(fundOf(offering), fundCode)
+                || !matches(categoryOf(offering), categoryCode)
+                || !matches(offering.getPaymentMethod(), paymentMethod)) {
                 continue;
             }
 
             WeeklyOfferingKey key = new WeeklyOfferingKey(
                 offering.getOfferingSunday(),
-                offering.getFundCategory(),
+                fundOf(offering),
+                categoryOf(offering),
                 offering.getGivingType(),
                 offering.getPaymentMethod()
             );
@@ -79,12 +83,14 @@ public class ReportService {
         return grouped.entrySet().stream()
             .sorted(Comparator
                 .comparing((Map.Entry<WeeklyOfferingKey, Summary> entry) -> entry.getKey().offeringSunday())
-                .thenComparing(entry -> entry.getKey().fundCategory(), Comparator.nullsFirst(String::compareTo))
+                .thenComparing(entry -> entry.getKey().fundCode(), Comparator.nullsFirst(String::compareTo))
+                .thenComparing(entry -> entry.getKey().categoryCode(), Comparator.nullsFirst(String::compareTo))
                 .thenComparing(entry -> entry.getKey().givingType(), Comparator.nullsFirst(Enum::compareTo))
                 .thenComparing(entry -> entry.getKey().paymentMethod(), Comparator.nullsFirst(String::compareTo)))
             .map(entry -> new WeeklyOfferingReportRow(
                 entry.getKey().offeringSunday(),
-                entry.getKey().fundCategory(),
+                entry.getKey().fundCode(),
+                entry.getKey().categoryCode(),
                 entry.getKey().givingType(),
                 entry.getKey().paymentMethod(),
                 entry.getValue().count(),
@@ -93,12 +99,19 @@ public class ReportService {
             .toList();
     }
 
+    public List<WeeklyOfferingReportRow> weeklyOfferings(
+        Member actor, LocalDate start, LocalDate end, String legacyFundCategory, String paymentMethod
+    ) {
+        return weeklyOfferings(actor, start, end, null, legacyFundCategory, paymentMethod);
+    }
+
     public List<MemberOfferingSummaryReportRow> memberOfferings(
         Member actor,
         LocalDate start,
         LocalDate end,
         String offeringNumber,
-        String fundCategory
+        String fundCode,
+        String categoryCode
     ) {
         requireReportAccess(actor);
         validateRange(start, end);
@@ -114,7 +127,9 @@ public class ReportService {
                 continue;
             }
             Member member = membersById.get(offering.getMemberId());
-            if (!matches(member != null ? member.getOfferingNumber() : null, offeringNumber) || !matches(offering.getFundCategory(), fundCategory)) {
+            if (!matches(member != null ? member.getOfferingNumber() : null, offeringNumber)
+                || !matches(fundOf(offering), fundCode)
+                || !matches(categoryOf(offering), categoryCode)) {
                 continue;
             }
             String memberName = member != null && member.getDisplayName() != null ? member.getDisplayName() : offering.getGiverDisplayName();
@@ -125,7 +140,8 @@ public class ReportService {
                 memberName,
                 primaryEmail,
                 memberOfferingNumber,
-                offering.getFundCategory()
+                fundOf(offering),
+                categoryOf(offering)
             );
             grouped.computeIfAbsent(key, ignored -> new Summary()).add(offering.getAmount());
         }
@@ -136,15 +152,23 @@ public class ReportService {
                 entry.getKey().memberName(),
                 entry.getKey().primaryEmail(),
                 entry.getKey().offeringNumber(),
-                entry.getKey().fundCategory(),
+                entry.getKey().fundCode(),
+                entry.getKey().categoryCode(),
                 entry.getValue().count(),
                 entry.getValue().total()
             ))
             .sorted(Comparator
                 .comparing(MemberOfferingSummaryReportRow::offeringNumber, Comparator.nullsLast(String::compareTo))
                 .thenComparing(MemberOfferingSummaryReportRow::memberName, Comparator.nullsLast(String::compareTo))
-                .thenComparing(MemberOfferingSummaryReportRow::fundCategory, Comparator.nullsLast(String::compareTo)))
+                .thenComparing(MemberOfferingSummaryReportRow::fundCode, Comparator.nullsLast(String::compareTo))
+                .thenComparing(MemberOfferingSummaryReportRow::categoryCode, Comparator.nullsLast(String::compareTo)))
             .toList();
+    }
+
+    public List<MemberOfferingSummaryReportRow> memberOfferings(
+        Member actor, LocalDate start, LocalDate end, String offeringNumber, String legacyFundCategory
+    ) {
+        return memberOfferings(actor, start, end, offeringNumber, null, legacyFundCategory);
     }
 
     public List<FinancialBudgetReportRow> financialBudget(Member actor, int fiscalYear) {
@@ -267,9 +291,18 @@ public class ReportService {
         return filter == null || filter.isBlank() || Objects.equals(value, filter);
     }
 
+    private String fundOf(Offering offering) {
+        return offering.getFundCode() == null ? "GENERAL" : offering.getFundCode();
+    }
+
+    private String categoryOf(Offering offering) {
+        return offering.getCategoryCode() == null ? offering.getFundCategory() : offering.getCategoryCode();
+    }
+
     private record WeeklyOfferingKey(
         LocalDate offeringSunday,
-        String fundCategory,
+        String fundCode,
+        String categoryCode,
         GivingType givingType,
         String paymentMethod
     ) {
@@ -280,7 +313,8 @@ public class ReportService {
         String memberName,
         String primaryEmail,
         String offeringNumber,
-        String fundCategory
+        String fundCode,
+        String categoryCode
     ) {
     }
 

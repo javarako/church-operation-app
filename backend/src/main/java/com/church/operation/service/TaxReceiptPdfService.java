@@ -28,6 +28,11 @@ public class TaxReceiptPdfService {
     private static final float LEFT = 30f;
     private static final float CONTENT_WIDTH = PAGE_WIDTH - 60f;
     private static final float FONT_SIZE_INCREASE = 2f;
+    static final float LOGO_MAX_WIDTH = 112.32f;
+    static final float LOGO_MAX_HEIGHT = 68.64f;
+    private static final float LOGO_TEXT_GAP = 10f;
+    private static final float HEADER_TOP_OFFSET = 34f;
+    private static final float HEADER_BOTTOM_OFFSET = 90f;
     private static final PDFont REGULAR = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
     private static final PDFont BOLD = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
@@ -64,11 +69,16 @@ public class TaxReceiptPdfService {
         float titleY = originY - 22f;
         writeCentered(stream, "Official Receipt for Income Tax Purposes", titleY, BOLD, fontSize(12f));
 
+        float churchX = LEFT;
         if (logo != null) {
-            float scale = Math.min(72f / logo.getWidth(), 44f / logo.getHeight());
-            stream.drawImage(logo, LEFT, originY - 72f, logo.getWidth() * scale, logo.getHeight() * scale);
+            float scale = Math.min(LOGO_MAX_WIDTH / logo.getWidth(), LOGO_MAX_HEIGHT / logo.getHeight());
+            float renderedWidth = logo.getWidth() * scale;
+            float renderedHeight = logo.getHeight() * scale;
+            float headerCenterY = originY - ((HEADER_TOP_OFFSET + HEADER_BOTTOM_OFFSET) / 2f);
+            float logoY = headerCenterY - (renderedHeight / 2f);
+            stream.drawImage(logo, LEFT, logoY, renderedWidth, renderedHeight);
+            churchX = LEFT + renderedWidth + LOGO_TEXT_GAP;
         }
-        float churchX = logo == null ? LEFT : 112f;
         write(stream, receipt.getChurchName(), churchX, originY - 43f, BOLD, fontSize(10f));
         writeFit(stream, receipt.getChurchAddress(), churchX, originY - 56f, PAGE_WIDTH - churchX - 30f, REGULAR, fontSize(7.5f));
         write(stream, "Charity registration: " + value(receipt.getCharityRegistrationNumber()), churchX, originY - 68f, REGULAR, fontSize(7.5f));

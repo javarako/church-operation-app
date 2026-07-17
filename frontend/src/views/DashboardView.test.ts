@@ -112,6 +112,20 @@ describe('DashboardView', () => {
     expect(container.querySelector('[data-testid="church-treasurer-icon"]')).toBeTruthy();
   });
 
+  it('shows all roles assigned to the signed-in user', async () => {
+    authState.currentUser = {
+      primaryEmail: 'staff@example.com',
+      displayName: 'Staff User',
+      roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'],
+      mustChangePassword: false,
+      token: 'token',
+    };
+
+    render(DashboardView);
+
+    expect(await screen.findByText('ADMIN, TREASURER, MEMBERSHIP')).toBeTruthy();
+  });
+
   it('shows not budgeted when a budget is zero', async () => {
     dashboardMock.mockResolvedValue({
       ...dashboardResponse,

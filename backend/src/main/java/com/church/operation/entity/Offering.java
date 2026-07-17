@@ -19,6 +19,8 @@ public class Offering {
     private String giverDisplayName;
     private LocalDate offeringDate;
     private LocalDate offeringSunday;
+    private String fundCode;
+    private String categoryCode;
     private String fundCategory;
     private BigDecimal amount;
     private String paymentMethod;
@@ -44,6 +46,10 @@ public class Offering {
     public void setOfferingDate(LocalDate offeringDate) { this.offeringDate = offeringDate; }
     public LocalDate getOfferingSunday() { return offeringSunday; }
     public void setOfferingSunday(LocalDate offeringSunday) { this.offeringSunday = offeringSunday; }
+    public String getFundCode() { return fundCode; }
+    public void setFundCode(String fundCode) { this.fundCode = fundCode; }
+    public String getCategoryCode() { return categoryCode; }
+    public void setCategoryCode(String categoryCode) { this.categoryCode = categoryCode; }
     public String getFundCategory() { return fundCategory; }
     public void setFundCategory(String fundCategory) { this.fundCategory = fundCategory; }
     public BigDecimal getAmount() { return amount; }

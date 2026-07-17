@@ -69,6 +69,18 @@ public class ReferenceDataDeletionService {
         switch (reference.getType()) {
             case GROUP_CODE -> addIfUsed(dependencies, Member.class, "groupCode", code, "member records");
             case MEMBERSHIP_STATUS -> addIfUsed(dependencies, Member.class, "membershipStatus", code, "member records");
+            case COMMITTEE_CODE -> addIfUsed(dependencies, Member.class, "committeeCodes", code, "member records");
+            case OFFERING_FUND -> {
+                addIfUsed(dependencies, Offering.class, "fundCode", code, "offering records");
+                addIfUsed(dependencies, FinancialTransaction.class, "category", code, "financial transactions");
+                addIfUsed(dependencies, Budget.class, "category", code, "budgets");
+                addIfUsed(dependencies, ReferenceData.class, "parentCode", code, "offering categories");
+            }
+            case OFFERING_CATEGORY -> {
+                addIfUsed(dependencies, Offering.class, "categoryCode", code, "offering records");
+                addIfUsed(dependencies, FinancialTransaction.class, "subCategory", code, "financial transactions");
+                addIfUsed(dependencies, Budget.class, "subCategory", code, "budgets");
+            }
             case OFFERING_FUND_CATEGORY -> {
                 addIfUsed(dependencies, Offering.class, "fundCategory", code, "offering records");
                 addIfUsed(dependencies, Budget.class, "category", code, "budgets");
@@ -87,17 +99,37 @@ public class ReferenceDataDeletionService {
         String archiveField = switch (reference.getType()) {
             case GROUP_CODE -> "groupCodes";
             case MEMBERSHIP_STATUS -> "membershipStatuses";
+            case COMMITTEE_CODE -> null;
+            case OFFERING_FUND -> "offeringFunds";
+            case OFFERING_CATEGORY -> "offeringCategories";
             case OFFERING_FUND_CATEGORY -> "fundCategories";
             case PAYMENT_METHOD -> "paymentMethods";
             case FINANCIAL_CATEGORY -> "categories";
             case FINANCIAL_SUB_CATEGORY -> "subCategories";
         };
-        Query archivedReference = Query.query(Criteria.where(archiveField).is(code)
-            .and("status").is(FiscalArchiveStatus.CLEANED));
-        if (mongoTemplate.exists(archivedReference, FiscalArchiveRegistry.class)) {
-            dependencies.add("a cleaned fiscal archive");
+        if (archiveField != null) {
+            if (archiveUsesReference(archiveField, code)
+                || reference.getType() == ReferenceDataType.OFFERING_CATEGORY
+                    && archiveUsesReference("fundCategories", code)
+                || reference.getType() == ReferenceDataType.OFFERING_FUND
+                    && OfferingHierarchyMigrationService.GENERAL_FUND.equals(code)
+                    && legacyArchiveContainsOfferingValues()) {
+                dependencies.add("a cleaned fiscal archive");
+            }
         }
         return dependencies;
+    }
+
+    private boolean archiveUsesReference(String field, String code) {
+        Query query = Query.query(Criteria.where(field).is(code)
+            .and("status").is(FiscalArchiveStatus.CLEANED));
+        return mongoTemplate.exists(query, FiscalArchiveRegistry.class);
+    }
+
+    private boolean legacyArchiveContainsOfferingValues() {
+        Query query = Query.query(Criteria.where("fundCategories.0").exists(true)
+            .and("status").is(FiscalArchiveStatus.CLEANED));
+        return mongoTemplate.exists(query, FiscalArchiveRegistry.class);
     }
 
     private void addIfUsed(
@@ -113,7 +145,7 @@ public class ReferenceDataDeletionService {
     }
 
     private void requireReferenceDataManager(Member actor) {
-        if (!hasRole(actor, Role.ADMIN) && !hasRole(actor, Role.MEMBERSHIP) && !hasRole(actor, Role.TREASURER)) {
+        if (!hasRole(actor, Role.ADMIN)) {
             throw new SecurityException("You do not have permission to delete reference data.");
         }
     }

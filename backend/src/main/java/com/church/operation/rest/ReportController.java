@@ -56,10 +56,11 @@ public class ReportController {
         Authentication authentication,
         @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
         @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
-        @RequestParam(value = "fundCategory", required = false) String fundCategory,
+        @RequestParam(value = "fundCode", required = false) String fundCode,
+        @RequestParam(value = "categoryCode", required = false) String categoryCode,
         @RequestParam(value = "paymentMethod", required = false) String paymentMethod
     ) {
-        return reportService.weeklyOfferings(actor(authentication), start, end, fundCategory, paymentMethod);
+        return reportService.weeklyOfferings(actor(authentication), start, end, fundCode, categoryCode, paymentMethod);
     }
 
     @GetMapping("/member-offerings")
@@ -68,9 +69,10 @@ public class ReportController {
         @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
         @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
         @RequestParam(value = "offeringNumber", required = false) String offeringNumber,
-        @RequestParam(value = "fundCategory", required = false) String fundCategory
+        @RequestParam(value = "fundCode", required = false) String fundCode,
+        @RequestParam(value = "categoryCode", required = false) String categoryCode
     ) {
-        return reportService.memberOfferings(actor(authentication), start, end, offeringNumber, fundCategory);
+        return reportService.memberOfferings(actor(authentication), start, end, offeringNumber, fundCode, categoryCode);
     }
 
     @GetMapping("/tax-receipts/summary")

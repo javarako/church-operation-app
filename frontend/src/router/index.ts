@@ -25,7 +25,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/offerings', component: OfferingsView, meta: { roles: financeRoles } },
   { path: '/finance', component: FinanceView, meta: { roles: financeRoles } },
   { path: '/budgets', component: BudgetsView, meta: { roles: financeRoles } },
-  { path: '/reference-data', component: ReferenceDataView, meta: { roles: ['ADMIN', 'TREASURER', 'MEMBERSHIP'] as Role[] } },
+  { path: '/reference-data', component: ReferenceDataView, meta: { roles: adminRoles } },
   { path: '/reports', component: ReportsView, meta: { roles: reportRoles } },
   { path: '/profile', component: ProfileView, meta: { roles: selfServiceRoles } },
   { path: '/system-administration', component: SystemAdministrationView, meta: { roles: adminRoles } },

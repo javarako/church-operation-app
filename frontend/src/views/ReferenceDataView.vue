@@ -75,9 +75,18 @@
 
         <label>
           Type
-          <select v-model="form.type" @change="handleFormTypeChange">
+          <select v-model="form.type" :disabled="Boolean(selectedOption)" @change="handleFormTypeChange">
             <option v-for="typeOption in typeOptions" :key="typeOption.type" :value="typeOption.type">
               {{ typeOption.label }}
+            </option>
+          </select>
+        </label>
+        <label v-if="form.type === 'OFFERING_CATEGORY'">
+          Parent fund
+          <select v-model="form.parentCode" required>
+            <option value="">Select fund</option>
+            <option v-for="fund in offeringFundOptions" :key="fund.code" :value="fund.code">
+              {{ fund.label }}
             </option>
           </select>
         </label>
@@ -92,7 +101,7 @@
         </label>
         <label>
           Code
-          <input v-model="form.code" required />
+          <input v-model="form.code" :disabled="Boolean(selectedOption)" required />
         </label>
         <label>
           Label
@@ -121,7 +130,7 @@ import { onMounted, reactive, ref } from 'vue';
 import {
   createReferenceData,
   deleteReferenceData,
-  listReferenceData,
+  listAllReferenceData,
   updateReferenceData,
   type ReferenceDataOption,
   type ReferenceDataPayload,
@@ -134,6 +143,7 @@ import { usePagination } from '../composables/usePagination';
 const selectedType = ref<ReferenceDataType>('GROUP_CODE');
 const selectedOption = ref<ReferenceDataOption | null>(null);
 const options = ref<ReferenceDataOption[]>([]);
+const offeringFundOptions = ref<ReferenceDataOption[]>([]);
 const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
 const error = ref('');
 const savedMessage = ref('');
@@ -142,7 +152,9 @@ const referencePagination = usePagination(options);
 const typeOptions: Array<{ type: ReferenceDataType; label: string }> = [
   { type: 'GROUP_CODE', label: 'Group code' },
   { type: 'MEMBERSHIP_STATUS', label: 'Membership status' },
-  { type: 'OFFERING_FUND_CATEGORY', label: 'Offering fund/category' },
+  { type: 'COMMITTEE_CODE', label: 'Committee code' },
+  { type: 'OFFERING_FUND', label: 'Offering fund' },
+  { type: 'OFFERING_CATEGORY', label: 'Offering category' },
   { type: 'PAYMENT_METHOD', label: 'Payment method' },
   { type: 'FINANCIAL_CATEGORY', label: 'Financial category' },
   { type: 'FINANCIAL_SUB_CATEGORY', label: 'Financial sub-category' },
@@ -158,13 +170,13 @@ const form = reactive<ReferenceDataPayload>({
 });
 
 onMounted(async () => {
-  await Promise.all([loadOptions(), loadFinancialCategories()]);
+  await refreshLists();
 });
 
 async function loadOptions() {
   error.value = '';
   try {
-    options.value = await listReferenceData(selectedType.value);
+    options.value = await listAllReferenceData(selectedType.value);
     referencePagination.resetPage();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load reference data.';
@@ -173,10 +185,22 @@ async function loadOptions() {
 
 async function loadFinancialCategories() {
   try {
-    financialCategoryOptions.value = await listReferenceData('FINANCIAL_CATEGORY');
+    financialCategoryOptions.value = await listAllReferenceData('FINANCIAL_CATEGORY');
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load financial categories.';
   }
+}
+
+async function loadOfferingFunds() {
+  try {
+    offeringFundOptions.value = await listAllReferenceData('OFFERING_FUND');
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
+  }
+}
+
+async function refreshLists() {
+  await Promise.all([loadOptions(), loadOfferingFunds(), loadFinancialCategories()]);
 }
 
 function startCreate() {
@@ -204,7 +228,7 @@ async function saveOption() {
       ...form,
       code: form.code.trim().toUpperCase(),
       label: form.label.trim(),
-      parentCode: form.type === 'FINANCIAL_SUB_CATEGORY' ? form.parentCode?.trim().toUpperCase() : undefined,
+      parentCode: isChildType(form.type) ? form.parentCode?.trim().toUpperCase() : undefined,
     };
     const saved = selectedOption.value
       ? await updateReferenceData(selectedOption.value.id, payload)
@@ -213,7 +237,7 @@ async function saveOption() {
     selectedOption.value = saved;
     applyToForm(saved);
     savedMessage.value = 'Saved';
-    await loadOptions();
+    await refreshLists();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not save reference data.';
   }
@@ -230,7 +254,7 @@ async function deleteSelectedOption(option: ReferenceDataOption) {
     if (selectedOption.value?.id === option.id) {
       startCreate();
     }
-    await Promise.all([loadOptions(), loadFinancialCategories()]);
+    await refreshLists();
     savedMessage.value = 'Deleted';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not delete reference data.';
@@ -247,9 +271,13 @@ function applyToForm(option: ReferenceDataPayload) {
 }
 
 function handleFormTypeChange() {
-  if (form.type !== 'FINANCIAL_SUB_CATEGORY') {
+  if (!isChildType(form.type)) {
     form.parentCode = '';
   }
+}
+
+function isChildType(type: ReferenceDataType) {
+  return type === 'OFFERING_CATEGORY' || type === 'FINANCIAL_SUB_CATEGORY';
 }
 
 function nextSortOrder() {

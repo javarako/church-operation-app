@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/vue';
 import ReportsView from './ReportsView.vue';
 import { authState } from '../auth/authStore';
 import {
@@ -75,9 +75,20 @@ describe('ReportsView', () => {
     financialMock.mockResolvedValue([]);
     batchMock.mockResolvedValue(new Blob(['zip'], { type: 'application/zip' }));
     pdfMock.mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
-    referenceMock.mockImplementation((type) => Promise.resolve(type === 'OFFERING_FUND_CATEGORY'
-      ? [{ id: 'f1', type, code: 'TITHE', label: 'Tithe', sortOrder: 1, active: true }]
-      : [{ id: 'p1', type, code: 'CASH', label: 'Cash', sortOrder: 1, active: true }]));
+    referenceMock.mockImplementation((type) => {
+      const options = {
+        OFFERING_FUND: [{ id: 'f1', type, code: 'GENERAL', label: 'General Fund', sortOrder: 1, active: true }],
+        OFFERING_CATEGORY: [{
+          id: 'c1', type, code: 'TITHE', label: 'Tithe', parentCode: 'GENERAL', sortOrder: 1, active: true,
+        }],
+        PAYMENT_METHOD: [{ id: 'p1', type, code: 'CHEQUE', label: 'Cheque', sortOrder: 1, active: true }],
+        FINANCIAL_CATEGORY: [{ id: 'fc1', type, code: 'ADMIN', label: 'Administration', sortOrder: 1, active: true }],
+        FINANCIAL_SUB_CATEGORY: [{
+          id: 'fs1', type, code: 'OFFICE', label: 'Office Supplies', parentCode: 'ADMIN', sortOrder: 1, active: true,
+        }],
+      };
+      return Promise.resolve(options[type as keyof typeof options] ?? []);
+    });
   });
 
   afterEach(() => {
@@ -105,7 +116,8 @@ describe('ReportsView', () => {
   it('uses reference dropdowns and validates report date ranges', async () => {
     signIn('VIEWER');
     render(ReportsView);
-    expect((await screen.findByLabelText('Fund/category')).tagName).toBe('SELECT');
+    expect((await screen.findByLabelText('Fund')).tagName).toBe('SELECT');
+    expect((await screen.findByLabelText('Category')).tagName).toBe('SELECT');
     expect((await screen.findByLabelText('Payment method')).tagName).toBe('SELECT');
     weeklyMock.mockClear();
     const dates = screen.getAllByLabelText(/date/i);
@@ -200,5 +212,71 @@ describe('ReportsView', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Issue receipt' }));
     expect(await screen.findByText('Receipt validation failed: donor address is incomplete')).toBeTruthy();
     expect(pdfMock).not.toHaveBeenCalled();
+  });
+
+  it('shows reference labels and budget utilization across operational reports', async () => {
+    signIn('VIEWER');
+    weeklyMock.mockResolvedValue([{
+      offeringSunday: '2026-07-12',
+      fundCode: 'GENERAL',
+      categoryCode: 'TITHE',
+      givingType: 'ANONYMOUS',
+      paymentMethod: 'CHEQUE',
+      count: 1,
+      totalAmount: 125,
+    }]);
+    memberMock.mockResolvedValue([{
+      memberId: 'member-1',
+      memberName: 'Grace Park',
+      primaryEmail: 'grace@example.com',
+      offeringNumber: '1001',
+      fundCode: 'GENERAL',
+      categoryCode: 'TITHE',
+      count: 2,
+      totalAmount: 250,
+    }]);
+    financialMock.mockResolvedValue([
+      {
+        fiscalYear: 2026,
+        budgetType: 'OFFERING_INCOME',
+        category: 'GENERAL',
+        subCategory: 'TITHE',
+        budget: 1000,
+        actual: 500,
+        variance: -500,
+      },
+      {
+        fiscalYear: 2026,
+        budgetType: 'EXPENSE',
+        category: 'ADMIN',
+        subCategory: 'OFFICE',
+        budget: 0,
+        actual: 25,
+        variance: 25,
+      },
+    ]);
+
+    render(ReportsView);
+
+    const weeklyRow = (await screen.findByText('2026-07-12')).closest('tr');
+    expect(weeklyRow).not.toBeNull();
+    expect(within(weeklyRow!).getByText('General Fund')).toBeTruthy();
+    expect(within(weeklyRow!).getByText('Tithe')).toBeTruthy();
+    expect(within(weeklyRow!).getByText('Anonymous')).toBeTruthy();
+    expect(within(weeklyRow!).getByText('Cheque')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('tab', { name: /member offerings/i }));
+    const memberRow = (await screen.findByText('Grace Park')).closest('tr');
+    expect(within(memberRow!).getByText('General Fund')).toBeTruthy();
+    expect(within(memberRow!).getByText('Tithe')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('tab', { name: /budget performance/i }));
+    const incomeRow = (await screen.findByText('INCOME')).closest('tr');
+    expect(within(incomeRow!).getByText('General Fund')).toBeTruthy();
+    expect(within(incomeRow!).getByText('Tithe')).toBeTruthy();
+    expect(within(incomeRow!).getByText('50.00%')).toBeTruthy();
+    const expenseRow = screen.getByText('Administration').closest('tr');
+    expect(within(expenseRow!).getByText('Office Supplies')).toBeTruthy();
+    expect(within(expenseRow!).getByText('-')).toBeTruthy();
   });
 });

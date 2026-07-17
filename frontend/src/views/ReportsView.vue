@@ -56,10 +56,19 @@
           </label>
 
           <label>
-            Fund/category
-            <select v-model="weeklyFilters.fundCategory">
+            Fund
+            <select v-model="weeklyFilters.fundCode" @change="weeklyFilters.categoryCode = ''">
               <option value="">All funds</option>
               <option v-for="option in offeringFundOptions" :key="option.id" :value="option.code">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Category
+            <select v-model="weeklyFilters.categoryCode">
+              <option value="">All categories</option>
+              <option v-for="option in weeklyCategoryOptions" :key="option.id" :value="option.code">
                 {{ option.label }}
               </option>
             </select>
@@ -93,10 +102,19 @@
           </label>
 
           <label>
-            Fund/category
-            <select v-model="memberFilters.fundCategory">
+            Fund
+            <select v-model="memberFilters.fundCode" @change="memberFilters.categoryCode = ''">
               <option value="">All funds</option>
               <option v-for="option in offeringFundOptions" :key="option.id" :value="option.code">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Category
+            <select v-model="memberFilters.categoryCode">
+              <option value="">All categories</option>
+              <option v-for="option in memberCategoryOptions" :key="option.id" :value="option.code">
                 {{ option.label }}
               </option>
             </select>
@@ -145,7 +163,8 @@
           <thead>
             <tr>
               <th>Offering Sunday</th>
-              <th>Fund/category</th>
+              <th>Fund</th>
+              <th>Category</th>
               <th>Giving type</th>
               <th>Payment method</th>
               <th>Count</th>
@@ -155,17 +174,18 @@
           <tbody>
             <tr
               v-for="row in weeklyPagination.paginatedRows.value"
-              :key="`${row.offeringSunday}-${row.fundCategory}-${row.givingType}-${row.paymentMethod}`"
+              :key="`${row.offeringSunday}-${row.fundCode}-${row.categoryCode}-${row.givingType}-${row.paymentMethod}`"
             >
               <td>{{ row.offeringSunday }}</td>
-              <td>{{ row.fundCategory }}</td>
-              <td>{{ row.givingType }}</td>
-              <td>{{ row.paymentMethod }}</td>
+              <td>{{ referenceLabel(offeringFundOptions, row.fundCode) }}</td>
+              <td>{{ referenceLabel(offeringCategoryOptions, row.categoryCode) }}</td>
+              <td>{{ givingTypeLabel(row.givingType) }}</td>
+              <td>{{ referenceLabel(paymentMethodOptions, row.paymentMethod) }}</td>
               <td>{{ row.count }}</td>
               <td>{{ formatMoney(row.totalAmount) }}</td>
             </tr>
             <tr v-if="!weeklyRows.length && !loading">
-              <td colspan="6" class="empty-state">No weekly report rows found.</td>
+              <td colspan="7" class="empty-state">No weekly report rows found.</td>
             </tr>
           </tbody>
         </table>
@@ -176,22 +196,24 @@
               <th>Offering number</th>
               <th>Member</th>
               <th>Email</th>
-              <th>Fund/category</th>
+              <th>Fund</th>
+              <th>Category</th>
               <th>Count</th>
               <th>Total</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in memberPagination.paginatedRows.value" :key="`${row.memberId}-${row.fundCategory}`">
+            <tr v-for="row in memberPagination.paginatedRows.value" :key="`${row.memberId}-${row.fundCode}-${row.categoryCode}`">
               <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.memberName }}</td>
               <td>{{ row.primaryEmail }}</td>
-              <td>{{ row.fundCategory }}</td>
+              <td>{{ referenceLabel(offeringFundOptions, row.fundCode) }}</td>
+              <td>{{ referenceLabel(offeringCategoryOptions, row.categoryCode) }}</td>
               <td>{{ row.count }}</td>
               <td>{{ formatMoney(row.totalAmount) }}</td>
             </tr>
             <tr v-if="!memberRows.length && !loading">
-              <td colspan="6" class="empty-state">No member report rows found.</td>
+              <td colspan="7" class="empty-state">No member report rows found.</td>
             </tr>
           </tbody>
         </table>
@@ -267,6 +289,7 @@
               <th>Sub-category</th>
               <th>Budget</th>
               <th>Actual</th>
+              <th>Budget vs. Actual</th>
               <th>Variance</th>
             </tr>
           </thead>
@@ -275,15 +298,16 @@
               v-for="row in financialPagination.paginatedRows.value"
               :key="`${row.fiscalYear}-${row.budgetType}-${row.category || ''}-${row.subCategory || ''}`"
             >
-              <td>{{ row.budgetType }}</td>
-              <td>{{ row.category || '-' }}</td>
-              <td>{{ row.subCategory || '-' }}</td>
+              <td>{{ budgetTypeLabel(row.budgetType) }}</td>
+              <td>{{ financialCategoryLabel(row) }}</td>
+              <td>{{ financialSubCategoryLabel(row) }}</td>
               <td>{{ formatMoney(row.budget) }}</td>
               <td>{{ formatMoney(row.actual) }}</td>
+              <td>{{ budgetActualPercentage(row.budget, row.actual) }}</td>
               <td>{{ formatMoney(row.variance) }}</td>
             </tr>
             <tr v-if="!financialRows.length && !loading">
-              <td colspan="6" class="empty-state">No budget report rows found.</td>
+              <td colspan="7" class="empty-state">No budget report rows found.</td>
             </tr>
           </tbody>
         </table>
@@ -405,7 +429,10 @@ const memberPagination = usePagination(memberRows);
 const taxPagination = usePagination(taxRows);
 const financialPagination = usePagination(financialRows);
 const offeringFundOptions = ref<ReferenceDataOption[]>([]);
+const offeringCategoryOptions = ref<ReferenceDataOption[]>([]);
 const paymentMethodOptions = ref<ReferenceDataOption[]>([]);
+const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
+const financialSubCategoryOptions = ref<ReferenceDataOption[]>([]);
 const loading = ref(false);
 const receiptBusy = ref(false);
 const error = ref('');
@@ -414,7 +441,8 @@ const thankYouNote = ref(DEFAULT_THANK_YOU_NOTE);
 const weeklyFilters = reactive({
   start: startOfYear(now),
   end: isoDate(now),
-  fundCategory: '',
+  fundCode: '',
+  categoryCode: '',
   paymentMethod: '',
 });
 
@@ -422,7 +450,8 @@ const memberFilters = reactive({
   start: startOfYear(now),
   end: isoDate(now),
   offeringNumber: '',
-  fundCategory: '',
+  fundCode: '',
+  categoryCode: '',
 });
 
 const taxFilters = reactive({
@@ -437,6 +466,13 @@ const financialFilters = reactive({
 const visibleReportTabs = computed(() =>
   reportTabs.filter((report) => report.id !== 'tax-return' || hasOfficialTaxAccess()),
 );
+
+const weeklyCategoryOptions = computed(() => offeringCategoryOptions.value.filter(
+  (option) => !weeklyFilters.fundCode || option.parentCode === weeklyFilters.fundCode,
+));
+const memberCategoryOptions = computed(() => offeringCategoryOptions.value.filter(
+  (option) => !memberFilters.fundCode || option.parentCode === memberFilters.fundCode,
+));
 
 const activeVisibleReportId = computed<ReportTab['id']>(() => {
   return visibleReportTabs.value.some((report) => report.id === activeReportId.value)
@@ -487,12 +523,18 @@ onMounted(() => {
 
 async function loadReferenceOptions() {
   try {
-    const [funds, paymentMethods] = await Promise.all([
-      listReferenceData('OFFERING_FUND_CATEGORY'),
+    const [funds, categories, paymentMethods, financialCategories, financialSubCategories] = await Promise.all([
+      listReferenceData('OFFERING_FUND'),
+      listReferenceData('OFFERING_CATEGORY'),
       listReferenceData('PAYMENT_METHOD'),
+      listReferenceData('FINANCIAL_CATEGORY'),
+      listReferenceData('FINANCIAL_SUB_CATEGORY'),
     ]);
     offeringFundOptions.value = activeSortedOptions(funds);
+    offeringCategoryOptions.value = activeSortedOptions(categories);
     paymentMethodOptions.value = activeSortedOptions(paymentMethods);
+    financialCategoryOptions.value = activeSortedOptions(financialCategories);
+    financialSubCategoryOptions.value = activeSortedOptions(financialSubCategories);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load report filter options.';
   }
@@ -556,12 +598,13 @@ function exportActiveReport() {
   if (activeVisibleReportId.value === 'weekly-offerings') {
     exportCsv(
       'weekly-offering-report.csv',
-      ['Offering Sunday', 'Fund/category', 'Giving type', 'Payment method', 'Count', 'Total'],
+      ['Offering Sunday', 'Fund', 'Category', 'Giving type', 'Payment method', 'Count', 'Total'],
       weeklyRows.value.map((row) => [
         row.offeringSunday,
-        row.fundCategory,
-        row.givingType,
-        row.paymentMethod,
+        referenceLabel(offeringFundOptions.value, row.fundCode),
+        referenceLabel(offeringCategoryOptions.value, row.categoryCode),
+        givingTypeLabel(row.givingType),
+        referenceLabel(paymentMethodOptions.value, row.paymentMethod),
         row.count,
         row.totalAmount,
       ]),
@@ -572,12 +615,13 @@ function exportActiveReport() {
   if (activeVisibleReportId.value === 'member-offerings') {
     exportCsv(
       'member-offering-summary.csv',
-      ['Offering number', 'Member', 'Email', 'Fund/category', 'Count', 'Total'],
+      ['Offering number', 'Member', 'Email', 'Fund', 'Category', 'Count', 'Total'],
       memberRows.value.map((row) => [
         row.offeringNumber,
         row.memberName,
         row.primaryEmail,
-        row.fundCategory,
+        referenceLabel(offeringFundOptions.value, row.fundCode),
+        referenceLabel(offeringCategoryOptions.value, row.categoryCode),
         row.count,
         row.totalAmount,
       ]),
@@ -587,13 +631,14 @@ function exportActiveReport() {
 
   exportCsv(
     'financial-budget-report.csv',
-    ['Type', 'Category', 'Sub-category', 'Budget', 'Actual', 'Variance'],
+    ['Type', 'Category', 'Sub-category', 'Budget', 'Actual', 'Budget vs. Actual', 'Variance'],
     financialRows.value.map((row) => [
-      row.budgetType,
-      row.category,
-      row.subCategory,
+      budgetTypeLabel(row.budgetType),
+      financialCategoryLabel(row),
+      financialSubCategoryLabel(row),
       row.budget,
       row.actual,
+      budgetActualPercentage(row.budget, row.actual),
       row.variance,
     ]),
   );
@@ -694,6 +739,48 @@ function activeSortedOptions(options: ReferenceDataOption[]) {
   return options
     .filter((option) => option.active)
     .sort((left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label));
+}
+
+function referenceLabel(options: ReferenceDataOption[], code?: string) {
+  if (!code) {
+    return '-';
+  }
+  return options.find((option) => option.code === code)?.label ?? code;
+}
+
+function givingTypeLabel(type: WeeklyOfferingReportRow['givingType']) {
+  return {
+    MEMBER: 'Member',
+    ANONYMOUS: 'Anonymous',
+    GROUP: 'Group',
+  }[type] ?? type;
+}
+
+function budgetTypeLabel(type: FinancialBudgetReportRow['budgetType']) {
+  if (type === 'OFFERING_INCOME') {
+    return 'INCOME';
+  }
+  return type;
+}
+
+function financialCategoryLabel(row: FinancialBudgetReportRow) {
+  return row.budgetType === 'OFFERING_INCOME'
+    ? referenceLabel(offeringFundOptions.value, row.category)
+    : referenceLabel(financialCategoryOptions.value, row.category);
+}
+
+function financialSubCategoryLabel(row: FinancialBudgetReportRow) {
+  return row.budgetType === 'OFFERING_INCOME'
+    ? referenceLabel(offeringCategoryOptions.value, row.subCategory)
+    : referenceLabel(financialSubCategoryOptions.value, row.subCategory);
+}
+
+function budgetActualPercentage(budget: number, actual: number) {
+  const budgetAmount = Number(budget);
+  if (budgetAmount === 0) {
+    return '-';
+  }
+  return `${((Number(actual) / budgetAmount) * 100).toFixed(2)}%`;
 }
 
 function exportCsv(filename: string, headers: string[], rows: Array<Array<string | number | undefined>>) {

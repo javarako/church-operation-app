@@ -118,6 +118,7 @@ describe('AppLayout', () => {
 
     expect(await screen.findByRole('link', { name: 'Dashboard' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'System Administration' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Reference Data' })).toBeNull();
   });
 
   it('falls back to text branding when church information fails', async () => {

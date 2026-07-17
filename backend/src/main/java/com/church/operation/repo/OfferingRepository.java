@@ -10,7 +10,7 @@ import java.util.List;
 public interface OfferingRepository extends MongoRepository<Offering, String> {
     List<Offering> findByDeletedFalseOrderByOfferingDateDescCreatedAtDesc();
 
-    @Query(value = "{ 'deleted' : false, 'offeringSunday' : { $gte : ?0, $lte : ?1 } }", sort = "{ 'offeringSunday' : 1, 'fundCategory' : 1, 'paymentMethod' : 1 }")
+    @Query(value = "{ 'deleted' : false, 'offeringSunday' : { $gte : ?0, $lte : ?1 } }", sort = "{ 'offeringSunday' : 1, 'fundCode' : 1, 'categoryCode' : 1, 'paymentMethod' : 1 }")
     List<Offering> findByDeletedFalseAndOfferingSundayBetweenOrderByOfferingSundayAscFundCategoryAscPaymentMethodAsc(
         LocalDate start,
         LocalDate end

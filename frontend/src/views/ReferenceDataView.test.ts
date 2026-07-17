@@ -1,17 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import ReferenceDataView from './ReferenceDataView.vue';
-import { deleteReferenceData } from '../api/referenceData';
+import {
+  createReferenceData,
+  deleteReferenceData,
+  listAllReferenceData,
+} from '../api/referenceData';
 
 vi.mock('../api/referenceData', () => ({
-  listReferenceData: vi.fn().mockResolvedValue([{
-    id: 'ref-1',
-    type: 'GROUP_CODE',
-    code: 'CHOIR',
-    label: 'Choir',
-    sortOrder: 10,
-    active: true,
-  }]),
+  listReferenceData: vi.fn().mockResolvedValue([]),
+  listAllReferenceData: vi.fn(),
   createReferenceData: vi.fn(),
   updateReferenceData: vi.fn(),
   deleteReferenceData: vi.fn().mockResolvedValue(undefined),
@@ -21,8 +19,25 @@ vi.mock('../api/churchInformation', () => ({
   getChurchInformation: vi.fn().mockResolvedValue({ listPageSize: 20 }),
 }));
 
-describe('ReferenceDataView deletion', () => {
-  afterEach(cleanup);
+const listAllMock = vi.mocked(listAllReferenceData);
+const createMock = vi.mocked(createReferenceData);
+
+describe('ReferenceDataView', () => {
+  beforeEach(() => {
+    listAllMock.mockImplementation(async (type) => type === 'GROUP_CODE' ? [{
+      id: 'ref-1',
+      type: 'GROUP_CODE',
+      code: 'CHOIR',
+      label: 'Choir',
+      sortOrder: 10,
+      active: true,
+    }] : []);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
 
   it('deletes a reference value from its row trash action after confirmation', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -31,5 +46,60 @@ describe('ReferenceDataView deletion', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Delete reference value Choir' }));
 
     expect(deleteReferenceData).toHaveBeenCalledWith('ref-1');
+  });
+
+  it('keeps type and code read-only after selecting an existing value', async () => {
+    render(ReferenceDataView);
+
+    await fireEvent.click(await screen.findByText('Choir'));
+
+    expect((screen.getByLabelText('Type') as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Code') as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('offers Committee Code as a maintainable type', async () => {
+    render(ReferenceDataView);
+
+    expect((await screen.findAllByRole('option', { name: 'Committee code' })).length).toBe(2);
+  });
+
+  it('refreshes financial category parents immediately after creation', async () => {
+    let financialCategories = [{
+      id: 'office',
+      type: 'FINANCIAL_CATEGORY' as const,
+      code: 'OFFICE',
+      label: 'Office',
+      sortOrder: 10,
+      active: true,
+    }];
+    listAllMock.mockImplementation(async (type) => {
+      if (type === 'FINANCIAL_CATEGORY') {
+        return financialCategories;
+      }
+      return [];
+    });
+    createMock.mockImplementation(async (payload) => {
+      const created = {
+        id: 'ministry',
+        ...payload,
+        type: 'FINANCIAL_CATEGORY' as const,
+        code: 'MINISTRY',
+        label: 'Ministry',
+      };
+      financialCategories = [...financialCategories, created];
+      return created;
+    });
+    render(ReferenceDataView);
+
+    await fireEvent.update(screen.getByLabelText('Type'), 'FINANCIAL_CATEGORY');
+    await fireEvent.update(screen.getByLabelText('Code'), 'MINISTRY');
+    await fireEvent.update(screen.getByLabelText('Label'), 'Ministry');
+    await fireEvent.click(screen.getByRole('button', { name: 'Create value' }));
+    await waitFor(() => expect(createMock).toHaveBeenCalled());
+
+    await fireEvent.click(screen.getByRole('button', { name: 'New value' }));
+    await fireEvent.update(screen.getByLabelText('Type'), 'FINANCIAL_SUB_CATEGORY');
+
+    expect(await screen.findByRole('option', { name: 'Ministry' })).toBeTruthy();
   });
 });

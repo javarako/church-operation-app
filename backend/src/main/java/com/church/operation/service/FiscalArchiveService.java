@@ -8,6 +8,7 @@ import com.church.operation.entity.FinancialTransaction;
 import com.church.operation.entity.Offering;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.FiscalArchiveRegistry;
+import com.church.operation.entity.ReferenceData;
 import com.church.operation.repo.BudgetRepository;
 import com.church.operation.repo.FinancialTransactionRepository;
 import com.church.operation.repo.FiscalArchiveRegistryRepository;
@@ -225,6 +226,7 @@ public class FiscalArchiveService {
                 || !validated.checksum().equals(registry.getChecksum())) {
                 throw new IllegalStateException("Fiscal archive registry checksum or status does not match.");
             }
+            normalizeLegacyOfferingHierarchy(payload);
             validateDependencies(payload);
             Set<BudgetKey> existingBudgetKeys = budgets.findAllByFiscalYear(payload.fiscalYear()).stream()
                 .map(BudgetKey::from).collect(java.util.stream.Collectors.toSet());
@@ -254,13 +256,27 @@ public class FiscalArchiveService {
         if (!missingMembers.isEmpty()) {
             throw new IllegalStateException("Fiscal archive references a member that no longer exists.");
         }
+        validateOfferingHierarchies(payload);
         validateCodes(java.util.stream.Stream.concat(
-                payload.offerings().stream().map(Offering::getFundCategory),
-                payload.budgets().stream()
+                payload.offerings().stream().map(Offering::getFundCode),
+                java.util.stream.Stream.concat(
+                    payload.linkedIncome().stream().map(FinancialTransaction::getCategory),
+                    payload.budgets().stream()
                     .filter(value -> value.getBudgetType() == com.church.operation.util.BudgetType.OFFERING_INCOME)
                     .map(Budget::getCategory)
+                )
             ).toList(),
-            ReferenceDataType.OFFERING_FUND_CATEGORY, "fund/category");
+            ReferenceDataType.OFFERING_FUND, "offering fund");
+        validateCodes(java.util.stream.Stream.concat(
+                payload.offerings().stream().map(Offering::getCategoryCode),
+                java.util.stream.Stream.concat(
+                    payload.linkedIncome().stream().map(FinancialTransaction::getSubCategory),
+                    payload.budgets().stream()
+                    .filter(value -> value.getBudgetType() == com.church.operation.util.BudgetType.OFFERING_INCOME)
+                    .map(Budget::getSubCategory)
+                )
+            ).toList(),
+            ReferenceDataType.OFFERING_CATEGORY, "offering category");
         validateCodes(payload.offerings().stream().map(Offering::getPaymentMethod).toList(),
             ReferenceDataType.PAYMENT_METHOD, "payment method");
         validateCodes(java.util.stream.Stream.concat(
@@ -279,12 +295,86 @@ public class FiscalArchiveService {
             ReferenceDataType.FINANCIAL_SUB_CATEGORY, "financial sub-category");
     }
 
+    private void validateOfferingHierarchies(FiscalArchivePayload payload) {
+        payload.offerings().forEach(value ->
+            validateOfferingHierarchy(value.getFundCode(), value.getCategoryCode()));
+        payload.linkedIncome().forEach(value ->
+            validateOfferingHierarchy(value.getCategory(), value.getSubCategory()));
+        payload.budgets().stream()
+            .filter(value -> value.getBudgetType() == com.church.operation.util.BudgetType.OFFERING_INCOME)
+            .forEach(value -> validateOfferingHierarchy(value.getCategory(), value.getSubCategory()));
+    }
+
+    private void validateOfferingHierarchy(String fundCode, String categoryCode) {
+        if (isBlank(fundCode) || isBlank(categoryCode)) {
+            throw new IllegalStateException("Fiscal archive contains an incomplete offering hierarchy.");
+        }
+        ReferenceData category = references.findByTypeAndCode(ReferenceDataType.OFFERING_CATEGORY, categoryCode)
+            .orElse(null);
+        if (category != null && !fundCode.equals(category.getParentCode())) {
+            throw new IllegalStateException("Fiscal archive contains an invalid offering hierarchy.");
+        }
+        if (category == null && !OfferingHierarchyMigrationService.GENERAL_FUND.equals(fundCode)
+            && references.existsByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, categoryCode)) {
+            throw new IllegalStateException("Fiscal archive contains an invalid offering hierarchy.");
+        }
+    }
+
     private void validateCodes(List<String> codes, ReferenceDataType type, String label) {
         boolean missing = codes.stream().filter(java.util.Objects::nonNull).distinct()
-            .anyMatch(code -> !references.existsByTypeAndCode(type, code));
+            .anyMatch(code -> !referenceExists(type, code));
         if (missing) {
             throw new IllegalStateException("Fiscal archive references a missing " + label + ".");
         }
+    }
+
+    private boolean referenceExists(ReferenceDataType type, String code) {
+        if (references.existsByTypeAndCode(type, code)) {
+            return true;
+        }
+        return (type == ReferenceDataType.OFFERING_FUND || type == ReferenceDataType.OFFERING_CATEGORY)
+            && references.existsByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, code);
+    }
+
+    private void normalizeLegacyOfferingHierarchy(FiscalArchivePayload payload) {
+        for (Offering offering : payload.offerings()) {
+            if (offering.getCategoryCode() == null && offering.getFundCategory() != null
+                && (offering.getFundCode() == null
+                    || OfferingHierarchyMigrationService.GENERAL_FUND.equals(offering.getFundCode()))) {
+                if (offering.getFundCode() == null) {
+                    offering.setFundCode(OfferingHierarchyMigrationService.GENERAL_FUND);
+                }
+                offering.setCategoryCode(offering.getFundCategory());
+            }
+        }
+        Map<String, Offering> offeringsById = payload.offerings().stream()
+            .filter(value -> value.getId() != null)
+            .collect(java.util.stream.Collectors.toMap(Offering::getId, value -> value));
+        for (FinancialTransaction income : payload.linkedIncome()) {
+            if (income.getSubCategory() == null) {
+                Offering source = offeringsById.get(income.getSourceId());
+                if (source != null && source.getCategoryCode() != null) {
+                    income.setCategory(source.getFundCode());
+                    income.setSubCategory(source.getCategoryCode());
+                } else if (income.getCategory() != null
+                    && !OfferingHierarchyMigrationService.GENERAL_FUND.equals(income.getCategory())) {
+                    income.setSubCategory(income.getCategory());
+                    income.setCategory(OfferingHierarchyMigrationService.GENERAL_FUND);
+                }
+            }
+        }
+        for (Budget budget : payload.budgets()) {
+            if (budget.getBudgetType() == com.church.operation.util.BudgetType.OFFERING_INCOME
+                && budget.getSubCategory() == null && budget.getCategory() != null
+                && !OfferingHierarchyMigrationService.GENERAL_FUND.equals(budget.getCategory())) {
+                budget.setSubCategory(budget.getCategory());
+                budget.setCategory(OfferingHierarchyMigrationService.GENERAL_FUND);
+            }
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     public FiscalArchiveRegistry executeRestore(Member actor, String id, String confirmation) {
@@ -364,6 +454,20 @@ public class FiscalArchiveService {
         registry.setExpenseCount(payload.expenses().size());
         registry.setBudgetCount(payload.budgets().size());
         registry.setMemberIds(payload.offerings().stream().map(Offering::getMemberId)
+            .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()));
+        registry.setOfferingFunds(java.util.stream.Stream.concat(
+                payload.offerings().stream().map(Offering::getFundCode),
+                payload.budgets().stream()
+                    .filter(value -> value.getBudgetType() == com.church.operation.util.BudgetType.OFFERING_INCOME)
+                    .map(Budget::getCategory)
+            )
+            .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()));
+        registry.setOfferingCategories(java.util.stream.Stream.concat(
+                payload.offerings().stream().map(Offering::getCategoryCode),
+                payload.budgets().stream()
+                    .filter(value -> value.getBudgetType() == com.church.operation.util.BudgetType.OFFERING_INCOME)
+                    .map(Budget::getSubCategory)
+            )
             .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()));
         registry.setFundCategories(java.util.stream.Stream.concat(
                 payload.offerings().stream().map(Offering::getFundCategory),
