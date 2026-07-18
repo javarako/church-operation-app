@@ -145,7 +145,9 @@ After all normal groups:
 - Add the special row.
 - Add the final total row.
 
-The expenditure special-row label is `CONTINGENCY`. The offering special-row
+The expenditure special-row label uses the configured Financial Category label
+for code `CONTINGENCY`, resolved case-insensitively, and falls back to
+`CONTINGENCY` when the reference is missing or blank. The offering special-row
 label remains `전년도 이월금`.
 
 ## Calculations
@@ -185,7 +187,7 @@ Both workbooks retain the existing quarterly offering settings:
 
 - Letter paper.
 - Landscape.
-- Fit to one page wide by one page tall.
+- Adjust to 100% scaling with fit-to-page disabled.
 - Horizontally centered.
 - Top and bottom margins: 0.5 inches.
 - Left and right margins: 0.25 inches.
@@ -275,4 +277,3 @@ Final verification includes:
 - Artifact-tool inspection of values and formulas.
 - Formula-error scans.
 - Visual rendering of both sheets, including visible logos.
-

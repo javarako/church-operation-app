@@ -95,7 +95,15 @@ class QuarterlyExpenditureReportServiceTest {
             .thenReturn(List.of(
                 reference(ReferenceDataType.FINANCIAL_CATEGORY, "PROPERTY", "Property", null, 1, false),
                 reference(ReferenceDataType.FINANCIAL_CATEGORY, "ADMIN", "Administration", null, 2, true),
-                reference(ReferenceDataType.FINANCIAL_CATEGORY, "MISSION", "Mission", null, 3, true)
+                reference(ReferenceDataType.FINANCIAL_CATEGORY, "MISSION", "Mission", null, 3, true),
+                reference(
+                    ReferenceDataType.FINANCIAL_CATEGORY,
+                    "CONTINGENCY",
+                    "Emergency Reserve",
+                    null,
+                    99,
+                    true
+                )
             ));
         when(referenceDataRepository.findByTypeOrderBySortOrderAscLabelAsc(
             ReferenceDataType.FINANCIAL_SUB_CATEGORY
@@ -127,6 +135,7 @@ class QuarterlyExpenditureReportServiceTest {
             BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("999")
         );
         assertThat(report.specialCumulativeActual()).isEqualByComparingTo("999");
+        assertThat(report.specialRowLabel()).isEqualTo("Emergency Reserve");
 
         verify(budgetRepository).findActiveByFiscalYear(2025);
         verify(transactionRepository).findActiveByTransactionDateBetween(

@@ -267,9 +267,18 @@ The code is the value's key and cannot be changed after creation. Inactive value
 2. Enter the fiscal year and select **Run report**.
 3. Review labelled income/expense categories, budget, actual, Budget vs. Actual percentage, and variance. A zero budget shows `-` for the percentage.
 
-For any visible report, select **Export CSV** to download the current report results.
+### Quarterly Financial Report
 
-[[FIGURE:10-reports.png|Report tabs, filters, results, and CSV export]]
+1. Select **Quarterly Financial Report**.
+2. Select the calendar year and quarter.
+3. Select the Offering download for the quarterly offering workbook or the Expenditure download for the quarterly expense workbook.
+4. Review the configured carry-over row in Offering and the configured `CONTINGENCY` Financial Category label in Expenditure.
+
+Both workbooks use Letter landscape print settings with scaling set to **Adjust to 100%**.
+
+For table reports that show **Export CSV**, select it to download the current report results.
+
+[[FIGURE:10-reports.png|Quarterly Financial Report controls and Excel downloads]]
 
 ## My Profile
 

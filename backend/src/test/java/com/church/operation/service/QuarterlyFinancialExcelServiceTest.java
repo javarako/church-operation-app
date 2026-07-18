@@ -13,6 +13,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFPicture;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -89,8 +90,7 @@ class QuarterlyFinancialExcelServiceTest {
             assertThat(picture.getClientAnchor().getRow1()).isEqualTo(0);
             assertThat(picture.getClientAnchor().getRow2()).isEqualTo(1);
             assertThat(sheet.getPrintSetup().getLandscape()).isTrue();
-            assertThat(sheet.getPrintSetup().getFitWidth()).isEqualTo((short) 1);
-            assertThat(sheet.getPrintSetup().getFitHeight()).isEqualTo((short) 1);
+            assertAdjustTo100Percent(sheet);
             assertThat(sheet.getHorizontallyCenter()).isTrue();
             assertThat(sheet.getMargin(Sheet.TopMargin)).isEqualTo(0.5);
             assertThat(sheet.getMargin(Sheet.BottomMargin)).isEqualTo(0.5);
@@ -168,6 +168,7 @@ class QuarterlyFinancialExcelServiceTest {
             assertThat(sheet.getRow(10).getCell(0).getStringCellValue())
                 .isEqualTo("CONTINGENCY");
             assertThat(workbook.getAllPictures()).hasSize(1);
+            assertAdjustTo100Percent(sheet);
         }
     }
 
@@ -204,6 +205,14 @@ class QuarterlyFinancialExcelServiceTest {
             new ChurchInformationProperties.Ui(20)
         );
         return new QuarterlyFinancialExcelService(properties);
+    }
+
+    private void assertAdjustTo100Percent(XSSFSheet sheet) {
+        assertThat(sheet.getPrintSetup().getScale()).isEqualTo((short) 100);
+        assertThat(sheet.getCTWorksheet().getSheetPr().getPageSetUpPr().getFitToPage())
+            .isFalse();
+        assertThat(sheet.getCTWorksheet().getPageSetup().isSetFitToWidth()).isFalse();
+        assertThat(sheet.getCTWorksheet().getPageSetup().isSetFitToHeight()).isFalse();
     }
 
     private QuarterlyFinancialReport report() {

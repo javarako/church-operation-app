@@ -183,7 +183,7 @@ Rows 4 through the final total use the same compact row-height and border patter
 ## Print Settings
 
 - Landscape orientation.
-- Fit to one page wide by one page tall.
+- Adjust to 100% scaling with fit-to-page disabled.
 - Margins:
   - Top: 0.5 inches.
   - Bottom: 0.5 inches.

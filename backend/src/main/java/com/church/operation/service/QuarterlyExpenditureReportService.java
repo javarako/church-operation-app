@@ -70,7 +70,7 @@ public class QuarterlyExpenditureReportService {
             reportRows.contingencyCumulativeActual(),
             "Expenditure",
             "지출",
-            "CONTINGENCY"
+            reportRows.contingencyLabel()
         );
     }
 
@@ -193,7 +193,8 @@ public class QuarterlyExpenditureReportService {
             List.copyOf(groups),
             contingencyBudget,
             List.copyOf(Arrays.asList(contingencyMonthly)),
-            contingencyCumulative
+            contingencyCumulative,
+            references.categoryLabelIgnoreCase("CONTINGENCY")
         );
     }
 
@@ -302,7 +303,8 @@ public class QuarterlyExpenditureReportService {
         List<QuarterlyFinancialGroup> groups,
         BigDecimal contingencyBudget,
         List<BigDecimal> contingencyMonthlyActuals,
-        BigDecimal contingencyCumulativeActual
+        BigDecimal contingencyCumulativeActual,
+        String contingencyLabel
     ) {
     }
 
@@ -319,6 +321,15 @@ public class QuarterlyExpenditureReportService {
 
         private String categoryLabel(String code) {
             return category(code).label();
+        }
+
+        private String categoryLabelIgnoreCase(String code) {
+            return categories.entrySet().stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase(code))
+                .map(entry -> entry.getValue().label())
+                .findFirst()
+                .filter(label -> label != null && !label.isBlank())
+                .orElse(code);
         }
 
         private ReferenceValue subCategory(RowKey key) {

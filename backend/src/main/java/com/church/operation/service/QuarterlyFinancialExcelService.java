@@ -271,10 +271,15 @@ public class QuarterlyFinancialExcelService {
     private void configurePrint(XSSFWorkbook workbook, XSSFSheet sheet, int finalRow) {
         sheet.getPrintSetup().setLandscape(true);
         sheet.getPrintSetup().setPaperSize(PrintSetup.LETTER_PAPERSIZE);
-        sheet.getPrintSetup().setFitWidth((short) 1);
-        sheet.getPrintSetup().setFitHeight((short) 1);
-        sheet.setFitToPage(true);
-        sheet.setAutobreaks(true);
+        sheet.getPrintSetup().setScale((short) 100);
+        sheet.setFitToPage(false);
+        sheet.setAutobreaks(false);
+        if (sheet.getCTWorksheet().getPageSetup().isSetFitToWidth()) {
+            sheet.getCTWorksheet().getPageSetup().unsetFitToWidth();
+        }
+        if (sheet.getCTWorksheet().getPageSetup().isSetFitToHeight()) {
+            sheet.getCTWorksheet().getPageSetup().unsetFitToHeight();
+        }
         sheet.setHorizontallyCenter(true);
         sheet.setMargin(Sheet.TopMargin, 0.5);
         sheet.setMargin(Sheet.BottomMargin, 0.5);
