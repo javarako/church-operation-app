@@ -33,7 +33,9 @@ import java.io.IOException;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.poi.ss.util.CellRangeAddress.valueOf;
 
@@ -57,6 +59,7 @@ public class QuarterlyFinancialExcelService {
             configureColumns(sheet);
             createTopRows(sheet, report, styles);
             int finalRow = createReportRows(sheet, report, styles);
+            wrapColumnB(workbook, sheet);
             addLogo(workbook, sheet);
             configurePrint(workbook, sheet, finalRow);
             workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
@@ -68,12 +71,31 @@ public class QuarterlyFinancialExcelService {
     }
 
     private void configureColumns(XSSFSheet sheet) {
-        sheet.setColumnWidth(0, (int) (6.1640625 * 256));
-        sheet.setColumnWidth(1, 27 * 256);
-        for (int column = 2; column <= 8; column++) {
+        sheet.setColumnWidth(0, 7 * 256);
+        sheet.setColumnWidth(1, 28 * 256);
+        for (int column = 2; column <= 7; column++) {
             sheet.setColumnWidth(column, (int) (10.83203125 * 256));
         }
-        sheet.setColumnWidth(9, (int) (16.5 * 256));
+        sheet.setColumnWidth(8, (int) (8.5 * 256));
+        sheet.setColumnWidth(9, 16 * 256);
+    }
+
+    private void wrapColumnB(XSSFWorkbook workbook, XSSFSheet sheet) {
+        Map<Short, CellStyle> wrappedStyles = new HashMap<>();
+        for (Row row : sheet) {
+            Cell cell = row.getCell(1);
+            if (cell == null) {
+                continue;
+            }
+            short sourceStyleIndex = cell.getCellStyle().getIndex();
+            CellStyle wrappedStyle = wrappedStyles.computeIfAbsent(sourceStyleIndex, index -> {
+                CellStyle style = workbook.createCellStyle();
+                style.cloneStyleFrom(workbook.getCellStyleAt(index));
+                style.setWrapText(true);
+                return style;
+            });
+            cell.setCellStyle(wrappedStyle);
+        }
     }
 
     private void createTopRows(XSSFSheet sheet, QuarterlyFinancialReport report, Styles styles) {

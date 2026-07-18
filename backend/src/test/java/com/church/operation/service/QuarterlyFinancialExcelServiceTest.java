@@ -99,9 +99,7 @@ class QuarterlyFinancialExcelServiceTest {
             assertThat(sheet.getFooter().getCenter()).isEqualTo("Page &P");
             assertThat(sheet.getRepeatingRows()).isEqualTo(CellRangeAddress.valueOf("1:4"));
             assertThat(workbook.getPrintArea(0)).contains("$A$1:$J$12");
-            assertThat(sheet.getColumnWidth(0)).isEqualTo((int) (6.1640625 * 256));
-            assertThat(sheet.getColumnWidth(1)).isEqualTo(27 * 256);
-            assertThat(sheet.getColumnWidth(9)).isEqualTo((int) (16.5 * 256));
+            assertQuarterlyColumnLayout(sheet);
 
             Font titleFont = workbook.getFontAt(sheet.getRow(1).getCell(0).getCellStyle().getFontIndex());
             assertThat(titleFont.getFontName()).isEqualTo("Arial");
@@ -169,6 +167,7 @@ class QuarterlyFinancialExcelServiceTest {
                 .isEqualTo("CONTINGENCY");
             assertThat(workbook.getAllPictures()).hasSize(1);
             assertAdjustTo100Percent(sheet);
+            assertQuarterlyColumnLayout(sheet);
         }
     }
 
@@ -213,6 +212,19 @@ class QuarterlyFinancialExcelServiceTest {
             .isFalse();
         assertThat(sheet.getCTWorksheet().getPageSetup().isSetFitToWidth()).isFalse();
         assertThat(sheet.getCTWorksheet().getPageSetup().isSetFitToHeight()).isFalse();
+    }
+
+    private void assertQuarterlyColumnLayout(XSSFSheet sheet) {
+        assertThat(sheet.getColumnWidth(0)).isEqualTo(7 * 256);
+        assertThat(sheet.getColumnWidth(1)).isEqualTo(28 * 256);
+        assertThat(sheet.getColumnWidth(8)).isEqualTo((int) (8.5 * 256));
+        assertThat(sheet.getColumnWidth(9)).isEqualTo(16 * 256);
+        for (var row : sheet) {
+            var cell = row.getCell(1);
+            if (cell != null) {
+                assertThat(cell.getCellStyle().getWrapText()).isTrue();
+            }
+        }
     }
 
     private QuarterlyFinancialReport report() {

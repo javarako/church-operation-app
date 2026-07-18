@@ -133,6 +133,17 @@ The columns remain:
 | I | Cumulative actual divided by budget |
 | J | Notes |
 
+Both workbooks use these column widths:
+
+- A: `7`
+- B: `28`
+- C through H: `10.83203125`
+- I: `8.5`
+- J: `16`
+
+Every populated cell in column B uses wrap text, including the header, detail,
+subtotal, special, and total rows.
+
 For each normal group:
 
 - Create one detail row per sub-category.
@@ -257,7 +268,8 @@ Backend tests cover:
 Workbook tests cover:
 
 - Sheet names and Korean titles.
-- Column widths, merged cells, styles, formulas, and zero display.
+- Shared column widths, column-B wrapping, merged cells, styles, formulas, and
+  zero display.
 - Landscape one-page print settings.
 - Church logo presence and visible top-right anchor for both workbooks.
 - Formula evaluation without spreadsheet errors.

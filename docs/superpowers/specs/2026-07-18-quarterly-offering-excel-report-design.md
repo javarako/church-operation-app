@@ -102,10 +102,14 @@ Create one worksheet named `Offering income`.
 
 Column widths match the sample:
 
-- A: `6.1640625`
-- B: `27`
-- C through I: `10.83203125`
-- J: `16.5`
+- A: `7`
+- B: `28`
+- C through H: `10.83203125`
+- I: `8.5`
+- J: `16`
+
+Every populated cell in column B uses wrap text, including the header, detail,
+subtotal, carry-over, and total rows.
 
 ### Rows
 
@@ -170,7 +174,7 @@ Match the sample workbook:
 - Gray header fill.
 - Thin black table borders.
 - Fund labels centered and wrapped.
-- Category labels left-aligned.
+- Category labels left-aligned and wrapped.
 - Subtotal and total numeric cells bold.
 - Currency format displays zero values as blank.
 - Percentage format: `0.00%`.
