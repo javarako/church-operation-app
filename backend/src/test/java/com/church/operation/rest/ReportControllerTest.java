@@ -1,9 +1,13 @@
 package com.church.operation.rest;
 
 import com.church.operation.dto.TaxReceiptSummaryRow;
+import com.church.operation.dto.QuarterlyFinancialReport;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.TaxReceipt;
 import com.church.operation.exception.GlobalExceptionHandler;
+import com.church.operation.service.QuarterlyFinancialExcelService;
+import com.church.operation.service.QuarterlyExpenditureReportService;
+import com.church.operation.service.QuarterlyOfferingReportService;
 import com.church.operation.service.ReportService;
 import com.church.operation.service.TaxReceiptPdfService;
 import com.church.operation.service.TaxReceiptService;
@@ -16,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -37,12 +43,23 @@ class ReportControllerTest {
     private final ReportService reportService = mock(ReportService.class);
     private final TaxReceiptService taxReceiptService = mock(TaxReceiptService.class);
     private final TaxReceiptPdfService pdfService = mock(TaxReceiptPdfService.class);
+    private final QuarterlyOfferingReportService quarterlyReportService = mock(QuarterlyOfferingReportService.class);
+    private final QuarterlyExpenditureReportService quarterlyExpenditureReportService =
+        mock(QuarterlyExpenditureReportService.class);
+    private final QuarterlyFinancialExcelService quarterlyExcelService = mock(QuarterlyFinancialExcelService.class);
     private MockMvc mockMvc;
     private Member treasurer;
 
     @BeforeEach
     void setUp() {
-        mockMvc = standaloneSetup(new ReportController(reportService, taxReceiptService, pdfService))
+        mockMvc = standaloneSetup(new ReportController(
+            reportService,
+            taxReceiptService,
+            pdfService,
+            quarterlyReportService,
+            quarterlyExpenditureReportService,
+            quarterlyExcelService
+        ))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
         treasurer = member(Role.TREASURER);
@@ -88,6 +105,114 @@ class ReportControllerTest {
             .andExpect(content().contentType("application/pdf"))
             .andExpect(header().string("Content-Disposition", "attachment; filename=receipt-2026-000001.pdf"))
             .andExpect(content().bytes("pdf-data".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void downloadsQuarterlyOfferingWorkbookWithAttachmentHeaders() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        QuarterlyFinancialReport report = new QuarterlyFinancialReport(
+            2026,
+            2,
+            LocalDate.of(2026, 4, 1),
+            LocalDate.of(2026, 6, 30),
+            2026,
+            LocalDate.of(2026, 1, 1),
+            List.of(YearMonth.of(2026, 4), YearMonth.of(2026, 5), YearMonth.of(2026, 6)),
+            List.of(),
+            BigDecimal.ZERO,
+            List.of(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
+            BigDecimal.ZERO,
+            "Offering income",
+            "수입",
+            "전년도 이월금"
+        );
+        byte[] workbook = new byte[] {1, 2, 3};
+        when(quarterlyReportService.build(viewer, 2026, 2)).thenReturn(report);
+        when(quarterlyExcelService.render(report)).thenReturn(workbook);
+
+        mockMvc.perform(get("/api/reports/quarterly-offerings.xlsx")
+                .param("year", "2026")
+                .param("quarter", "2")
+                .principal(authentication(viewer)))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .andExpect(header().string(
+                "Content-Disposition",
+                "attachment; filename=quarterly-offerings-2026-q2.xlsx"
+            ))
+            .andExpect(content().bytes(workbook));
+
+        verify(quarterlyReportService).build(viewer, 2026, 2);
+        verify(quarterlyExcelService).render(report);
+    }
+
+    @Test
+    void downloadsQuarterlyExpenditureWorkbookWithAttachmentHeaders() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        QuarterlyFinancialReport report = new QuarterlyFinancialReport(
+            2026,
+            2,
+            LocalDate.of(2026, 4, 1),
+            LocalDate.of(2026, 6, 30),
+            2026,
+            LocalDate.of(2026, 1, 1),
+            List.of(YearMonth.of(2026, 4), YearMonth.of(2026, 5), YearMonth.of(2026, 6)),
+            List.of(),
+            BigDecimal.ZERO,
+            List.of(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
+            BigDecimal.ZERO,
+            "Expenditure",
+            "지출",
+            "CONTINGENCY"
+        );
+        byte[] workbook = new byte[] {4, 5, 6};
+        when(quarterlyExpenditureReportService.build(viewer, 2026, 2)).thenReturn(report);
+        when(quarterlyExcelService.render(report)).thenReturn(workbook);
+
+        mockMvc.perform(get("/api/reports/quarterly-expenditures.xlsx")
+                .param("year", "2026")
+                .param("quarter", "2")
+                .principal(authentication(viewer)))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .andExpect(header().string(
+                "Content-Disposition",
+                "attachment; filename=quarterly-expenditures-2026-q2.xlsx"
+            ))
+            .andExpect(content().bytes(workbook));
+
+        verify(quarterlyExpenditureReportService).build(viewer, 2026, 2);
+        verify(quarterlyExcelService).render(report);
+    }
+
+    @Test
+    void rejectsInvalidQuarterlyReportSelection() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        when(quarterlyReportService.build(viewer, 2026, 5))
+            .thenThrow(new IllegalArgumentException("A valid calendar year and quarter are required."));
+
+        mockMvc.perform(get("/api/reports/quarterly-offerings.xlsx")
+                .param("year", "2026")
+                .param("quarter", "5")
+                .principal(authentication(viewer)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsInvalidQuarterlyExpenditureSelection() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        when(quarterlyExpenditureReportService.build(viewer, 2026, 5))
+            .thenThrow(new IllegalArgumentException("A valid calendar year and quarter are required."));
+
+        mockMvc.perform(get("/api/reports/quarterly-expenditures.xlsx")
+                .param("year", "2026")
+                .param("quarter", "5")
+                .principal(authentication(viewer)))
+            .andExpect(status().isBadRequest());
     }
 
     @Test

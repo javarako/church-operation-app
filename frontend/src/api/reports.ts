@@ -93,6 +93,11 @@ interface FinancialBudgetReportFilters {
   fiscalYear: number;
 }
 
+export interface QuarterlyFinancialReportFilters {
+  year: number;
+  quarter: 1 | 2 | 3 | 4;
+}
+
 function buildQuery(params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams();
 
@@ -146,4 +151,12 @@ export function replaceTaxReceipt(receiptId: string, thankYouNote: string) {
 
 export function listFinancialBudgetReport(filters: FinancialBudgetReportFilters) {
   return getJson<FinancialBudgetReportRow[]>(withQuery('/api/reports/financial-budget', { ...filters }));
+}
+
+export function downloadQuarterlyOfferingReport(filters: QuarterlyFinancialReportFilters) {
+  return getBlob(withQuery('/api/reports/quarterly-offerings.xlsx', { ...filters }));
+}
+
+export function downloadQuarterlyExpenditureReport(filters: QuarterlyFinancialReportFilters) {
+  return getBlob(withQuery('/api/reports/quarterly-expenditures.xlsx', { ...filters }));
 }

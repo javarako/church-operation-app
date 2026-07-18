@@ -11,6 +11,9 @@ import com.church.operation.dto.WeeklyOfferingReportRow;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.TaxReceipt;
 import com.church.operation.service.ReportService;
+import com.church.operation.service.QuarterlyFinancialExcelService;
+import com.church.operation.service.QuarterlyExpenditureReportService;
+import com.church.operation.service.QuarterlyOfferingReportService;
 import com.church.operation.service.TaxReceiptPdfService;
 import com.church.operation.service.TaxReceiptService;
 import jakarta.validation.Valid;
@@ -40,15 +43,24 @@ public class ReportController {
     private final ReportService reportService;
     private final TaxReceiptService taxReceiptService;
     private final TaxReceiptPdfService taxReceiptPdfService;
+    private final QuarterlyOfferingReportService quarterlyOfferingReportService;
+    private final QuarterlyExpenditureReportService quarterlyExpenditureReportService;
+    private final QuarterlyFinancialExcelService quarterlyFinancialExcelService;
 
     public ReportController(
         ReportService reportService,
         TaxReceiptService taxReceiptService,
-        TaxReceiptPdfService taxReceiptPdfService
+        TaxReceiptPdfService taxReceiptPdfService,
+        QuarterlyOfferingReportService quarterlyOfferingReportService,
+        QuarterlyExpenditureReportService quarterlyExpenditureReportService,
+        QuarterlyFinancialExcelService quarterlyFinancialExcelService
     ) {
         this.reportService = reportService;
         this.taxReceiptService = taxReceiptService;
         this.taxReceiptPdfService = taxReceiptPdfService;
+        this.quarterlyOfferingReportService = quarterlyOfferingReportService;
+        this.quarterlyExpenditureReportService = quarterlyExpenditureReportService;
+        this.quarterlyFinancialExcelService = quarterlyFinancialExcelService;
     }
 
     @GetMapping("/weekly-offerings")
@@ -145,6 +157,46 @@ public class ReportController {
         @RequestParam("fiscalYear") int fiscalYear
     ) {
         return reportService.financialBudget(actor(authentication), fiscalYear);
+    }
+
+    @GetMapping("/quarterly-offerings.xlsx")
+    ResponseEntity<byte[]> downloadQuarterlyOfferings(
+        Authentication authentication,
+        @RequestParam("year") int year,
+        @RequestParam("quarter") int quarter
+    ) {
+        byte[] workbook = quarterlyFinancialExcelService.render(
+            quarterlyOfferingReportService.build(actor(authentication), year, quarter)
+        );
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .header(
+                HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=quarterly-offerings-" + year + "-q" + quarter + ".xlsx"
+            )
+            .body(workbook);
+    }
+
+    @GetMapping("/quarterly-expenditures.xlsx")
+    ResponseEntity<byte[]> downloadQuarterlyExpenditures(
+        Authentication authentication,
+        @RequestParam("year") int year,
+        @RequestParam("quarter") int quarter
+    ) {
+        byte[] workbook = quarterlyFinancialExcelService.render(
+            quarterlyExpenditureReportService.build(actor(authentication), year, quarter)
+        );
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .header(
+                HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=quarterly-expenditures-" + year + "-q" + quarter + ".xlsx"
+            )
+            .body(workbook);
     }
 
     private Member actor(Authentication authentication) {

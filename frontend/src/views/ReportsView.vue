@@ -38,7 +38,12 @@
         >
           Download all receipts
         </button>
-        <button v-else type="button" class="secondary" @click="exportActiveReport">
+        <button
+          v-else-if="activeVisibleReportId !== 'quarterly-financial'"
+          type="button"
+          class="secondary"
+          @click="exportActiveReport"
+        >
           Export CSV
         </button>
       </div>
@@ -138,6 +143,48 @@
           </label>
         </template>
 
+        <template v-else-if="activeVisibleReportId === 'quarterly-financial'">
+          <label>
+            Calendar year
+            <input v-model.number="quarterlyFilters.year" type="number" min="2000" step="1" />
+          </label>
+
+          <label>
+            Quarter
+            <select v-model.number="quarterlyFilters.quarter">
+              <option :value="1">Q1 (January-March)</option>
+              <option :value="2">Q2 (April-June)</option>
+              <option :value="3">Q3 (July-September)</option>
+              <option :value="4">Q4 (October-December)</option>
+            </select>
+          </label>
+
+          <div class="quarterly-downloads">
+            <div class="quarterly-download-row">
+              <strong>Quarterly Offering Excel</strong>
+              <button
+                type="button"
+                aria-label="Download quarterly offering Excel"
+                :disabled="quarterlyOfferingBusy"
+                @click="downloadQuarterlyOfferingWorkbook"
+              >
+                {{ quarterlyOfferingBusy ? 'Preparing...' : 'Download Excel' }}
+              </button>
+            </div>
+            <div class="quarterly-download-row">
+              <strong>Quarterly Expenditure Excel</strong>
+              <button
+                type="button"
+                aria-label="Download quarterly expenditure Excel"
+                :disabled="quarterlyExpenditureBusy"
+                @click="downloadQuarterlyExpenditureWorkbook"
+              >
+                {{ quarterlyExpenditureBusy ? 'Preparing...' : 'Download Excel' }}
+              </button>
+            </div>
+          </div>
+        </template>
+
         <template v-else>
           <label>
             Fiscal year
@@ -145,20 +192,20 @@
           </label>
         </template>
 
-        <div class="actions">
+        <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="actions">
           <button type="submit">Run report</button>
         </div>
       </form>
 
       <p v-if="error" class="error">{{ error }}</p>
 
-      <div class="summary-strip">
+      <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="summary-strip">
         <strong>{{ loading ? 'Loading...' : activeSummary.label }}</strong>
         <span>{{ activeSummary.rows }} row{{ activeSummary.rows === 1 ? '' : 's' }}</span>
         <span v-if="activeSummary.total">{{ activeSummary.total }}</span>
       </div>
 
-      <div class="table-wrap">
+      <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="table-wrap">
         <table v-if="activeVisibleReportId === 'weekly-offerings'">
           <thead>
             <tr>
@@ -347,7 +394,7 @@
       />
 
       <PaginationControls
-        v-else
+        v-else-if="activeVisibleReportId === 'financial-budget'"
         :current-page="financialPagination.currentPage.value"
         :page-count="financialPagination.pageCount.value"
         :page-size="financialPagination.pageSize.value"
@@ -365,6 +412,8 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import PaginationControls from '../components/PaginationControls.vue';
 import {
   DEFAULT_THANK_YOU_NOTE,
+  downloadQuarterlyExpenditureReport,
+  downloadQuarterlyOfferingReport,
   downloadTaxReceiptPdf,
   issueBatchTaxReceipts,
   issueTaxReceipt,
@@ -384,7 +433,7 @@ import { authState, type Role } from '../auth/authStore';
 import { usePagination } from '../composables/usePagination';
 
 interface ReportTab {
-  id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget';
+  id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget' | 'quarterly-financial';
   label: string;
   title: string;
   description: string;
@@ -415,6 +464,12 @@ const reportTabs: ReportTab[] = [
     title: 'Financial Actual vs Budget',
     description: 'Compare budget, actuals, and variance for the selected fiscal year.',
   },
+  {
+    id: 'quarterly-financial',
+    label: 'Quarterly Financial Report',
+    title: 'Quarterly Financial Report',
+    description: 'Download the calendar-quarter offering and expenditure workbooks.',
+  },
 ];
 
 const officialTaxRoles: Role[] = ['ADMIN', 'TREASURER'];
@@ -435,6 +490,8 @@ const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
 const financialSubCategoryOptions = ref<ReferenceDataOption[]>([]);
 const loading = ref(false);
 const receiptBusy = ref(false);
+const quarterlyOfferingBusy = ref(false);
+const quarterlyExpenditureBusy = ref(false);
 const error = ref('');
 const thankYouNote = ref(DEFAULT_THANK_YOU_NOTE);
 
@@ -461,6 +518,11 @@ const taxFilters = reactive({
 
 const financialFilters = reactive({
   fiscalYear: now.getFullYear(),
+});
+
+const quarterlyFilters = reactive({
+  year: now.getFullYear(),
+  quarter: (Math.floor(now.getMonth() / 3) + 1) as 1 | 2 | 3 | 4,
 });
 
 const visibleReportTabs = computed(() =>
@@ -547,11 +609,19 @@ function hasOfficialTaxAccess() {
 
 function selectTab(tabId: ReportTab['id']) {
   activeReportId.value = tabId;
+  if (tabId === 'quarterly-financial') {
+    error.value = '';
+    return;
+  }
   void runActiveReport();
 }
 
 async function runActiveReport() {
   error.value = '';
+
+  if (activeVisibleReportId.value === 'quarterly-financial') {
+    return;
+  }
 
   const validationError = validateActiveFilters();
   if (validationError) {
@@ -591,6 +661,59 @@ async function runActiveReport() {
     error.value = err instanceof Error ? err.message : 'Could not load report.';
   } finally {
     loading.value = false;
+  }
+}
+
+function quarterlyValidationError() {
+  if (quarterlyFilters.year < 2000 || quarterlyFilters.quarter < 1 || quarterlyFilters.quarter > 4) {
+    return 'A valid calendar year and quarter are required.';
+  }
+  return '';
+}
+
+async function downloadQuarterlyOfferingWorkbook() {
+  error.value = quarterlyValidationError();
+  if (error.value) {
+    return;
+  }
+
+  quarterlyOfferingBusy.value = true;
+  try {
+    const blob = await downloadQuarterlyOfferingReport({
+      year: quarterlyFilters.year,
+      quarter: quarterlyFilters.quarter,
+    });
+    downloadBlob(
+      blob,
+      `quarterly-offerings-${quarterlyFilters.year}-q${quarterlyFilters.quarter}.xlsx`,
+    );
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not generate the quarterly workbook.';
+  } finally {
+    quarterlyOfferingBusy.value = false;
+  }
+}
+
+async function downloadQuarterlyExpenditureWorkbook() {
+  error.value = quarterlyValidationError();
+  if (error.value) {
+    return;
+  }
+
+  quarterlyExpenditureBusy.value = true;
+  try {
+    const blob = await downloadQuarterlyExpenditureReport({
+      year: quarterlyFilters.year,
+      quarter: quarterlyFilters.quarter,
+    });
+    downloadBlob(
+      blob,
+      `quarterly-expenditures-${quarterlyFilters.year}-q${quarterlyFilters.quarter}.xlsx`,
+    );
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not generate the quarterly workbook.';
+  } finally {
+    quarterlyExpenditureBusy.value = false;
   }
 }
 
@@ -865,6 +988,37 @@ function startOfYear(value: Date) {
   display: grid;
   gap: 6px;
   color: #344054;
+}
+
+.quarterly-downloads {
+  grid-column: 1 / -1;
+  border-top: 1px solid #d9dee5;
+}
+
+.quarterly-download-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  border-bottom: 1px solid #d9dee5;
+}
+
+.quarterly-download-row button {
+  flex: 0 0 auto;
+  border: 1px solid #22577a;
+  border-radius: 6px;
+  background: #22577a;
+  color: white;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quarterly-download-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .report-filters input,
