@@ -10,7 +10,8 @@
 
 ## Global Constraints
 
-- Column widths are A `7`, B `28`, I `8.5`, and J `16`.
+- Raw OOXML column widths match the reference workbook: A `7.83203125`, B
+  `28.83203125`, I `9.33203125`, and J `16.83203125`.
 - Every styled cell in column B wraps text.
 - Columns C through H and all existing workbook behavior remain unchanged.
 - Both Offering and Expenditure workbooks must be covered by tests.
@@ -34,10 +35,10 @@
 Add a helper that asserts:
 
 ```java
-assertThat(sheet.getColumnWidth(0)).isEqualTo(7 * 256);
-assertThat(sheet.getColumnWidth(1)).isEqualTo(28 * 256);
-assertThat(sheet.getColumnWidth(8)).isEqualTo((int) (8.5 * 256));
-assertThat(sheet.getColumnWidth(9)).isEqualTo(16 * 256);
+assertThat(sheet.getColumnWidth(0)).isEqualTo((int) (7.83203125 * 256));
+assertThat(sheet.getColumnWidth(1)).isEqualTo((int) (28.83203125 * 256));
+assertThat(sheet.getColumnWidth(8)).isEqualTo((int) (9.33203125 * 256));
+assertThat(sheet.getColumnWidth(9)).isEqualTo((int) (16.83203125 * 256));
 for (Row row : sheet) {
     Cell cell = row.getCell(1);
     if (cell != null) {
@@ -64,10 +65,10 @@ Expected: failures report the old widths and non-wrapped column-B styles.
 Update `configureColumns`:
 
 ```java
-sheet.setColumnWidth(0, 7 * 256);
-sheet.setColumnWidth(1, 28 * 256);
-sheet.setColumnWidth(8, (int) (8.5 * 256));
-sheet.setColumnWidth(9, 16 * 256);
+sheet.setColumnWidth(0, (int) (7.83203125 * 256));
+sheet.setColumnWidth(1, (int) (28.83203125 * 256));
+sheet.setColumnWidth(8, (int) (9.33203125 * 256));
+sheet.setColumnWidth(9, (int) (16.83203125 * 256));
 ```
 
 After report rows are created, call a method that iterates column B and applies
@@ -89,8 +90,8 @@ Expected: all tests pass.
 
 - [x] **Step 5: Update the existing report specifications**
 
-Replace the old width values with A `7`, B `28`, I `8.5`, and J `16`, and state
-that every column-B cell uses wrap text.
+Record the sample workbook's exact raw widths and state that every column-B
+cell uses wrap text.
 
 - [x] **Step 6: Verify generated workbooks**
 

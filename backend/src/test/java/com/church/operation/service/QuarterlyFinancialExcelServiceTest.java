@@ -215,10 +215,10 @@ class QuarterlyFinancialExcelServiceTest {
     }
 
     private void assertQuarterlyColumnLayout(XSSFSheet sheet) {
-        assertThat(sheet.getColumnWidth(0)).isEqualTo(7 * 256);
-        assertThat(sheet.getColumnWidth(1)).isEqualTo(28 * 256);
-        assertThat(sheet.getColumnWidth(8)).isEqualTo((int) (8.5 * 256));
-        assertThat(sheet.getColumnWidth(9)).isEqualTo(16 * 256);
+        assertThat(sheet.getColumnWidth(0)).isEqualTo((int) (7.83203125 * 256));
+        assertThat(sheet.getColumnWidth(1)).isEqualTo((int) (28.83203125 * 256));
+        assertThat(sheet.getColumnWidth(8)).isEqualTo((int) (9.33203125 * 256));
+        assertThat(sheet.getColumnWidth(9)).isEqualTo((int) (16.83203125 * 256));
         for (var row : sheet) {
             var cell = row.getCell(1);
             if (cell != null) {

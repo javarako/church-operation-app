@@ -133,13 +133,13 @@ The columns remain:
 | I | Cumulative actual divided by budget |
 | J | Notes |
 
-Both workbooks use these column widths:
+Both workbooks use the sample workbook's exact raw OOXML column widths:
 
-- A: `7`
-- B: `28`
+- A: `7.83203125`
+- B: `28.83203125`
 - C through H: `10.83203125`
-- I: `8.5`
-- J: `16`
+- I: `9.33203125`
+- J: `16.83203125`
 
 Every populated cell in column B uses wrap text, including the header, detail,
 subtotal, special, and total rows.

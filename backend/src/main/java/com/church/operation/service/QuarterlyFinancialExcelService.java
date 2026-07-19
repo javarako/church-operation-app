@@ -71,13 +71,13 @@ public class QuarterlyFinancialExcelService {
     }
 
     private void configureColumns(XSSFSheet sheet) {
-        sheet.setColumnWidth(0, 7 * 256);
-        sheet.setColumnWidth(1, 28 * 256);
+        sheet.setColumnWidth(0, (int) (7.83203125 * 256));
+        sheet.setColumnWidth(1, (int) (28.83203125 * 256));
         for (int column = 2; column <= 7; column++) {
             sheet.setColumnWidth(column, (int) (10.83203125 * 256));
         }
-        sheet.setColumnWidth(8, (int) (8.5 * 256));
-        sheet.setColumnWidth(9, 16 * 256);
+        sheet.setColumnWidth(8, (int) (9.33203125 * 256));
+        sheet.setColumnWidth(9, (int) (16.83203125 * 256));
     }
 
     private void wrapColumnB(XSSFWorkbook workbook, XSSFSheet sheet) {

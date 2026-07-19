@@ -100,13 +100,13 @@ Create one worksheet named `Offering income`.
 | I | Cumulative actual divided by budget (`H / C`) |
 | J | Notes |
 
-Column widths match the sample:
+Raw OOXML column widths match the sample workbook exactly:
 
-- A: `7`
-- B: `28`
+- A: `7.83203125`
+- B: `28.83203125`
 - C through H: `10.83203125`
-- I: `8.5`
-- J: `16`
+- I: `9.33203125`
+- J: `16.83203125`
 
 Every populated cell in column B uses wrap text, including the header, detail,
 subtotal, carry-over, and total rows.
