@@ -11,10 +11,16 @@
     <div class="two-column">
       <section class="panel">
         <div class="toolbar offering-toolbar">
-          <select v-model="filters.fundCategory">
+          <select v-model="filters.fundCode">
             <option value="">All funds</option>
             <option v-for="fund in fundOptions" :key="fund.code" :value="fund.code">
               {{ fund.label }}
+            </option>
+          </select>
+          <select v-model="filters.categoryCode">
+            <option value="">All categories</option>
+            <option v-for="category in allCategoryOptions" :key="category.code" :value="category.code">
+              {{ category.label }}
             </option>
           </select>
           <select v-model="filters.givingType">
@@ -40,7 +46,8 @@
                 <th>Date</th>
                 <th>Sunday</th>
                 <th>Giver</th>
-                <th>Fund/category</th>
+                <th>Fund</th>
+                <th>Category</th>
                 <th>Amount</th>
                 <th>Payment</th>
                 <th>Linked income</th>
@@ -57,9 +64,10 @@
                 <td>{{ offering.offeringDate }}</td>
                 <td>{{ offering.offeringSunday }}</td>
                 <td>{{ offering.giverDisplayName || offering.giverLabel || '-' }}</td>
-                <td>{{ labelForFund(offering.fundCategory) }}</td>
+                <td>{{ labelForFund(offering.fundCode) }}</td>
+                <td>{{ labelForCategory(offering.categoryCode) }}</td>
                 <td>{{ formatMoney(offering.amount) }}</td>
-                <td>{{ offering.paymentMethod || '-' }}</td>
+                <td>{{ labelForPaymentMethod(offering.paymentMethod) }}</td>
                 <td>{{ offering.incomeTransactionId ? 'Created' : '-' }}</td>
                 <td class="row-actions">
                   <button
@@ -127,15 +135,25 @@
 
         <label>
           Offering Sunday
-          <input v-model="form.offeringSunday" type="date" required />
+          <input v-model="form.offeringSunday" type="date" min="1970-01-04" step="7" required />
         </label>
 
         <label>
-          Fund/category
-          <select v-model="form.fundCategory" required>
+          Fund
+          <select v-model="form.fundCode" required @change="handleFundChange">
             <option value="">Select fund</option>
             <option v-for="fund in fundOptions" :key="fund.code" :value="fund.code">
               {{ fund.label }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Category
+          <select v-model="form.categoryCode" required>
+            <option value="">Select category</option>
+            <option v-for="category in categoryOptions" :key="category.code" :value="category.code">
+              {{ category.label }}
             </option>
           </select>
         </label>
@@ -185,6 +203,7 @@ import { listMembers, type MemberRecord } from '../api/members';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import PaginationControls from '../components/PaginationControls.vue';
 import { usePagination } from '../composables/usePagination';
+import { calculateComingSunday } from '../utils/offeringDates';
 
 interface OfferingForm {
   givingType: GivingType;
@@ -192,7 +211,8 @@ interface OfferingForm {
   giverLabel: string;
   offeringDate: string;
   offeringSunday: string;
-  fundCategory: string;
+  fundCode: string;
+  categoryCode: string;
   amount: number | null;
   paymentMethod: string;
   memo: string;
@@ -201,6 +221,8 @@ interface OfferingForm {
 const today = new Date().toISOString().slice(0, 10);
 const offerings = ref<Offering[]>([]);
 const fundOptions = ref<ReferenceDataOption[]>([]);
+const categoryOptions = ref<ReferenceDataOption[]>([]);
+const allCategoryOptions = ref<ReferenceDataOption[]>([]);
 const paymentMethodOptions = ref<ReferenceDataOption[]>([]);
 const members = ref<MemberRecord[]>([]);
 const memberSearch = ref('');
@@ -210,7 +232,8 @@ const savedMessage = ref('');
 const editingOfferingId = ref('');
 
 const filters = reactive({
-  fundCategory: '',
+  fundCode: '',
+  categoryCode: '',
   givingType: '' as '' | GivingType,
 });
 
@@ -220,7 +243,8 @@ const form = reactive<OfferingForm>({
   giverLabel: '',
   offeringDate: today,
   offeringSunday: calculateComingSunday(today),
-  fundCategory: '',
+  fundCode: '',
+  categoryCode: '',
   amount: null,
   paymentMethod: '',
   memo: '',
@@ -228,9 +252,10 @@ const form = reactive<OfferingForm>({
 
 const filteredOfferings = computed(() =>
   offerings.value.filter((offering) => {
-    const matchesFund = !filters.fundCategory || offering.fundCategory === filters.fundCategory;
+    const matchesFund = !filters.fundCode || offering.fundCode === filters.fundCode;
+    const matchesCategory = !filters.categoryCode || offering.categoryCode === filters.categoryCode;
     const matchesType = !filters.givingType || offering.givingType === filters.givingType;
-    return matchesFund && matchesType;
+    return matchesFund && matchesCategory && matchesType;
   }),
 );
 
@@ -242,7 +267,8 @@ const offeringPagination = usePagination(filteredOfferings);
 watch(filters, () => offeringPagination.resetPage());
 
 onMounted(async () => {
-  await Promise.all([loadOfferings(), loadFunds(), loadPaymentMethods(), loadMembers()]);
+  await Promise.all([loadOfferings(), loadFunds(), loadPaymentMethods(), loadMembers(), loadAllCategories()]);
+  await loadCategories();
 });
 
 async function loadOfferings() {
@@ -259,13 +285,39 @@ async function loadOfferings() {
 
 async function loadFunds() {
   try {
-    fundOptions.value = await listReferenceData('OFFERING_FUND_CATEGORY');
-    if (!form.fundCategory) {
-      form.fundCategory = fundOptions.value[0]?.code ?? '';
+    fundOptions.value = await listReferenceData('OFFERING_FUND');
+    if (!form.fundCode) {
+      form.fundCode = fundOptions.value[0]?.code ?? '';
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
   }
+}
+
+async function loadAllCategories() {
+  try {
+    allCategoryOptions.value = await listReferenceData('OFFERING_CATEGORY');
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load offering categories.';
+  }
+}
+
+async function loadCategories() {
+  try {
+    categoryOptions.value = form.fundCode
+      ? await listReferenceData('OFFERING_CATEGORY', form.fundCode)
+      : [];
+    if (!categoryOptions.value.some((category) => category.code === form.categoryCode)) {
+      form.categoryCode = categoryOptions.value[0]?.code ?? '';
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load offering categories.';
+  }
+}
+
+async function handleFundChange() {
+  form.categoryCode = '';
+  await loadCategories();
 }
 
 async function loadPaymentMethods() {
@@ -301,7 +353,8 @@ async function saveOffering() {
       givingType: form.givingType,
       offeringDate: form.offeringDate,
       offeringSunday: form.offeringSunday,
-      fundCategory: form.fundCategory,
+      fundCode: form.fundCode,
+      categoryCode: form.categoryCode,
       amount: form.amount,
       paymentMethod: form.paymentMethod.trim() || undefined,
       memo: form.memo.trim() || undefined,
@@ -327,7 +380,7 @@ async function saveOffering() {
   }
 }
 
-function selectOffering(offering: Offering) {
+async function selectOffering(offering: Offering) {
   formError.value = '';
   savedMessage.value = '';
   editingOfferingId.value = offering.id;
@@ -336,7 +389,9 @@ function selectOffering(offering: Offering) {
   form.giverLabel = offering.giverLabel ?? '';
   form.offeringDate = offering.offeringDate;
   form.offeringSunday = offering.offeringSunday;
-  form.fundCategory = offering.fundCategory;
+  form.fundCode = offering.fundCode;
+  await loadCategories();
+  form.categoryCode = offering.categoryCode;
   form.amount = Number(offering.amount);
   form.paymentMethod = offering.paymentMethod ?? '';
   form.memo = offering.memo ?? '';
@@ -384,20 +439,14 @@ function resetForm() {
   form.giverLabel = '';
   form.offeringDate = today;
   form.offeringSunday = calculateComingSunday(today);
-  form.fundCategory = fundOptions.value[0]?.code ?? '';
+  form.fundCode = fundOptions.value[0]?.code ?? '';
+  form.categoryCode = '';
+  void loadCategories();
   form.amount = null;
   form.paymentMethod = paymentMethodOptions.value[0]?.code ?? '';
   form.memo = '';
   memberSearch.value = '';
   void loadMembers();
-}
-
-function calculateComingSunday(dateValue: string) {
-  const date = new Date(`${dateValue}T00:00:00`);
-  const day = date.getDay();
-  const daysUntilSunday = day === 0 ? 0 : 7 - day;
-  date.setDate(date.getDate() + daysUntilSunday);
-  return date.toISOString().slice(0, 10);
 }
 
 function formatMoney(value: number) {
@@ -406,5 +455,16 @@ function formatMoney(value: number) {
 
 function labelForFund(code: string) {
   return fundOptions.value.find((fund) => fund.code === code)?.label ?? code;
+}
+
+function labelForCategory(code: string) {
+  return allCategoryOptions.value.find((category) => category.code === code)?.label ?? code;
+}
+
+function labelForPaymentMethod(code?: string) {
+  if (!code) {
+    return '-';
+  }
+  return paymentMethodOptions.value.find((method) => method.code === code)?.label ?? code;
 }
 </script>

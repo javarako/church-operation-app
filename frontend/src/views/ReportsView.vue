@@ -30,7 +30,20 @@
           <h3>{{ activeReport.title }}</h3>
           <p>{{ activeReport.description }}</p>
         </div>
-        <button type="button" class="secondary" @click="exportActiveReport">
+        <button
+          v-if="activeVisibleReportId === 'tax-return'"
+          type="button"
+          :disabled="receiptBusy"
+          @click="downloadAllReceipts"
+        >
+          Download all receipts
+        </button>
+        <button
+          v-else-if="activeVisibleReportId !== 'quarterly-financial'"
+          type="button"
+          class="secondary"
+          @click="exportActiveReport"
+        >
           Export CSV
         </button>
       </div>
@@ -48,10 +61,19 @@
           </label>
 
           <label>
-            Fund/category
-            <select v-model="weeklyFilters.fundCategory">
+            Fund
+            <select v-model="weeklyFilters.fundCode" @change="weeklyFilters.categoryCode = ''">
               <option value="">All funds</option>
               <option v-for="option in offeringFundOptions" :key="option.id" :value="option.code">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Category
+            <select v-model="weeklyFilters.categoryCode">
+              <option value="">All categories</option>
+              <option v-for="option in weeklyCategoryOptions" :key="option.id" :value="option.code">
                 {{ option.label }}
               </option>
             </select>
@@ -85,10 +107,19 @@
           </label>
 
           <label>
-            Fund/category
-            <select v-model="memberFilters.fundCategory">
+            Fund
+            <select v-model="memberFilters.fundCode" @change="memberFilters.categoryCode = ''">
               <option value="">All funds</option>
               <option v-for="option in offeringFundOptions" :key="option.id" :value="option.code">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Category
+            <select v-model="memberFilters.categoryCode">
+              <option value="">All categories</option>
+              <option v-for="option in memberCategoryOptions" :key="option.id" :value="option.code">
                 {{ option.label }}
               </option>
             </select>
@@ -105,6 +136,53 @@
             Offering number
             <input v-model="taxFilters.offeringNumber" placeholder="All offering numbers" />
           </label>
+
+          <label class="tax-note-field">
+            Thank-you note
+            <textarea v-model="thankYouNote" maxlength="500" rows="3"></textarea>
+          </label>
+        </template>
+
+        <template v-else-if="activeVisibleReportId === 'quarterly-financial'">
+          <label>
+            Calendar year
+            <input v-model.number="quarterlyFilters.year" type="number" min="2000" step="1" />
+          </label>
+
+          <label>
+            Quarter
+            <select v-model.number="quarterlyFilters.quarter">
+              <option :value="1">Q1 (January-March)</option>
+              <option :value="2">Q2 (April-June)</option>
+              <option :value="3">Q3 (July-September)</option>
+              <option :value="4">Q4 (October-December)</option>
+            </select>
+          </label>
+
+          <div class="quarterly-downloads">
+            <div class="quarterly-download-row">
+              <strong>Quarterly Offering Excel</strong>
+              <button
+                type="button"
+                aria-label="Download quarterly offering Excel"
+                :disabled="quarterlyOfferingBusy"
+                @click="downloadQuarterlyOfferingWorkbook"
+              >
+                {{ quarterlyOfferingBusy ? 'Preparing...' : 'Download Excel' }}
+              </button>
+            </div>
+            <div class="quarterly-download-row">
+              <strong>Quarterly Expenditure Excel</strong>
+              <button
+                type="button"
+                aria-label="Download quarterly expenditure Excel"
+                :disabled="quarterlyExpenditureBusy"
+                @click="downloadQuarterlyExpenditureWorkbook"
+              >
+                {{ quarterlyExpenditureBusy ? 'Preparing...' : 'Download Excel' }}
+              </button>
+            </div>
+          </div>
         </template>
 
         <template v-else>
@@ -114,25 +192,26 @@
           </label>
         </template>
 
-        <div class="actions">
+        <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="actions">
           <button type="submit">Run report</button>
         </div>
       </form>
 
       <p v-if="error" class="error">{{ error }}</p>
 
-      <div class="summary-strip">
+      <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="summary-strip">
         <strong>{{ loading ? 'Loading...' : activeSummary.label }}</strong>
         <span>{{ activeSummary.rows }} row{{ activeSummary.rows === 1 ? '' : 's' }}</span>
         <span v-if="activeSummary.total">{{ activeSummary.total }}</span>
       </div>
 
-      <div class="table-wrap">
+      <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="table-wrap">
         <table v-if="activeVisibleReportId === 'weekly-offerings'">
           <thead>
             <tr>
               <th>Offering Sunday</th>
-              <th>Fund/category</th>
+              <th>Fund</th>
+              <th>Category</th>
               <th>Giving type</th>
               <th>Payment method</th>
               <th>Count</th>
@@ -142,17 +221,18 @@
           <tbody>
             <tr
               v-for="row in weeklyPagination.paginatedRows.value"
-              :key="`${row.offeringSunday}-${row.fundCategory}-${row.givingType}-${row.paymentMethod}`"
+              :key="`${row.offeringSunday}-${row.fundCode}-${row.categoryCode}-${row.givingType}-${row.paymentMethod}`"
             >
               <td>{{ row.offeringSunday }}</td>
-              <td>{{ row.fundCategory }}</td>
-              <td>{{ row.givingType }}</td>
-              <td>{{ row.paymentMethod }}</td>
+              <td>{{ referenceLabel(offeringFundOptions, row.fundCode) }}</td>
+              <td>{{ referenceLabel(offeringCategoryOptions, row.categoryCode) }}</td>
+              <td>{{ givingTypeLabel(row.givingType) }}</td>
+              <td>{{ referenceLabel(paymentMethodOptions, row.paymentMethod) }}</td>
               <td>{{ row.count }}</td>
               <td>{{ formatMoney(row.totalAmount) }}</td>
             </tr>
             <tr v-if="!weeklyRows.length && !loading">
-              <td colspan="6" class="empty-state">No weekly report rows found.</td>
+              <td colspan="7" class="empty-state">No weekly report rows found.</td>
             </tr>
           </tbody>
         </table>
@@ -163,22 +243,24 @@
               <th>Offering number</th>
               <th>Member</th>
               <th>Email</th>
-              <th>Fund/category</th>
+              <th>Fund</th>
+              <th>Category</th>
               <th>Count</th>
               <th>Total</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in memberPagination.paginatedRows.value" :key="`${row.memberId}-${row.fundCategory}`">
+            <tr v-for="row in memberPagination.paginatedRows.value" :key="`${row.memberId}-${row.fundCode}-${row.categoryCode}`">
               <td>{{ row.offeringNumber || '-' }}</td>
               <td>{{ row.memberName }}</td>
               <td>{{ row.primaryEmail }}</td>
-              <td>{{ row.fundCategory }}</td>
+              <td>{{ referenceLabel(offeringFundOptions, row.fundCode) }}</td>
+              <td>{{ referenceLabel(offeringCategoryOptions, row.categoryCode) }}</td>
               <td>{{ row.count }}</td>
               <td>{{ formatMoney(row.totalAmount) }}</td>
             </tr>
             <tr v-if="!memberRows.length && !loading">
-              <td colspan="6" class="empty-state">No member report rows found.</td>
+              <td colspan="7" class="empty-state">No member report rows found.</td>
             </tr>
           </tbody>
         </table>
@@ -186,30 +268,62 @@
         <table v-else-if="activeVisibleReportId === 'tax-return'">
           <thead>
             <tr>
-              <th>Offering number</th>
-              <th>Giving date</th>
-              <th>Member</th>
-              <th>Email</th>
+              <th>Offering #</th>
+              <th>Donor</th>
               <th>Address</th>
-              <th>Fund/category</th>
-              <th>Amount</th>
+              <th>Tax year</th>
+              <th>Total offering</th>
+              <th>Receipt #</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="row in taxPagination.paginatedRows.value"
-              :key="`${row.memberId}-${row.givingDate}-${row.fundCategory}-${row.amount}`"
+              :key="`${row.memberId}-${row.taxYear}`"
             >
-              <td>{{ row.offeringNumber || '-' }}</td>
-              <td>{{ row.givingDate }}</td>
-              <td>{{ row.memberName }}</td>
-              <td>{{ row.primaryEmail }}</td>
-              <td>{{ row.memberAddress || '-' }}</td>
-              <td>{{ row.fundCategory }}</td>
-              <td>{{ formatMoney(row.amount) }}</td>
+              <td>{{ row.offeringNumber }}</td>
+              <td>{{ row.donorName }}</td>
+              <td>{{ row.donorAddress || '-' }}</td>
+              <td>{{ row.taxYear }}</td>
+              <td>{{ formatMoney(row.totalAmount) }}</td>
+              <td>
+                {{ row.receiptNumber || '-' }}
+                <span v-if="row.sourceChanged" class="receipt-warning">
+                  Offerings changed after this receipt was issued.
+                </span>
+              </td>
+              <td>{{ row.receiptStatus || 'Not issued' }}</td>
+              <td class="receipt-actions">
+                <button
+                  v-if="!row.receiptId"
+                  type="button"
+                  :disabled="receiptBusy"
+                  @click="issueReceipt(row)"
+                >
+                  Issue receipt
+                </button>
+                <template v-else-if="row.receiptStatus === 'ISSUED'">
+                  <button type="button" class="secondary" :disabled="receiptBusy" @click="downloadReceipt(row)">
+                    Download
+                  </button>
+                  <button type="button" class="secondary danger-text" :disabled="receiptBusy" @click="voidReceipt(row)">
+                    Void receipt
+                  </button>
+                </template>
+                <button
+                  v-else
+                  type="button"
+                  :disabled="receiptBusy"
+                  @click="replaceReceipt(row)"
+                >
+                  Replace receipt
+                </button>
+              </td>
             </tr>
             <tr v-if="!taxRows.length && !loading">
-              <td colspan="7" class="empty-state">No tax report rows found.</td>
+              <td colspan="8" class="empty-state">No eligible member offerings found for this tax year.</td>
             </tr>
           </tbody>
         </table>
@@ -222,6 +336,7 @@
               <th>Sub-category</th>
               <th>Budget</th>
               <th>Actual</th>
+              <th>Budget vs. Actual</th>
               <th>Variance</th>
             </tr>
           </thead>
@@ -230,15 +345,16 @@
               v-for="row in financialPagination.paginatedRows.value"
               :key="`${row.fiscalYear}-${row.budgetType}-${row.category || ''}-${row.subCategory || ''}`"
             >
-              <td>{{ row.budgetType }}</td>
-              <td>{{ row.category || '-' }}</td>
-              <td>{{ row.subCategory || '-' }}</td>
+              <td>{{ budgetTypeLabel(row.budgetType) }}</td>
+              <td>{{ financialCategoryLabel(row) }}</td>
+              <td>{{ financialSubCategoryLabel(row) }}</td>
               <td>{{ formatMoney(row.budget) }}</td>
               <td>{{ formatMoney(row.actual) }}</td>
+              <td>{{ budgetActualPercentage(row.budget, row.actual) }}</td>
               <td>{{ formatMoney(row.variance) }}</td>
             </tr>
             <tr v-if="!financialRows.length && !loading">
-              <td colspan="6" class="empty-state">No budget report rows found.</td>
+              <td colspan="7" class="empty-state">No budget report rows found.</td>
             </tr>
           </tbody>
         </table>
@@ -278,7 +394,7 @@
       />
 
       <PaginationControls
-        v-else
+        v-else-if="activeVisibleReportId === 'financial-budget'"
         :current-page="financialPagination.currentPage.value"
         :page-count="financialPagination.pageCount.value"
         :page-size="financialPagination.pageSize.value"
@@ -295,13 +411,21 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import PaginationControls from '../components/PaginationControls.vue';
 import {
+  DEFAULT_THANK_YOU_NOTE,
+  downloadQuarterlyExpenditureReport,
+  downloadQuarterlyOfferingReport,
+  downloadTaxReceiptPdf,
+  issueBatchTaxReceipts,
+  issueTaxReceipt,
   listFinancialBudgetReport,
   listMemberOfferingSummaryReport,
-  listOfficialTaxReport,
+  listTaxReceiptSummary,
   listWeeklyOfferingReport,
+  replaceTaxReceipt,
+  voidTaxReceipt,
   type FinancialBudgetReportRow,
   type MemberOfferingSummaryReportRow,
-  type OfficialTaxReportRow,
+  type TaxReceiptSummaryRow,
   type WeeklyOfferingReportRow,
 } from '../api/reports';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
@@ -309,7 +433,7 @@ import { authState, type Role } from '../auth/authStore';
 import { usePagination } from '../composables/usePagination';
 
 interface ReportTab {
-  id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget';
+  id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget' | 'quarterly-financial';
   label: string;
   title: string;
   description: string;
@@ -340,6 +464,12 @@ const reportTabs: ReportTab[] = [
     title: 'Financial Actual vs Budget',
     description: 'Compare budget, actuals, and variance for the selected fiscal year.',
   },
+  {
+    id: 'quarterly-financial',
+    label: 'Quarterly Financial Report',
+    title: 'Quarterly Financial Report',
+    description: 'Download the calendar-quarter offering and expenditure workbooks.',
+  },
 ];
 
 const officialTaxRoles: Role[] = ['ADMIN', 'TREASURER'];
@@ -347,21 +477,29 @@ const now = new Date();
 const activeReportId = ref<ReportTab['id']>('weekly-offerings');
 const weeklyRows = ref<WeeklyOfferingReportRow[]>([]);
 const memberRows = ref<MemberOfferingSummaryReportRow[]>([]);
-const taxRows = ref<OfficialTaxReportRow[]>([]);
+const taxRows = ref<TaxReceiptSummaryRow[]>([]);
 const financialRows = ref<FinancialBudgetReportRow[]>([]);
 const weeklyPagination = usePagination(weeklyRows);
 const memberPagination = usePagination(memberRows);
 const taxPagination = usePagination(taxRows);
 const financialPagination = usePagination(financialRows);
 const offeringFundOptions = ref<ReferenceDataOption[]>([]);
+const offeringCategoryOptions = ref<ReferenceDataOption[]>([]);
 const paymentMethodOptions = ref<ReferenceDataOption[]>([]);
+const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
+const financialSubCategoryOptions = ref<ReferenceDataOption[]>([]);
 const loading = ref(false);
+const receiptBusy = ref(false);
+const quarterlyOfferingBusy = ref(false);
+const quarterlyExpenditureBusy = ref(false);
 const error = ref('');
+const thankYouNote = ref(DEFAULT_THANK_YOU_NOTE);
 
 const weeklyFilters = reactive({
   start: startOfYear(now),
   end: isoDate(now),
-  fundCategory: '',
+  fundCode: '',
+  categoryCode: '',
   paymentMethod: '',
 });
 
@@ -369,7 +507,8 @@ const memberFilters = reactive({
   start: startOfYear(now),
   end: isoDate(now),
   offeringNumber: '',
-  fundCategory: '',
+  fundCode: '',
+  categoryCode: '',
 });
 
 const taxFilters = reactive({
@@ -381,9 +520,21 @@ const financialFilters = reactive({
   fiscalYear: now.getFullYear(),
 });
 
+const quarterlyFilters = reactive({
+  year: now.getFullYear(),
+  quarter: (Math.floor(now.getMonth() / 3) + 1) as 1 | 2 | 3 | 4,
+});
+
 const visibleReportTabs = computed(() =>
   reportTabs.filter((report) => report.id !== 'tax-return' || hasOfficialTaxAccess()),
 );
+
+const weeklyCategoryOptions = computed(() => offeringCategoryOptions.value.filter(
+  (option) => !weeklyFilters.fundCode || option.parentCode === weeklyFilters.fundCode,
+));
+const memberCategoryOptions = computed(() => offeringCategoryOptions.value.filter(
+  (option) => !memberFilters.fundCode || option.parentCode === memberFilters.fundCode,
+));
 
 const activeVisibleReportId = computed<ReportTab['id']>(() => {
   return visibleReportTabs.value.some((report) => report.id === activeReportId.value)
@@ -416,7 +567,7 @@ const activeSummary = computed(() => {
     return {
       label: 'Receipt total',
       rows: taxRows.value.length,
-      total: formatSummaryMoney(sum(taxRows.value.map((row) => row.amount))),
+      total: formatSummaryMoney(sum(taxRows.value.map((row) => row.totalAmount))),
     };
   }
 
@@ -434,12 +585,18 @@ onMounted(() => {
 
 async function loadReferenceOptions() {
   try {
-    const [funds, paymentMethods] = await Promise.all([
-      listReferenceData('OFFERING_FUND_CATEGORY'),
+    const [funds, categories, paymentMethods, financialCategories, financialSubCategories] = await Promise.all([
+      listReferenceData('OFFERING_FUND'),
+      listReferenceData('OFFERING_CATEGORY'),
       listReferenceData('PAYMENT_METHOD'),
+      listReferenceData('FINANCIAL_CATEGORY'),
+      listReferenceData('FINANCIAL_SUB_CATEGORY'),
     ]);
     offeringFundOptions.value = activeSortedOptions(funds);
+    offeringCategoryOptions.value = activeSortedOptions(categories);
     paymentMethodOptions.value = activeSortedOptions(paymentMethods);
+    financialCategoryOptions.value = activeSortedOptions(financialCategories);
+    financialSubCategoryOptions.value = activeSortedOptions(financialSubCategories);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load report filter options.';
   }
@@ -452,11 +609,19 @@ function hasOfficialTaxAccess() {
 
 function selectTab(tabId: ReportTab['id']) {
   activeReportId.value = tabId;
+  if (tabId === 'quarterly-financial') {
+    error.value = '';
+    return;
+  }
   void runActiveReport();
 }
 
 async function runActiveReport() {
   error.value = '';
+
+  if (activeVisibleReportId.value === 'quarterly-financial') {
+    return;
+  }
 
   const validationError = validateActiveFilters();
   if (validationError) {
@@ -480,7 +645,12 @@ async function runActiveReport() {
     }
 
     if (activeVisibleReportId.value === 'tax-return') {
-      taxRows.value = await listOfficialTaxReport({ ...taxFilters });
+      const rows = await listTaxReceiptSummary({ ...taxFilters });
+      taxRows.value = rows.sort((left, right) => left.offeringNumber.localeCompare(
+        right.offeringNumber,
+        undefined,
+        { numeric: true, sensitivity: 'base' },
+      ));
       taxPagination.resetPage();
       return;
     }
@@ -494,16 +664,70 @@ async function runActiveReport() {
   }
 }
 
+function quarterlyValidationError() {
+  if (quarterlyFilters.year < 2000 || quarterlyFilters.quarter < 1 || quarterlyFilters.quarter > 4) {
+    return 'A valid calendar year and quarter are required.';
+  }
+  return '';
+}
+
+async function downloadQuarterlyOfferingWorkbook() {
+  error.value = quarterlyValidationError();
+  if (error.value) {
+    return;
+  }
+
+  quarterlyOfferingBusy.value = true;
+  try {
+    const blob = await downloadQuarterlyOfferingReport({
+      year: quarterlyFilters.year,
+      quarter: quarterlyFilters.quarter,
+    });
+    downloadBlob(
+      blob,
+      `quarterly-offerings-${quarterlyFilters.year}-q${quarterlyFilters.quarter}.xlsx`,
+    );
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not generate the quarterly workbook.';
+  } finally {
+    quarterlyOfferingBusy.value = false;
+  }
+}
+
+async function downloadQuarterlyExpenditureWorkbook() {
+  error.value = quarterlyValidationError();
+  if (error.value) {
+    return;
+  }
+
+  quarterlyExpenditureBusy.value = true;
+  try {
+    const blob = await downloadQuarterlyExpenditureReport({
+      year: quarterlyFilters.year,
+      quarter: quarterlyFilters.quarter,
+    });
+    downloadBlob(
+      blob,
+      `quarterly-expenditures-${quarterlyFilters.year}-q${quarterlyFilters.quarter}.xlsx`,
+    );
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not generate the quarterly workbook.';
+  } finally {
+    quarterlyExpenditureBusy.value = false;
+  }
+}
+
 function exportActiveReport() {
   if (activeVisibleReportId.value === 'weekly-offerings') {
     exportCsv(
       'weekly-offering-report.csv',
-      ['Offering Sunday', 'Fund/category', 'Giving type', 'Payment method', 'Count', 'Total'],
+      ['Offering Sunday', 'Fund', 'Category', 'Giving type', 'Payment method', 'Count', 'Total'],
       weeklyRows.value.map((row) => [
         row.offeringSunday,
-        row.fundCategory,
-        row.givingType,
-        row.paymentMethod,
+        referenceLabel(offeringFundOptions.value, row.fundCode),
+        referenceLabel(offeringCategoryOptions.value, row.categoryCode),
+        givingTypeLabel(row.givingType),
+        referenceLabel(paymentMethodOptions.value, row.paymentMethod),
         row.count,
         row.totalAmount,
       ]),
@@ -514,12 +738,13 @@ function exportActiveReport() {
   if (activeVisibleReportId.value === 'member-offerings') {
     exportCsv(
       'member-offering-summary.csv',
-      ['Offering number', 'Member', 'Email', 'Fund/category', 'Count', 'Total'],
+      ['Offering number', 'Member', 'Email', 'Fund', 'Category', 'Count', 'Total'],
       memberRows.value.map((row) => [
         row.offeringNumber,
         row.memberName,
         row.primaryEmail,
-        row.fundCategory,
+        referenceLabel(offeringFundOptions.value, row.fundCode),
+        referenceLabel(offeringCategoryOptions.value, row.categoryCode),
         row.count,
         row.totalAmount,
       ]),
@@ -527,58 +752,91 @@ function exportActiveReport() {
     return;
   }
 
-  if (activeVisibleReportId.value === 'tax-return') {
-    const confirmed = window.confirm('This extraction is for official use. Continue?');
-    if (!confirmed) {
-      return;
-    }
-
-    exportCsv(
-      'official-tax-return.csv',
-      [
-        'Church name',
-        'Church address',
-        'Church contact info',
-        'Treasurer name',
-        'Tax year',
-        'Offering number',
-        'Giving date',
-        'Member',
-        'Email',
-        'Address',
-        'Fund/category',
-        'Amount',
-      ],
-      taxRows.value.map((row) => [
-        row.churchName,
-        row.churchAddress,
-        row.churchContactInfo,
-        row.treasurerName,
-        row.taxYear,
-        row.offeringNumber,
-        row.givingDate,
-        row.memberName,
-        row.primaryEmail,
-        row.memberAddress,
-        row.fundCategory,
-        row.amount,
-      ]),
-    );
-    return;
-  }
-
   exportCsv(
     'financial-budget-report.csv',
-    ['Type', 'Category', 'Sub-category', 'Budget', 'Actual', 'Variance'],
+    ['Type', 'Category', 'Sub-category', 'Budget', 'Actual', 'Budget vs. Actual', 'Variance'],
     financialRows.value.map((row) => [
-      row.budgetType,
-      row.category,
-      row.subCategory,
+      budgetTypeLabel(row.budgetType),
+      financialCategoryLabel(row),
+      financialSubCategoryLabel(row),
       row.budget,
       row.actual,
+      budgetActualPercentage(row.budget, row.actual),
       row.variance,
     ]),
   );
+}
+
+async function issueReceipt(row: TaxReceiptSummaryRow) {
+  await runReceiptAction(async () => {
+    const receipt = await issueTaxReceipt({
+      taxYear: row.taxYear,
+      offeringNumber: row.offeringNumber,
+      thankYouNote: thankYouNote.value,
+    });
+    await downloadReceiptResult(receipt.id, `receipt-${receipt.receiptNumber}.pdf`);
+    await runActiveReport();
+  });
+}
+
+async function downloadReceipt(row: TaxReceiptSummaryRow) {
+  if (!row.receiptId || !row.receiptNumber) return;
+  await runReceiptAction(() => downloadReceiptResult(row.receiptId!, `receipt-${row.receiptNumber}.pdf`));
+}
+
+async function downloadAllReceipts() {
+  await runReceiptAction(async () => {
+    const blob = await issueBatchTaxReceipts({
+      taxYear: taxFilters.taxYear,
+      thankYouNote: thankYouNote.value,
+    });
+    downloadBlob(blob, `tax-receipts-${taxFilters.taxYear}.zip`);
+    await runActiveReport();
+  });
+}
+
+async function voidReceipt(row: TaxReceiptSummaryRow) {
+  if (!row.receiptId || !window.confirm(`Void receipt ${row.receiptNumber}?`)) return;
+  const reason = window.prompt('Reason for voiding this receipt:')?.trim();
+  if (!reason) return;
+  await runReceiptAction(async () => {
+    await voidTaxReceipt(row.receiptId!, reason);
+    await runActiveReport();
+  });
+}
+
+async function replaceReceipt(row: TaxReceiptSummaryRow) {
+  if (!row.receiptId) return;
+  await runReceiptAction(async () => {
+    const receipt = await replaceTaxReceipt(row.receiptId!, thankYouNote.value);
+    await downloadReceiptResult(receipt.id, `receipt-${receipt.receiptNumber}.pdf`);
+    await runActiveReport();
+  });
+}
+
+async function downloadReceiptResult(receiptId: string, filename: string) {
+  downloadBlob(await downloadTaxReceiptPdf(receiptId), filename);
+}
+
+async function runReceiptAction(action: () => Promise<void>) {
+  error.value = '';
+  receiptBusy.value = true;
+  try {
+    await action();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not complete the receipt action.';
+  } finally {
+    receiptBusy.value = false;
+  }
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function validateActiveFilters() {
@@ -604,6 +862,48 @@ function activeSortedOptions(options: ReferenceDataOption[]) {
   return options
     .filter((option) => option.active)
     .sort((left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label));
+}
+
+function referenceLabel(options: ReferenceDataOption[], code?: string) {
+  if (!code) {
+    return '-';
+  }
+  return options.find((option) => option.code === code)?.label ?? code;
+}
+
+function givingTypeLabel(type: WeeklyOfferingReportRow['givingType']) {
+  return {
+    MEMBER: 'Member',
+    ANONYMOUS: 'Anonymous',
+    GROUP: 'Group',
+  }[type] ?? type;
+}
+
+function budgetTypeLabel(type: FinancialBudgetReportRow['budgetType']) {
+  if (type === 'OFFERING_INCOME') {
+    return 'INCOME';
+  }
+  return type;
+}
+
+function financialCategoryLabel(row: FinancialBudgetReportRow) {
+  return row.budgetType === 'OFFERING_INCOME'
+    ? referenceLabel(offeringFundOptions.value, row.category)
+    : referenceLabel(financialCategoryOptions.value, row.category);
+}
+
+function financialSubCategoryLabel(row: FinancialBudgetReportRow) {
+  return row.budgetType === 'OFFERING_INCOME'
+    ? referenceLabel(offeringCategoryOptions.value, row.subCategory)
+    : referenceLabel(financialSubCategoryOptions.value, row.subCategory);
+}
+
+function budgetActualPercentage(budget: number, actual: number) {
+  const budgetAmount = Number(budget);
+  if (budgetAmount === 0) {
+    return '-';
+  }
+  return `${((Number(actual) / budgetAmount) * 100).toFixed(2)}%`;
 }
 
 function exportCsv(filename: string, headers: string[], rows: Array<Array<string | number | undefined>>) {
@@ -690,13 +990,102 @@ function startOfYear(value: Date) {
   color: #344054;
 }
 
+.quarterly-downloads {
+  grid-column: 1 / -1;
+  border-top: 1px solid #d9dee5;
+}
+
+.quarterly-download-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  border-bottom: 1px solid #d9dee5;
+}
+
+.quarterly-download-row button {
+  flex: 0 0 auto;
+  border: 1px solid #22577a;
+  border-radius: 6px;
+  background: #22577a;
+  color: white;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quarterly-download-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .report-filters input,
-.report-filters select {
+.report-filters select,
+.report-filters textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #c8d0d9;
   border-radius: 6px;
   padding: 9px 10px;
+}
+
+.tax-note-field {
+  grid-column: 1 / -1;
+}
+
+.tax-note-field textarea {
+  resize: vertical;
+  min-height: 72px;
+  font: inherit;
+}
+
+.receipt-warning {
+  display: block;
+  margin-top: 4px;
+  color: #9a5b00;
+  font-size: 12px;
+  white-space: normal;
+}
+
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.receipt-actions button {
+  white-space: nowrap;
+}
+
+.danger-text {
+  color: #a32929;
+}
+
+@media (max-width: 600px) {
+  .reports-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-toolbar button {
+    min-width: 0;
+    padding: 6px 8px;
+    white-space: normal;
+  }
+
+  .reports-header {
+    flex-direction: column;
+  }
+
+  .reports-header button {
+    width: 100%;
+  }
+
+  .report-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .report-filters .actions {

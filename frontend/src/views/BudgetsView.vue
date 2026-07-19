@@ -17,7 +17,7 @@
           />
           <select v-model="filters.budgetType">
             <option value="">All types</option>
-            <option value="OFFERING_INCOME">Offering income</option>
+            <option value="OFFERING_INCOME">Income</option>
             <option value="EXPENSE">Expense</option>
           </select>
           <button type="button" @click="loadBudgets">Refresh</button>
@@ -84,7 +84,7 @@
         <label>
           Budget type
           <select v-model="form.budgetType" @change="handleBudgetTypeChange">
-            <option value="OFFERING_INCOME">Offering income</option>
+            <option value="OFFERING_INCOME">Income</option>
             <option value="EXPENSE">Expense</option>
           </select>
         </label>
@@ -100,7 +100,7 @@
         </label>
 
         <label v-if="showsCategory">
-          Category
+          {{ form.budgetType === 'OFFERING_INCOME' ? 'Fund' : 'Category' }}
           <select v-model="form.category" :required="showsCategory" @change="handleCategoryChange">
             <option value="">Select category</option>
             <option v-for="category in categoryOptions" :key="category.code" :value="category.code">
@@ -110,9 +110,9 @@
         </label>
 
         <label v-if="showsSubCategory">
-          Sub-category
-          <select v-model="form.subCategory">
-            <option value="">No sub-category</option>
+          {{ form.budgetType === 'OFFERING_INCOME' ? 'Category' : 'Sub-category' }}
+          <select v-model="form.subCategory" :required="form.budgetType === 'OFFERING_INCOME'">
+            <option value="">{{ form.budgetType === 'OFFERING_INCOME' ? 'Select category' : 'No sub-category' }}</option>
             <option v-for="subCategory in subCategoryOptions" :key="subCategory.code" :value="subCategory.code">
               {{ subCategory.label }}
             </option>
@@ -162,6 +162,7 @@ const currentYear = new Date().getFullYear();
 const budgets = ref<Budget[]>([]);
 const selectedFiscalYear = ref(currentYear);
 const offeringFundOptions = ref<ReferenceDataOption[]>([]);
+const allOfferingCategoryOptions = ref<ReferenceDataOption[]>([]);
 const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
 const allFinancialSubCategoryOptions = ref<ReferenceDataOption[]>([]);
 const categoryOptions = ref<ReferenceDataOption[]>([]);
@@ -184,19 +185,29 @@ const form = reactive<BudgetForm>({
   memo: '',
 });
 
+const BUDGET_TYPE_ORDER: Record<BudgetType, number> = {
+  OFFERING_INCOME: 0,
+  EXPENSE: 1,
+  CARRY_OVER: 2,
+};
+
 const filteredBudgets = computed(() =>
-  budgets.value.filter((budget) => !filters.budgetType || budget.budgetType === filters.budgetType),
+  budgets.value
+    .filter((budget) => !filters.budgetType || budget.budgetType === filters.budgetType)
+    .slice()
+    .sort(compareBudgets),
 );
 const budgetPagination = usePagination(filteredBudgets);
 
 watch(filters, () => budgetPagination.resetPage());
 
 const showsCategory = computed(() => form.budgetType !== 'CARRY_OVER');
-const showsSubCategory = computed(() => form.budgetType === 'EXPENSE');
+const showsSubCategory = computed(() => form.budgetType === 'EXPENSE' || form.budgetType === 'OFFERING_INCOME');
 
 onMounted(async () => {
   await Promise.all([
     loadOfferingFunds(),
+    loadAllOfferingCategories(),
     loadFinancialCategories(),
     loadAllSubCategoryOptions(),
     loadBudgets(),
@@ -219,9 +230,17 @@ async function loadBudgets() {
 
 async function loadOfferingFunds() {
   try {
-    offeringFundOptions.value = (await listReferenceData('OFFERING_FUND_CATEGORY')).filter((option) => option.active);
+    offeringFundOptions.value = (await listReferenceData('OFFERING_FUND')).filter((option) => option.active);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
+  }
+}
+
+async function loadAllOfferingCategories() {
+  try {
+    allOfferingCategoryOptions.value = await listReferenceData('OFFERING_CATEGORY');
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load offering categories.';
   }
 }
 
@@ -254,12 +273,13 @@ async function loadCategoryOptions() {
 }
 
 async function loadSubCategoryOptions() {
-  if (form.budgetType !== 'EXPENSE' || !form.category) {
+  if (!form.category) {
     subCategoryOptions.value = [];
     return;
   }
   try {
-    subCategoryOptions.value = await listReferenceData('FINANCIAL_SUB_CATEGORY', form.category);
+    const type = form.budgetType === 'OFFERING_INCOME' ? 'OFFERING_CATEGORY' : 'FINANCIAL_SUB_CATEGORY';
+    subCategoryOptions.value = await listReferenceData(type, form.category);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load financial sub-categories.';
   }
@@ -370,10 +390,82 @@ function typeLabel(type: BudgetType) {
     case 'CARRY_OVER':
       return 'Carry over';
     case 'OFFERING_INCOME':
-      return 'Offering income';
+      return 'Income';
     case 'EXPENSE':
       return 'Expense';
   }
+}
+
+function compareBudgets(left: Budget, right: Budget) {
+  const typeDifference = BUDGET_TYPE_ORDER[left.budgetType] - BUDGET_TYPE_ORDER[right.budgetType];
+  if (typeDifference !== 0) {
+    return typeDifference;
+  }
+
+  const parentDifference = compareReferenceOrder(
+    parentReference(left),
+    left.category,
+    parentReference(right),
+    right.category,
+  );
+  if (parentDifference !== 0) {
+    return parentDifference;
+  }
+
+  const childDifference = compareReferenceOrder(
+    childReference(left),
+    left.subCategory,
+    childReference(right),
+    right.subCategory,
+  );
+  if (childDifference !== 0) {
+    return childDifference;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function parentReference(budget: Budget) {
+  const options = budget.budgetType === 'OFFERING_INCOME'
+    ? offeringFundOptions.value
+    : budget.budgetType === 'EXPENSE'
+      ? financialCategoryOptions.value
+      : [];
+  return options.find((option) => option.code === budget.category);
+}
+
+function childReference(budget: Budget) {
+  const options = budget.budgetType === 'OFFERING_INCOME'
+    ? allOfferingCategoryOptions.value
+    : budget.budgetType === 'EXPENSE'
+      ? allFinancialSubCategoryOptions.value
+      : [];
+  return options.find((option) =>
+    option.code === budget.subCategory
+      && (!option.parentCode || option.parentCode === budget.category),
+  );
+}
+
+function compareReferenceOrder(
+  left: ReferenceDataOption | undefined,
+  leftCode: string | undefined,
+  right: ReferenceDataOption | undefined,
+  rightCode: string | undefined,
+) {
+  const sortDifference = (left?.sortOrder ?? Number.MAX_SAFE_INTEGER)
+    - (right?.sortOrder ?? Number.MAX_SAFE_INTEGER);
+  if (sortDifference !== 0) {
+    return sortDifference;
+  }
+
+  const leftLabel = left?.label || leftCode || '';
+  const rightLabel = right?.label || rightCode || '';
+  const labelDifference = leftLabel.localeCompare(rightLabel);
+  if (labelDifference !== 0) {
+    return labelDifference;
+  }
+
+  return (leftCode || '').localeCompare(rightCode || '');
 }
 
 function formatMoney(value: number) {
@@ -392,6 +484,7 @@ function labelForSubCategory(code?: string) {
   if (!code) {
     return '-';
   }
-  return allFinancialSubCategoryOptions.value.find((option) => option.code === code)?.label ?? code;
+  return [...allOfferingCategoryOptions.value, ...allFinancialSubCategoryOptions.value]
+    .find((option) => option.code === code)?.label ?? code;
 }
 </script>

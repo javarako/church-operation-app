@@ -4,6 +4,7 @@ import com.church.operation.dto.OfferingRequest;
 import com.church.operation.entity.FinancialTransaction;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.Offering;
+import com.church.operation.entity.ReferenceData;
 import com.church.operation.repo.FinancialTransactionRepository;
 import com.church.operation.repo.MemberRepository;
 import com.church.operation.repo.OfferingRepository;
@@ -62,7 +63,7 @@ public class OfferingService {
         offering.setCreatedBy(actor.getId());
         offering.setCreatedAt(now);
         applyGiver(offering, request);
-        offering.setFundCategory(normalizeFundCategory(request.fundCategory()));
+        applyOfferingHierarchy(offering, request);
         offering.setPaymentMethod(normalizePaymentMethod(request.paymentMethod()));
 
         Offering savedOffering = offeringRepository.save(offering);
@@ -106,7 +107,7 @@ public class OfferingService {
         offering.setAmount(request.amount());
         offering.setMemo(trimToNull(request.memo()));
         applyGiver(offering, request);
-        offering.setFundCategory(normalizeFundCategory(request.fundCategory()));
+        applyOfferingHierarchy(offering, request);
         offering.setPaymentMethod(normalizePaymentMethod(request.paymentMethod()));
     }
 
@@ -115,7 +116,8 @@ public class OfferingService {
             .orElseThrow(() -> new IllegalArgumentException("Linked income transaction was not found."));
         transaction.setTransactionDate(offering.getOfferingDate());
         transaction.setAmount(offering.getAmount());
-        transaction.setCategory(offering.getFundCategory());
+        transaction.setCategory(offering.getFundCode());
+        transaction.setSubCategory(offering.getCategoryCode());
         transaction.setMemo(offering.getMemo());
         financialTransactionRepository.save(transaction);
     }
@@ -143,8 +145,11 @@ public class OfferingService {
         if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Offering amount must be greater than zero.");
         }
-        if (trimToNull(request.fundCategory()) == null) {
-            throw new IllegalArgumentException("Offering fund/category is required.");
+        if (trimToNull(request.fundCode()) == null) {
+            throw new IllegalArgumentException("Offering fund is required.");
+        }
+        if (trimToNull(request.categoryCode()) == null) {
+            throw new IllegalArgumentException("Offering category is required.");
         }
     }
 
@@ -176,8 +181,8 @@ public class OfferingService {
         transaction.setType(FinancialTransactionType.INCOME);
         transaction.setTransactionDate(offering.getOfferingDate());
         transaction.setAmount(offering.getAmount());
-        transaction.setCategory(offering.getFundCategory());
-        transaction.setSubCategory(null);
+        transaction.setCategory(offering.getFundCode());
+        transaction.setSubCategory(offering.getCategoryCode());
         transaction.setSourceType(FinancialSourceType.OFFERING);
         transaction.setSourceId(offering.getId());
         transaction.setMemo(offering.getMemo());
@@ -186,15 +191,37 @@ public class OfferingService {
         return transaction;
     }
 
-    private String normalizeFundCategory(String fundCategory) {
-        String normalized = trimToNull(fundCategory);
+    private void applyOfferingHierarchy(Offering offering, OfferingRequest request) {
+        String fundCode = normalizeReference(request.fundCode(), ReferenceDataType.OFFERING_FUND,
+            "Offering fund is required.", "Offering fund was not found.");
+        String categoryCode = normalizeReference(request.categoryCode(), ReferenceDataType.OFFERING_CATEGORY,
+            "Offering category is required.", "Offering category was not found.");
+        ReferenceData category = referenceDataRepository
+            .findByTypeAndCode(ReferenceDataType.OFFERING_CATEGORY, categoryCode)
+            .filter(referenceData -> referenceData.isActive())
+            .orElseThrow(() -> new IllegalArgumentException("Offering category was not found."));
+        if (!fundCode.equals(category.getParentCode())) {
+            throw new IllegalArgumentException("Offering category does not belong to the selected fund.");
+        }
+        offering.setFundCode(fundCode);
+        offering.setCategoryCode(categoryCode);
+        offering.setFundCategory(categoryCode);
+    }
+
+    private String normalizeReference(
+        String value,
+        ReferenceDataType type,
+        String requiredMessage,
+        String missingMessage
+    ) {
+        String normalized = trimToNull(value);
         if (normalized == null) {
-            throw new IllegalArgumentException("Offering fund/category is required.");
+            throw new IllegalArgumentException(requiredMessage);
         }
         normalized = normalized.toUpperCase(Locale.ROOT);
-        referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, normalized)
+        referenceDataRepository.findByTypeAndCode(type, normalized)
             .filter(referenceData -> referenceData.isActive())
-            .orElseThrow(() -> new IllegalArgumentException("Offering fund/category was not found."));
+            .orElseThrow(() -> new IllegalArgumentException(missingMessage));
         return normalized;
     }
 
@@ -212,6 +239,9 @@ public class OfferingService {
 
     private LocalDate resolveOfferingSunday(LocalDate offeringDate, LocalDate requestedSunday) {
         if (requestedSunday != null) {
+            if (requestedSunday.getDayOfWeek() != DayOfWeek.SUNDAY) {
+                throw new IllegalArgumentException("Offering Sunday must be a Sunday.");
+            }
             return requestedSunday;
         }
         int daysUntilSunday = DayOfWeek.SUNDAY.getValue() - offeringDate.getDayOfWeek().getValue();

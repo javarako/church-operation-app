@@ -1,0 +1,115 @@
+package com.church.operation.service;
+
+import com.church.operation.entity.Member;
+import com.church.operation.entity.FiscalArchiveRegistry;
+import com.church.operation.entity.Offering;
+import com.church.operation.entity.TaxReceipt;
+import com.church.operation.exception.DeletionBlockedException;
+import com.church.operation.repo.MemberRepository;
+import com.church.operation.repo.PasswordResetTokenRepository;
+import com.church.operation.util.Role;
+import com.church.operation.util.SystemAuditOperation;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+
+import java.util.Optional;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class MemberDeletionServiceTest {
+    @Mock private MemberRepository memberRepository;
+    @Mock private PasswordResetTokenRepository tokenRepository;
+    @Mock private MemberImageService memberImageService;
+    @Mock private MongoTemplate mongoTemplate;
+    @Mock private SystemAuditService audit;
+
+    @Test
+    void deletesAnUnreferencedMemberAndRelatedCredentials() {
+        Member actor = member("manager-id", "manager@example.com", Role.MEMBERSHIP);
+        Member target = member("member-id", "member@example.com", Role.MEMBER);
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(target));
+        when(mongoTemplate.exists(any(Query.class), eq(Offering.class))).thenReturn(false);
+        when(mongoTemplate.exists(any(Query.class), eq(TaxReceipt.class))).thenReturn(false);
+
+        service().delete(actor, "member-id");
+
+        verify(memberImageService).remove(actor, "member-id");
+        verify(tokenRepository).deleteByMemberEmail("member@example.com");
+        verify(memberRepository).delete(target);
+        verify(audit).recordSuccess(
+            eq(actor), eq(SystemAuditOperation.MEMBER_DELETE), any(java.util.Map.class)
+        );
+    }
+
+    @Test
+    void blocksDeletingTheSignedInMember() {
+        Member actor = member("member-id", "manager@example.com", Role.ADMIN);
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(actor));
+
+        assertThatThrownBy(() -> service().delete(actor, "member-id"))
+            .isInstanceOf(DeletionBlockedException.class)
+            .hasMessageContaining("signed-in member");
+        verify(audit).recordFailure(
+            eq(actor), eq(SystemAuditOperation.MEMBER_DELETE), any(java.util.Map.class),
+            any(DeletionBlockedException.class)
+        );
+    }
+
+    @Test
+    void blocksDeletingTheBootstrapAdministrator() {
+        Member actor = member("manager-id", "manager@example.com", Role.ADMIN);
+        Member target = member("admin-id", "admin", Role.ADMIN);
+        when(memberRepository.findById("admin-id")).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service().delete(actor, "admin-id"))
+            .isInstanceOf(DeletionBlockedException.class)
+            .hasMessageContaining("System Administrator");
+    }
+
+    @Test
+    void blocksDeletingAMemberReferencedByAnOffering() {
+        Member actor = member("manager-id", "manager@example.com", Role.MEMBERSHIP);
+        Member target = member("member-id", "member@example.com", Role.MEMBER);
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(target));
+        when(mongoTemplate.exists(any(Query.class), eq(Offering.class))).thenReturn(true);
+
+        assertThatThrownBy(() -> service().delete(actor, "member-id"))
+            .isInstanceOf(DeletionBlockedException.class)
+            .hasMessageContaining("offering");
+    }
+
+    @Test
+    void blocksDeletingAMemberRequiredByACleanedFiscalArchive() {
+        Member actor = member("manager-id", "manager@example.com", Role.MEMBERSHIP);
+        Member target = member("member-id", "member@example.com", Role.MEMBER);
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(target));
+        when(mongoTemplate.exists(any(Query.class), any(Class.class)))
+            .thenAnswer(invocation -> invocation.getArgument(1).equals(FiscalArchiveRegistry.class));
+
+        assertThatThrownBy(() -> service().delete(actor, "member-id"))
+            .isInstanceOf(DeletionBlockedException.class)
+            .hasMessageContaining("fiscal archive");
+    }
+
+    private MemberDeletionService service() {
+        return new MemberDeletionService(memberRepository, tokenRepository, memberImageService, mongoTemplate, audit);
+    }
+
+    private Member member(String id, String email, Role role) {
+        Member member = new Member();
+        member.setId(id);
+        member.setPrimaryEmail(email);
+        member.setRoles(Set.of(role));
+        return member;
+    }
+}

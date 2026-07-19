@@ -19,6 +19,7 @@ public record MemberRequest(
     LocalDate birthDate,
     String groupCode,
     String membershipStatus,
+    Set<String> committeeCodes,
     String offeringNumber,
     String faceImageAttachmentId,
     String householdName,
@@ -27,4 +28,46 @@ public record MemberRequest(
     Boolean active,
     Boolean locked
 ) {
+    public MemberRequest(
+        String primaryEmail,
+        String secondaryEmail,
+        String primaryPhone,
+        String secondaryPhone,
+        String mobilePhone,
+        Address mailingAddress,
+        String displayName,
+        String nickname,
+        LocalDate birthDate,
+        String groupCode,
+        String membershipStatus,
+        String offeringNumber,
+        String faceImageAttachmentId,
+        String householdName,
+        String notes,
+        Set<Role> roles,
+        Boolean active,
+        Boolean locked
+    ) {
+        this(
+            primaryEmail,
+            secondaryEmail,
+            primaryPhone,
+            secondaryPhone,
+            mobilePhone,
+            mailingAddress,
+            displayName,
+            nickname,
+            birthDate,
+            groupCode,
+            membershipStatus,
+            null,
+            offeringNumber,
+            faceImageAttachmentId,
+            householdName,
+            notes,
+            roles,
+            active,
+            locked
+        );
+    }
 }

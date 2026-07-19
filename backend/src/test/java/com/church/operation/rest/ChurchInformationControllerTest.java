@@ -3,6 +3,7 @@ package com.church.operation.rest;
 import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.entity.Member;
 import com.church.operation.service.AuthTokenService;
+import com.church.operation.service.MaintenanceModeService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -32,6 +33,9 @@ class ChurchInformationControllerTest {
             .andExpect(jsonPath("$.address").value("church address --- IGNORE ---"))
             .andExpect(jsonPath("$.contactInfo").value("contact info --- IGNORE ---"))
             .andExpect(jsonPath("$.treasurerName").value("treasurer name --- IGNORE ---"))
+            .andExpect(jsonPath("$.charityRegistrationNumber").value(""))
+            .andExpect(jsonPath("$.receiptIssueLocation").value(""))
+            .andExpect(jsonPath("$.website").value(""))
             .andExpect(jsonPath("$.bannerPath").value("/branding/church-banner.png"))
             .andExpect(jsonPath("$.logPath").value("/branding/church_logo.png"))
             .andExpect(jsonPath("$.listPageSize").value(20));
@@ -53,6 +57,11 @@ class ChurchInformationControllerTest {
                     return Optional.empty();
                 }
             };
+        }
+
+        @Bean
+        MaintenanceModeService maintenanceModeService() {
+            return new MaintenanceModeService();
         }
     }
 }

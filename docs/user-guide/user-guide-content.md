@@ -13,9 +13,9 @@ The menu changes according to the roles assigned to the signed-in member. A user
 | Role | Primary responsibilities |
 |---|---|
 | Admin | Full operational access, member accounts, reference data, finance, budgets, and reports |
-| Treasurer | Offerings, finance, budgets, reference data, reports, and official tax extracts |
+| Treasurer | Offerings, finance, budgets, reports, and official tax extracts |
 | Pastor | Dashboard and reports |
-| Membership | Dashboard, member records, and member-related reference data |
+| Membership | Dashboard and member records |
 | Viewer | Dashboard and read-only reporting |
 | Member | Personal profile access and self-service password reset |
 
@@ -28,7 +28,7 @@ The menu changes according to the roles assigned to the signed-in member. A user
 | Offerings | Admin, Treasurer |
 | Finance | Admin, Treasurer |
 | Budgets | Admin, Treasurer |
-| Reference Data | Admin, Treasurer, Membership |
+| Reference Data | Admin |
 | Reports | Admin, Treasurer, Pastor, Viewer |
 | Official Tax Return report | Treasurer |
 | My Profile | Admin, Member |
@@ -85,12 +85,11 @@ The initial administrator account is created with login ID `admin` and password 
 
 The dashboard provides a quick operational summary:
 
+- **Fiscal Snapshot** shows active and newly registered members, year-to-date offering and expense performance against budget, and uncleared cheque totals.
 - **Offering Overview** shows current-week, month-to-date, and year-to-date totals from active offering records.
-- **Fiscal Snapshot** compares budgeted and actual income and expense for the configured fiscal year.
-- **Membership** shows total, active, and locked member accounts.
-- **Recent Finance Activity** summarizes recent income, expense, and transaction volume.
+- **Offering Trend** charts the last 12 Offering Sundays, including Sundays with no recorded offerings.
 
-Use the left menu to open permitted functions. The church name, contact information, treasurer, current user initials, and role appear in the banner area.
+Use the left menu to open permitted functions. The church name, contact information, treasurer, current user initials, and all assigned roles appear in the banner area.
 
 [[FIGURE:04-dashboard.png|Dashboard overview]]
 
@@ -112,10 +111,11 @@ Use the left menu to open permitted functions. The church name, contact informat
 2. Enter the mandatory **Primary email**. This becomes the login ID.
 3. Enter name, nickname, secondary email, phone numbers, birth date, and address as available.
 4. Choose **Group code** and **Membership status** from church reference data.
-5. Enter a numeric **Offering number** when required.
-6. Assign one or more roles. New records default to **MEMBER**.
-7. Use **Login enabled** to permit sign-in and **Login locked** to block sign-in.
-8. Add internal notes and select **Create member**.
+5. Open **Committees** and select any applicable committee assignments.
+6. Enter a numeric **Offering number** when required.
+7. Assign one or more roles. New records default to **MEMBER**.
+8. Use **Login enabled** to permit sign-in and **Login locked** to block sign-in.
+9. Add internal notes and select **Create member**.
 
 ### Update a member
 
@@ -134,7 +134,7 @@ Use the left menu to open permitted functions. The church name, contact informat
 ### Review offerings
 
 1. Select **Offerings**.
-2. Filter by **Fund/category** or giving type.
+2. Filter by **Fund**, **Category**, or giving type. Category choices follow the selected Fund.
 3. Select **Refresh**.
 4. Review the filtered total and offering count above the table.
 
@@ -144,7 +144,7 @@ Use the left menu to open permitted functions. The church name, contact informat
 2. Choose **Member**, **Anonymous**, or **Group** as the giving type.
 3. For a member offering, search for and select the member. For anonymous or group giving, enter a giver label.
 4. Enter the **Offering date**. **Offering Sunday** automatically moves to the coming Sunday, or remains today when the date is Sunday; edit it when necessary.
-5. Choose the **Fund/category** and **Payment method** from reference data.
+5. Choose the **Fund**, its **Category**, and **Payment method** from reference data.
 6. Enter the amount and optional memo.
 7. Select **Save offering**.
 
@@ -213,22 +213,22 @@ Budgets are prepared by fiscal year for offering income by fund/category and for
 
 ## Reference Data
 
-**Available to:** Admin, Treasurer, Membership
+**Available to:** Admin
 
 Reference data supplies church-specific dropdown values for member, offering, finance, and budget forms.
 
-Supported types include group code, membership status, offering fund/category, payment method, financial category, and financial sub-category.
+Supported types include group code, membership status, committee code, offering fund/category, payment method, financial category, and financial sub-category.
 
 ### Create or update a value
 
 1. Select **Reference Data**.
 2. Choose the reference type and select **Refresh**.
 3. Select **New value**, enter an uppercase code, user-facing label, sort order, and active status.
-4. For a financial sub-category, select its parent category.
+4. For an offering category or financial sub-category, select its parent fund or category.
 5. Select **Create value**.
 6. To edit, select a row, update the details, and save.
 
-Inactive values remain stored but are omitted from normal dropdown choices.
+The code is the value's key and cannot be changed after creation. Inactive values remain stored but are omitted from normal dropdown choices. A value cannot be deleted while member, offering, finance, budget, or archive data uses it.
 
 [[FIGURE:09-reference-data.png|Reference data maintenance]]
 
@@ -242,7 +242,7 @@ Inactive values remain stored but are omitted from normal dropdown choices.
 2. Set start and end dates. The end date is included in the report range.
 3. Optionally filter by fund/category and payment method.
 4. Select **Run report**.
-5. Review totals by offering Sunday, fund, giving type, and payment method.
+5. Review labelled totals by offering Sunday, fund, category, giving type, and payment method.
 
 ### Offering Summary
 
@@ -265,11 +265,20 @@ Inactive values remain stored but are omitted from normal dropdown choices.
 
 1. Select **Budget performance**.
 2. Enter the fiscal year and select **Run report**.
-3. Review budget, actual, and variance by income/expense category and sub-category.
+3. Review labelled income/expense categories, budget, actual, Budget vs. Actual percentage, and variance. A zero budget shows `-` for the percentage.
 
-For any visible report, select **Export CSV** to download the current report results.
+### Quarterly Financial Report
 
-[[FIGURE:10-reports.png|Report tabs, filters, results, and CSV export]]
+1. Select **Quarterly Financial Report**.
+2. Select the calendar year and quarter.
+3. Select the Offering download for the quarterly offering workbook or the Expenditure download for the quarterly expense workbook.
+4. Review the configured carry-over row in Offering and the configured `CONTINGENCY` Financial Category label in Expenditure.
+
+Both workbooks use Letter landscape print settings with scaling set to **Adjust to 100%**.
+
+For table reports that show **Export CSV**, select it to download the current report results.
+
+[[FIGURE:10-reports.png|Quarterly Financial Report controls and Excel downloads]]
 
 ## My Profile
 

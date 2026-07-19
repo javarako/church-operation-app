@@ -2,7 +2,10 @@ package com.church.operation.service;
 
 import com.church.operation.dto.MemberRequest;
 import com.church.operation.entity.Member;
+import com.church.operation.entity.ReferenceData;
 import com.church.operation.repo.MemberRepository;
+import com.church.operation.repo.ReferenceDataRepository;
+import com.church.operation.util.ReferenceDataType;
 import com.church.operation.util.Role;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -23,6 +27,8 @@ import static org.mockito.Mockito.when;
 class MemberServiceTest {
     @Mock
     private MemberRepository memberRepository;
+    @Mock
+    private ReferenceDataRepository referenceDataRepository;
 
     @Test
     void createsBootstrapAdminMemberWhenMissing() {
@@ -30,19 +36,20 @@ class MemberServiceTest {
         when(memberRepository.save(org.mockito.ArgumentMatchers.any(Member.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         Member member = service.createBootstrapAdminMember();
 
         assertThat(member.getPrimaryEmail()).isEqualTo("admin");
         assertThat(member.getRoles()).containsExactly(Role.ADMIN);
         assertThat(member.isMustChangePassword()).isTrue();
+        assertThat(member.getCreatedAt()).isNotNull();
         verify(memberRepository).save(org.mockito.ArgumentMatchers.any(Member.class));
     }
 
     @Test
     void rejectsBlankPrimaryEmail() {
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         assertThatThrownBy(() -> service.validatePrimaryEmail(" "))
             .isInstanceOf(IllegalArgumentException.class)
@@ -77,7 +84,7 @@ class MemberServiceTest {
         when(memberRepository.findByOfferingNumber("1001")).thenReturn(Optional.empty());
         when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         Member created = service.createMember(actor, request);
 
@@ -88,11 +95,83 @@ class MemberServiceTest {
     }
 
     @Test
+    void membershipManagerAssignsMultipleNormalizedCommitteeCodes() {
+        Member actor = member("admin-id", "admin", Role.ADMIN);
+        MemberRequest request = new MemberRequest(
+            "person@example.com", null, null, null, null, null, "Person", null, null,
+            "ADULT", "ACTIVE",
+            new LinkedHashSet<>(List.of("worship", "WORSHIP", "outreach")),
+            "1001", null, null, null, Set.of(Role.MEMBER), true, false
+        );
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.COMMITTEE_CODE, "WORSHIP"))
+            .thenReturn(Optional.of(activeReference("WORSHIP")));
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.COMMITTEE_CODE, "OUTREACH"))
+            .thenReturn(Optional.of(activeReference("OUTREACH")));
+        when(memberRepository.findByPrimaryEmail("person@example.com")).thenReturn(Optional.empty());
+        when(memberRepository.findByOfferingNumber("1001")).thenReturn(Optional.empty());
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Member created = new MemberService(memberRepository, referenceDataRepository).createMember(actor, request);
+
+        assertThat(created.getCommitteeCodes()).containsExactly("WORSHIP", "OUTREACH");
+    }
+
+    @Test
+    void rejectsUnknownCommitteeCode() {
+        Member actor = member("admin-id", "admin", Role.ADMIN);
+        MemberRequest request = new MemberRequest(
+            "person@example.com", null, null, null, null, null, "Person", null, null,
+            null, null, Set.of("MISSING"), null, null, null, null, Set.of(Role.MEMBER), true, false
+        );
+        when(referenceDataRepository.findByTypeAndCode(ReferenceDataType.COMMITTEE_CODE, "MISSING"))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+            new MemberService(memberRepository, referenceDataRepository).createMember(actor, request)
+        ).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Committee code was not found.");
+    }
+
+    @Test
+    void membershipManagerCanRetainAnAssignedInactiveCommitteeCode() {
+        Member actor = member("admin-id", "admin", Role.ADMIN);
+        Member stored = member("member-id", "person@example.com", Role.MEMBER);
+        stored.setCommitteeCodes(Set.of("LEGACY"));
+        MemberRequest request = new MemberRequest(
+            "person@example.com", null, null, null, null, null, "Person", null, null,
+            null, null, Set.of("LEGACY"), null, null, null, null, Set.of(Role.MEMBER), true, false
+        );
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(stored));
+        when(memberRepository.findByPrimaryEmail("person@example.com")).thenReturn(Optional.of(stored));
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Member updated = new MemberService(memberRepository, referenceDataRepository)
+            .updateMember(actor, "member-id", request);
+
+        assertThat(updated.getCommitteeCodes()).containsExactly("LEGACY");
+    }
+
+    @Test
+    void createMemberSetsCreatedAt() {
+        Member actor = member("manager-id", "manager@example.com", Role.MEMBERSHIP);
+        MemberRequest request = minimalRequest("new@example.com");
+
+        when(memberRepository.findByPrimaryEmail("new@example.com")).thenReturn(Optional.empty());
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
+
+        Member created = service.createMember(actor, request);
+
+        assertThat(created.getCreatedAt()).isNotNull();
+    }
+
+    @Test
     void viewerCannotCreateMember() {
         Member actor = member("viewer-id", "viewer@example.com", Role.VIEWER);
         MemberRequest request = minimalRequest("person@example.com");
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         assertThatThrownBy(() -> service.createMember(actor, request))
             .isInstanceOf(SecurityException.class)
@@ -123,7 +202,7 @@ class MemberServiceTest {
             false
         );
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         assertThatThrownBy(() -> service.createMember(actor, request))
             .isInstanceOf(IllegalArgumentException.class)
@@ -135,6 +214,7 @@ class MemberServiceTest {
         Member actor = member("member-id", "member@example.com", Role.MEMBER);
         Member stored = member("member-id", "member@example.com", Role.MEMBER);
         stored.setDisplayName("Old Name");
+        stored.setCommitteeCodes(Set.of("WORSHIP"));
 
         MemberRequest request = new MemberRequest(
             "changed@example.com",
@@ -148,6 +228,7 @@ class MemberServiceTest {
             null,
             "IGNORED",
             "IGNORED",
+            Set.of("MALICIOUS"),
             "9999",
             null,
             "Household",
@@ -161,7 +242,7 @@ class MemberServiceTest {
         when(memberRepository.findByPrimaryEmail("member@example.com")).thenReturn(Optional.of(stored));
         when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         Member updated = service.updateMember(actor, "member-id", request);
 
@@ -169,6 +250,7 @@ class MemberServiceTest {
         assertThat(updated.getDisplayName()).isEqualTo("New Name");
         assertThat(updated.getGroupCode()).isNull();
         assertThat(updated.getOfferingNumber()).isNull();
+        assertThat(updated.getCommitteeCodes()).containsExactly("WORSHIP");
         assertThat(updated.getRoles()).containsExactly(Role.MEMBER);
         assertThat(updated.isActive()).isTrue();
         assertThat(updated.isLocked()).isFalse();
@@ -185,7 +267,7 @@ class MemberServiceTest {
         when(memberRepository.findByPrimaryEmail("admin")).thenReturn(Optional.of(stored));
         when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         Member updated = service.updateSelf(actor, request);
 
@@ -204,7 +286,7 @@ class MemberServiceTest {
 
         when(memberRepository.findAll()).thenReturn(List.of(match, miss));
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         List<Member> members = service.listMembers(actor, "sarah");
 
@@ -218,7 +300,7 @@ class MemberServiceTest {
 
         when(memberRepository.findAll()).thenReturn(List.of(giver));
 
-        MemberService service = new MemberService(memberRepository);
+        MemberService service = new MemberService(memberRepository, referenceDataRepository);
 
         List<Member> members = service.listMembers(actor, "giver");
 
@@ -255,5 +337,13 @@ class MemberServiceTest {
             null,
             null
         );
+    }
+
+    private ReferenceData activeReference(String code) {
+        ReferenceData reference = new ReferenceData();
+        reference.setType(ReferenceDataType.COMMITTEE_CODE);
+        reference.setCode(code);
+        reference.setActive(true);
+        return reference;
     }
 }

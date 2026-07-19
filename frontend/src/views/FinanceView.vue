@@ -206,6 +206,7 @@ interface FinanceDisplayRow extends FinancialTransaction {
 const today = new Date().toISOString().slice(0, 10);
 const transactions = ref<FinancialTransaction[]>([]);
 const offeringFundOptions = ref<ReferenceDataOption[]>([]);
+const offeringCategoryOptions = ref<ReferenceDataOption[]>([]);
 const financialCategoryOptions = ref<ReferenceDataOption[]>([]);
 const subCategoryOptions = ref<ReferenceDataOption[]>([]);
 const allSubCategoryOptions = ref<ReferenceDataOption[]>([]);
@@ -249,7 +250,7 @@ const displayRows = computed<FinanceDisplayRow[]>(() => {
 
   visibleTransactions.value.forEach((transaction) => {
     if (transaction.type === 'INCOME' && transaction.sourceType === 'OFFERING') {
-      const summaryKey = `${transaction.transactionDate}:${transaction.category}`;
+      const summaryKey = `${transaction.transactionDate}:${transaction.category}:${transaction.subCategory ?? ''}`;
       const existing = incomeByDayAndCategory.get(summaryKey);
       if (existing) {
         existing.amount += Number(transaction.amount);
@@ -299,7 +300,10 @@ const financePagination = usePagination(filteredRows);
 watch(filters, () => financePagination.resetPage());
 
 onMounted(async () => {
-  await Promise.all([loadTransactions(), loadOfferingFunds(), loadFinancialCategories(), loadAllSubCategories()]);
+  await Promise.all([
+    loadTransactions(), loadOfferingFunds(), loadOfferingCategories(),
+    loadFinancialCategories(), loadAllSubCategories(),
+  ]);
 });
 
 async function loadTransactions() {
@@ -316,9 +320,17 @@ async function loadTransactions() {
 
 async function loadOfferingFunds() {
   try {
-    offeringFundOptions.value = (await listReferenceData('OFFERING_FUND_CATEGORY')).filter((option) => option.active);
+    offeringFundOptions.value = (await listReferenceData('OFFERING_FUND')).filter((option) => option.active);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load offering funds.';
+  }
+}
+
+async function loadOfferingCategories() {
+  try {
+    offeringCategoryOptions.value = (await listReferenceData('OFFERING_CATEGORY')).filter((option) => option.active);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not load offering categories.';
   }
 }
 
@@ -476,6 +488,7 @@ function labelForSubCategory(code?: string) {
   if (!code) {
     return '-';
   }
-  return allSubCategoryOptions.value.find((subCategory) => subCategory.code === code)?.label ?? code;
+  return [...offeringCategoryOptions.value, ...allSubCategoryOptions.value]
+    .find((subCategory) => subCategory.code === code)?.label ?? code;
 }
 </script>

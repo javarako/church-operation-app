@@ -24,6 +24,7 @@
                 <th>Email</th>
                 <th>Group</th>
                 <th>Status</th>
+                <th aria-label="Actions"></th>
               </tr>
             </thead>
             <tbody>
@@ -33,10 +34,27 @@
                 :class="{ selected: selectedMember?.id === member.id }"
                 @click="selectMember(member)"
               >
-                <td>{{ member.displayName || member.nickname || 'Unnamed' }}</td>
+                <td>
+                  <div class="member-name-cell">
+                    <MemberAvatar :member-id="member.id" :name="memberDisplayName(member)" :size="38" />
+                    <span>{{ memberDisplayName(member) }}</span>
+                  </div>
+                </td>
                 <td>{{ member.primaryEmail }}</td>
-                <td>{{ member.groupCode || '-' }}</td>
-                <td>{{ member.membershipStatus || '-' }}</td>
+                <td>{{ referenceLabel(groupCodeOptions, member.groupCode) }}</td>
+                <td>{{ referenceLabel(membershipStatusOptions, member.membershipStatus) }}</td>
+                <td class="row-actions">
+                  <button
+                    type="button"
+                    class="icon-button danger"
+                    :disabled="isBootstrapAdmin(member)"
+                    :title="isBootstrapAdmin(member) ? 'System Administrator cannot be deleted' : 'Delete member'"
+                    :aria-label="`Delete member ${memberDisplayName(member)}`"
+                    @click.stop="deleteSelectedMember(member)"
+                  >
+                    <Trash2 :size="17" aria-hidden="true" />
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -54,6 +72,11 @@
 
       <form class="panel form-grid" @submit.prevent="saveMember">
         <h3>{{ selectedMember ? 'Member Detail' : 'New Member' }}</h3>
+        <MemberImageEditor
+          class="wide"
+          :member-id="selectedMember?.id"
+          :name="form.displayName || form.nickname || 'Unnamed'"
+        />
 
         <label>
           Primary email
@@ -97,6 +120,16 @@
             </option>
           </select>
         </label>
+        <details class="wide committee-picker">
+          <summary>Committees ({{ form.committeeCodes.length }})</summary>
+          <div class="committee-options">
+            <label v-for="option in visibleCommitteeOptions" :key="option.code" class="check-row">
+              <input v-model="form.committeeCodes" type="checkbox" :value="option.code" />
+              {{ option.label }}
+            </label>
+            <span v-if="visibleCommitteeOptions.length === 0">No active committees</span>
+          </div>
+        </details>
         <label>
           Offering number
           <input v-model="form.offeringNumber" inputmode="numeric" pattern="[0-9]*" @input="keepOfferingNumberNumeric" />
@@ -155,15 +188,19 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
-import { createMember, listMembers, updateMember, type Address, type MemberPayload, type MemberRecord } from '../api/members';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { createMember, deleteMember, listMembers, updateMember, type Address, type MemberPayload, type MemberRecord } from '../api/members';
+import { Trash2 } from '@lucide/vue';
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import type { Role } from '../auth/authStore';
 import PaginationControls from '../components/PaginationControls.vue';
+import MemberAvatar from '../components/MemberAvatar.vue';
+import MemberImageEditor from '../components/MemberImageEditor.vue';
 import { usePagination } from '../composables/usePagination';
 
 interface MemberForm extends MemberPayload {
   mailingAddress: Address;
+  committeeCodes: string[];
   roles: Role[];
 }
 
@@ -175,6 +212,7 @@ const error = ref('');
 const savedMessage = ref('');
 const groupCodeOptions = ref<ReferenceDataOption[]>([]);
 const membershipStatusOptions = ref<ReferenceDataOption[]>([]);
+const committeeCodeOptions = ref<ReferenceDataOption[]>([]);
 const memberPagination = usePagination(members);
 
 const form = reactive<MemberForm>({
@@ -186,6 +224,7 @@ const form = reactive<MemberForm>({
   mobilePhone: '',
   groupCode: '',
   membershipStatus: '',
+  committeeCodes: [],
   offeringNumber: '',
   birthDate: '',
   mailingAddress: {},
@@ -195,18 +234,36 @@ const form = reactive<MemberForm>({
   notes: '',
 });
 
+const visibleCommitteeOptions = computed<ReferenceDataOption[]>(() => {
+  const activeOptions = [...committeeCodeOptions.value];
+  const activeCodes = new Set(activeOptions.map((option) => option.code));
+  const inactiveAssignments = form.committeeCodes
+    .filter((code) => !activeCodes.has(code))
+    .map((code) => ({
+      id: `inactive-${code}`,
+      type: 'COMMITTEE_CODE' as const,
+      code,
+      label: `${code} (Inactive)`,
+      sortOrder: Number.MAX_SAFE_INTEGER,
+      active: false,
+    }));
+  return [...activeOptions, ...inactiveAssignments];
+});
+
 onMounted(async () => {
   await Promise.all([loadReferenceData(), loadMembers()]);
 });
 
 async function loadReferenceData() {
   try {
-    const [groups, statuses] = await Promise.all([
+    const [groups, statuses, committees] = await Promise.all([
       listReferenceData('GROUP_CODE'),
       listReferenceData('MEMBERSHIP_STATUS'),
+      listReferenceData('COMMITTEE_CODE'),
     ]);
     groupCodeOptions.value = groups.filter((option) => option.active);
     membershipStatusOptions.value = statuses.filter((option) => option.active);
+    committeeCodeOptions.value = committees.filter((option) => option.active);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not load reference data.';
   }
@@ -233,6 +290,7 @@ function startCreate() {
     mobilePhone: '',
     groupCode: '',
     membershipStatus: '',
+    committeeCodes: [],
     offeringNumber: '',
     birthDate: '',
     mailingAddress: {},
@@ -265,6 +323,27 @@ async function saveMember() {
   }
 }
 
+async function deleteSelectedMember(member: MemberRecord) {
+  if (isBootstrapAdmin(member)) {
+    return;
+  }
+  if (!window.confirm(`Delete member ${memberDisplayName(member)}? This cannot be undone.`)) {
+    return;
+  }
+  error.value = '';
+  savedMessage.value = '';
+  try {
+    await deleteMember(member.id);
+    if (selectedMember.value?.id === member.id) {
+      startCreate();
+    }
+    await loadMembers();
+    savedMessage.value = 'Deleted';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not delete member.';
+  }
+}
+
 function applyToForm(member: MemberPayload) {
   form.primaryEmail = member.primaryEmail ?? '';
   form.displayName = member.displayName ?? '';
@@ -274,6 +353,7 @@ function applyToForm(member: MemberPayload) {
   form.mobilePhone = member.mobilePhone ?? '';
   form.groupCode = member.groupCode ?? '';
   form.membershipStatus = member.membershipStatus ?? '';
+  form.committeeCodes = [...(member.committeeCodes ?? [])];
   form.offeringNumber = member.offeringNumber ?? '';
   form.birthDate = member.birthDate ?? '';
   form.mailingAddress = { ...(member.mailingAddress ?? {}) };
@@ -287,11 +367,27 @@ function cleanPayload(member: MemberPayload): MemberPayload {
   return {
     ...member,
     mailingAddress: { ...(member.mailingAddress ?? {}) },
+    committeeCodes: [...(member.committeeCodes ?? [])],
     roles: member.roles?.length ? member.roles : ['MEMBER'],
   };
 }
 
 function keepOfferingNumberNumeric() {
   form.offeringNumber = form.offeringNumber?.replace(/\D/g, '') ?? '';
+}
+
+function memberDisplayName(member: MemberRecord) {
+  return member.displayName || member.nickname || 'Unnamed';
+}
+
+function referenceLabel(options: ReferenceDataOption[], code?: string) {
+  if (!code) {
+    return '-';
+  }
+  return options.find((option) => option.code === code)?.label ?? code;
+}
+
+function isBootstrapAdmin(member: MemberRecord) {
+  return member.primaryEmail.trim().toLowerCase() === 'admin';
 }
 </script>

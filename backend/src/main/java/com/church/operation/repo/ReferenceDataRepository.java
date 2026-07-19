@@ -11,6 +11,7 @@ public interface ReferenceDataRepository extends MongoRepository<ReferenceData, 
     boolean existsByTypeAndCode(ReferenceDataType type, String code);
     List<ReferenceData> findByTypeOrderBySortOrderAscLabelAsc(ReferenceDataType type);
     List<ReferenceData> findByTypeAndActiveTrueOrderBySortOrderAscLabelAsc(ReferenceDataType type);
+    List<ReferenceData> findByTypeAndParentCodeOrderBySortOrderAscLabelAsc(ReferenceDataType type, String parentCode);
     List<ReferenceData> findByTypeAndParentCodeAndActiveTrueOrderBySortOrderAscLabelAsc(ReferenceDataType type, String parentCode);
     Optional<ReferenceData> findByTypeAndCode(ReferenceDataType type, String code);
 }

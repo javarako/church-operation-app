@@ -37,6 +37,7 @@ function router() {
       { path: '/reference-data', component: { template: '<span>Reference Data</span>' } },
       { path: '/reports', component: { template: '<span>Reports</span>' } },
       { path: '/profile', component: { template: '<span>Profile</span>' } },
+      { path: '/system-administration', component: { template: '<span>System Administration</span>' } },
       { path: '/login', component: { template: '<span>Login</span>' } },
     ],
   });
@@ -96,12 +97,28 @@ describe('AppLayout', () => {
   it('keeps role-aware menu links for admin', async () => {
     await renderLayout();
 
+    const links = await screen.findAllByRole('link');
+
+    expect(screen.getByRole('link', { name: 'System Administration' })).toBeTruthy();
+    for (const link of links) {
+      expect(link.querySelector('svg')).toBeTruthy();
+    }
+  });
+
+  it('hides system administration from non-admin staff', async () => {
+    authState.currentUser = {
+      primaryEmail: 'treasurer@example.com',
+      displayName: 'Treasurer User',
+      roles: ['TREASURER'],
+      mustChangePassword: false,
+      token: 'token',
+    };
+
+    await renderLayout();
+
     expect(await screen.findByRole('link', { name: 'Dashboard' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Members' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Offerings' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Finance' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Budgets' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Reports' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'System Administration' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Reference Data' })).toBeNull();
   });
 
   it('falls back to text branding when church information fails', async () => {

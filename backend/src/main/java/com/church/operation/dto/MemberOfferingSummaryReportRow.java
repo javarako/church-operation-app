@@ -7,8 +7,25 @@ public record MemberOfferingSummaryReportRow(
     String memberName,
     String primaryEmail,
     String offeringNumber,
-    String fundCategory,
+    String fundCode,
+    String categoryCode,
     long count,
     BigDecimal totalAmount
 ) {
+    public MemberOfferingSummaryReportRow(
+        String memberId,
+        String memberName,
+        String primaryEmail,
+        String offeringNumber,
+        String legacyFundCategory,
+        long count,
+        BigDecimal totalAmount
+    ) {
+        this(memberId, memberName, primaryEmail, offeringNumber, "GENERAL",
+            legacyFundCategory, count, totalAmount);
+    }
+
+    public String fundCategory() {
+        return categoryCode;
+    }
 }

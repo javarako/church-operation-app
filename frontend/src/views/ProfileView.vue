@@ -8,6 +8,13 @@
     </header>
 
     <form class="panel form-grid profile-form" @submit.prevent="saveProfile">
+      <MemberImageEditor
+        v-if="memberId"
+        class="wide"
+        :member-id="memberId"
+        :name="form.displayName || form.nickname || form.primaryEmail"
+        self
+      />
       <label>
         Primary email
         <input v-model="form.primaryEmail" disabled />
@@ -69,6 +76,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { getMyProfile, updateMyProfile, type Address, type MemberPayload } from '../api/members';
+import MemberImageEditor from '../components/MemberImageEditor.vue';
 
 interface ProfileForm extends MemberPayload {
   mailingAddress: Address;

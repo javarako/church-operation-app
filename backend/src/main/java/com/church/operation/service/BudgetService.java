@@ -84,12 +84,16 @@ public class BudgetService {
 
         String normalizedCategory = normalizeCategory(request.category());
         if (request.budgetType() == BudgetType.OFFERING_INCOME) {
-            referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, normalizedCategory)
+            referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_FUND, normalizedCategory)
                 .filter(ReferenceData::isActive)
-                .orElseThrow(() -> new IllegalArgumentException("Offering fund/category was not found."));
+                .orElseThrow(() -> new IllegalArgumentException("Offering fund was not found."));
+            String normalizedOfferingCategory = normalizeOfferingCategory(normalizedCategory, request.subCategory());
             budget.setCategory(normalizedCategory);
-            budget.setSubCategory(null);
-            ensureUniqueBudget(request.fiscalYear(), BudgetType.OFFERING_INCOME, normalizedCategory, null, budget.getId());
+            budget.setSubCategory(normalizedOfferingCategory);
+            ensureUniqueBudget(
+                request.fiscalYear(), BudgetType.OFFERING_INCOME,
+                normalizedCategory, normalizedOfferingCategory, budget.getId()
+            );
             return;
         }
 
@@ -143,6 +147,19 @@ public class BudgetService {
             .filter(referenceData -> category.equals(referenceData.getParentCode()))
             .orElseThrow(() -> new IllegalArgumentException("Financial sub-category was not found for the selected category."));
         return normalizedSubCategory;
+    }
+
+    private String normalizeOfferingCategory(String fundCode, String categoryCode) {
+        String normalized = trimToNull(categoryCode);
+        if (normalized == null) {
+            throw new IllegalArgumentException("Offering category is required.");
+        }
+        String normalizedCategory = normalized.toUpperCase(Locale.ROOT);
+        referenceDataRepository.findByTypeAndCode(ReferenceDataType.OFFERING_CATEGORY, normalizedCategory)
+            .filter(ReferenceData::isActive)
+            .filter(referenceData -> fundCode.equals(referenceData.getParentCode()))
+            .orElseThrow(() -> new IllegalArgumentException("Offering category was not found for the selected fund."));
+        return normalizedCategory;
     }
 
     private void ensureUniqueCarryOver(int fiscalYear, String currentBudgetId) {

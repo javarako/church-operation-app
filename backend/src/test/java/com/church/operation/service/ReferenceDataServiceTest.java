@@ -35,11 +35,12 @@ class ReferenceDataServiceTest {
 
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.GROUP_CODE, "ADULT");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.MEMBERSHIP_STATUS, "ACTIVE");
-        verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE");
+        verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.OFFERING_FUND, "GENERAL");
+        verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.OFFERING_CATEGORY, "TITHE");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.PAYMENT_METHOD, "CASH");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.FINANCIAL_CATEGORY, "OFFICE");
         verify(referenceDataRepository).existsByTypeAndCode(ReferenceDataType.FINANCIAL_SUB_CATEGORY, "SUPPLIES");
-        verify(referenceDataRepository, org.mockito.Mockito.times(29)).save(any(ReferenceData.class));
+        verify(referenceDataRepository, org.mockito.Mockito.times(30)).save(any(ReferenceData.class));
     }
 
     @Test
@@ -72,8 +73,8 @@ class ReferenceDataServiceTest {
     }
 
     @Test
-    void membershipManagerCreatesReferenceData() {
-        Member actor = member(Role.MEMBERSHIP);
+    void adminCreatesReferenceData() {
+        Member actor = member(Role.ADMIN);
         ReferenceDataRequest request = new ReferenceDataRequest(
             ReferenceDataType.GROUP_CODE,
             "CHOIR",
@@ -98,8 +99,27 @@ class ReferenceDataServiceTest {
     }
 
     @Test
-    void viewerCannotCreateReferenceData() {
-        Member actor = member(Role.VIEWER);
+    void cannotCreateLegacyCombinedOfferingReferenceData() {
+        ReferenceDataRequest request = new ReferenceDataRequest(
+            ReferenceDataType.OFFERING_FUND_CATEGORY,
+            "LEGACY",
+            "Legacy",
+            10,
+            true,
+            null
+        );
+
+        ReferenceDataService service = new ReferenceDataService(referenceDataRepository);
+
+        assertThatThrownBy(() -> service.create(member(Role.ADMIN), request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("legacy");
+        verify(referenceDataRepository, never()).save(any(ReferenceData.class));
+    }
+
+    @Test
+    void nonAdminCannotCreateReferenceData() {
+        Member actor = member(Role.MEMBERSHIP);
         ReferenceDataRequest request = new ReferenceDataRequest(
             ReferenceDataType.MEMBERSHIP_STATUS,
             "WATCHING",
@@ -112,6 +132,15 @@ class ReferenceDataServiceTest {
         ReferenceDataService service = new ReferenceDataService(referenceDataRepository);
 
         assertThatThrownBy(() -> service.create(actor, request))
+            .isInstanceOf(SecurityException.class)
+            .hasMessage("You do not have permission to maintain reference data.");
+    }
+
+    @Test
+    void onlyAdminCanListAllReferenceData() {
+        ReferenceDataService service = new ReferenceDataService(referenceDataRepository);
+
+        assertThatThrownBy(() -> service.listAll(member(Role.TREASURER), ReferenceDataType.GROUP_CODE))
             .isInstanceOf(SecurityException.class)
             .hasMessage("You do not have permission to maintain reference data.");
     }
@@ -150,8 +179,41 @@ class ReferenceDataServiceTest {
     }
 
     @Test
+    void rejectsChangingCodeAfterCreation() {
+        Member actor = member(Role.ADMIN);
+        ReferenceData existing = reference(ReferenceDataType.GROUP_CODE, "CHOIR");
+        ReferenceDataRequest request = new ReferenceDataRequest(
+            ReferenceDataType.GROUP_CODE, "WORSHIP", "Worship", 10, true, null
+        );
+        when(referenceDataRepository.findById("ref-id")).thenReturn(Optional.of(existing));
+
+        ReferenceDataService service = new ReferenceDataService(referenceDataRepository);
+
+        assertThatThrownBy(() -> service.update(actor, "ref-id", request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Reference data type and code cannot be changed after creation.");
+        verify(referenceDataRepository, never()).save(any(ReferenceData.class));
+    }
+
+    @Test
+    void rejectsChangingTypeAfterCreation() {
+        Member actor = member(Role.ADMIN);
+        ReferenceData existing = reference(ReferenceDataType.GROUP_CODE, "CHOIR");
+        ReferenceDataRequest request = new ReferenceDataRequest(
+            ReferenceDataType.COMMITTEE_CODE, "CHOIR", "Choir", 10, true, null
+        );
+        when(referenceDataRepository.findById("ref-id")).thenReturn(Optional.of(existing));
+
+        ReferenceDataService service = new ReferenceDataService(referenceDataRepository);
+
+        assertThatThrownBy(() -> service.update(actor, "ref-id", request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Reference data type and code cannot be changed after creation.");
+    }
+
+    @Test
     void financialSubCategoryRequiresParentCode() {
-        Member actor = member(Role.TREASURER);
+        Member actor = member(Role.ADMIN);
         ReferenceDataRequest request = new ReferenceDataRequest(
             ReferenceDataType.FINANCIAL_SUB_CATEGORY,
             "SUPPLIES",
@@ -170,7 +232,7 @@ class ReferenceDataServiceTest {
 
     @Test
     void financialSubCategoryRequiresExistingFinancialCategoryParent() {
-        Member actor = member(Role.TREASURER);
+        Member actor = member(Role.ADMIN);
         ReferenceDataRequest request = new ReferenceDataRequest(
             ReferenceDataType.FINANCIAL_SUB_CATEGORY,
             "SUPPLIES",
@@ -191,7 +253,7 @@ class ReferenceDataServiceTest {
 
     @Test
     void createsFinancialSubCategoryWithNormalizedParentCode() {
-        Member actor = member(Role.TREASURER);
+        Member actor = member(Role.ADMIN);
         ReferenceData parent = new ReferenceData();
         parent.setId("parent-id");
         parent.setType(ReferenceDataType.FINANCIAL_CATEGORY);
@@ -219,7 +281,7 @@ class ReferenceDataServiceTest {
 
     @Test
     void clearsParentCodeForNonSubCategoryTypes() {
-        Member actor = member(Role.TREASURER);
+        Member actor = member(Role.ADMIN);
         ReferenceDataRequest request = new ReferenceDataRequest(
             ReferenceDataType.FINANCIAL_CATEGORY,
             "office",
@@ -256,10 +318,39 @@ class ReferenceDataServiceTest {
         assertThat(service.listActive(ReferenceDataType.FINANCIAL_SUB_CATEGORY, "office")).containsExactly(supplies);
     }
 
+    @Test
+    void adminListsActiveAndInactiveChildReferencesByParentCode() {
+        ReferenceData inactiveCategory = new ReferenceData();
+        inactiveCategory.setType(ReferenceDataType.OFFERING_CATEGORY);
+        inactiveCategory.setCode("LEGACY");
+        inactiveCategory.setParentCode("GENERAL");
+        inactiveCategory.setActive(false);
+
+        when(referenceDataRepository.findByTypeAndParentCodeOrderBySortOrderAscLabelAsc(
+            ReferenceDataType.OFFERING_CATEGORY,
+            "GENERAL"
+        )).thenReturn(List.of(inactiveCategory));
+
+        ReferenceDataService service = new ReferenceDataService(referenceDataRepository);
+
+        assertThat(service.listAll(member(Role.ADMIN), ReferenceDataType.OFFERING_CATEGORY, "general"))
+            .containsExactly(inactiveCategory);
+    }
+
     private Member member(Role role) {
         Member member = new Member();
         member.setRoles(Set.of(role));
         member.setActive(true);
         return member;
+    }
+
+    private ReferenceData reference(ReferenceDataType type, String code) {
+        ReferenceData referenceData = new ReferenceData();
+        referenceData.setId("ref-id");
+        referenceData.setType(type);
+        referenceData.setCode(code);
+        referenceData.setLabel(code);
+        referenceData.setActive(true);
+        return referenceData;
     }
 }

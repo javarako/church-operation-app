@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/vue';
-import { createRouter, createWebHistory } from 'vue-router';
+import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router';
 import App from './App.vue';
-import { authState } from './auth/authStore';
+import { authState, type Role } from './auth/authStore';
 import { getChurchInformation } from './api/churchInformation';
+import { createAppRouter } from './router';
 
 vi.mock('./api/churchInformation', () => ({
   getChurchInformation: vi.fn().mockResolvedValue({
@@ -40,6 +41,20 @@ async function renderApp(path: string) {
       plugins: [testRouter],
     },
   });
+}
+
+async function navigateAs(role: Role, path: string) {
+  authState.currentUser = {
+    primaryEmail: `${role.toLowerCase()}@example.com`,
+    displayName: `${role} User`,
+    roles: [role],
+    mustChangePassword: false,
+    token: 'token',
+  };
+  const testRouter = createAppRouter(createMemoryHistory());
+  await testRouter.push(path);
+  await testRouter.isReady();
+  return testRouter.currentRoute.value.path;
 }
 
 describe('App', () => {
@@ -81,5 +96,38 @@ describe('App', () => {
 
     expect(screen.getByText('Login Page')).toBeTruthy();
     expect(screen.queryByRole('navigation', { name: 'Main menu' })).toBeNull();
+  });
+
+  it.each<Role>(['ADMIN', 'TREASURER', 'PASTOR', 'MEMBERSHIP', 'VIEWER'])(
+    'allows %s to reach the staff dashboard',
+    async (role) => {
+      expect(await navigateAs(role, '/')).toBe('/');
+    },
+  );
+
+  it('keeps System Administration restricted to administrators', async () => {
+    expect(await navigateAs('ADMIN', '/system-administration')).toBe('/system-administration');
+    for (const role of ['TREASURER', 'PASTOR', 'MEMBERSHIP', 'VIEWER'] as Role[]) {
+      expect(await navigateAs(role, '/system-administration')).toBe('/');
+    }
+  });
+
+  it('keeps Reference Data restricted to administrators', async () => {
+    expect(await navigateAs('ADMIN', '/reference-data')).toBe('/reference-data');
+    for (const role of ['TREASURER', 'PASTOR', 'MEMBERSHIP', 'VIEWER'] as Role[]) {
+      expect(await navigateAs(role, '/reference-data')).toBe('/');
+    }
+  });
+
+  it('allows administrators and treasurers to reach official-receipt reports', async () => {
+    expect(await navigateAs('ADMIN', '/reports')).toBe('/reports');
+    expect(await navigateAs('TREASURER', '/reports')).toBe('/reports');
+  });
+
+  it('redirects members to self-service instead of an inaccessible dashboard', async () => {
+    expect(await navigateAs('MEMBER', '/profile')).toBe('/profile');
+    for (const path of ['/', '/members', '/offerings', '/finance', '/budgets', '/reference-data', '/reports', '/system-administration']) {
+      expect(await navigateAs('MEMBER', path)).toBe('/profile');
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { getJson, postJson, putJson } from './http';
+import { deleteEmpty, getBlob, getJson, postJson, putFile, putJson } from './http';
 import type { Role } from '../auth/authStore';
 
 export interface Address {
@@ -22,6 +22,7 @@ export interface MemberPayload {
   birthDate?: string;
   groupCode?: string;
   membershipStatus?: string;
+  committeeCodes?: string[];
   offeringNumber?: string;
   faceImageAttachmentId?: string;
   householdName?: string;
@@ -37,6 +38,7 @@ export interface MemberRecord extends MemberPayload {
   active: boolean;
   locked: boolean;
   mustChangePassword: boolean;
+  createdAt?: string;
 }
 
 export function listMembers(search: string) {
@@ -52,10 +54,38 @@ export function updateMember(id: string, payload: MemberPayload) {
   return putJson<MemberPayload, MemberRecord>(`/api/members/${id}`, payload);
 }
 
+export function deleteMember(id: string) {
+  return deleteEmpty(`/api/members/${id}`);
+}
+
 export function getMyProfile() {
   return getJson<MemberRecord>('/api/members/me');
 }
 
 export function updateMyProfile(payload: MemberPayload) {
   return putJson<MemberPayload, MemberRecord>('/api/members/me', payload);
+}
+
+export function getMemberImage(id: string) {
+  return getBlob(`/api/members/${id}/image`);
+}
+
+export function replaceMemberImage(id: string, file: File) {
+  return putFile<MemberRecord>(`/api/members/${id}/image`, 'file', file);
+}
+
+export function removeMemberImage(id: string) {
+  return deleteEmpty(`/api/members/${id}/image`);
+}
+
+export function getSelfImage() {
+  return getBlob('/api/members/me/image');
+}
+
+export function replaceSelfImage(file: File) {
+  return putFile<MemberRecord>('/api/members/me/image', 'file', file);
+}
+
+export function removeSelfImage() {
+  return deleteEmpty('/api/members/me/image');
 }

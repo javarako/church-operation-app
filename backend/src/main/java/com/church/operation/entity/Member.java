@@ -6,6 +6,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -27,6 +28,7 @@ public class Member {
     private LocalDate birthDate;
     private String groupCode;
     private String membershipStatus;
+    private Set<String> committeeCodes = new LinkedHashSet<>();
 
     @Indexed(unique = true, sparse = true)
     private String offeringNumber;
@@ -39,6 +41,7 @@ public class Member {
     private boolean locked = false;
     private boolean mustChangePassword = false;
     private String passwordHash;
+    private Instant createdAt;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -64,6 +67,17 @@ public class Member {
     public void setGroupCode(String groupCode) { this.groupCode = groupCode; }
     public String getMembershipStatus() { return membershipStatus; }
     public void setMembershipStatus(String membershipStatus) { this.membershipStatus = membershipStatus; }
+    public Set<String> getCommitteeCodes() {
+        if (committeeCodes == null) {
+            committeeCodes = new LinkedHashSet<>();
+        }
+        return committeeCodes;
+    }
+    public void setCommitteeCodes(Set<String> committeeCodes) {
+        this.committeeCodes = committeeCodes == null
+            ? new LinkedHashSet<>()
+            : new LinkedHashSet<>(committeeCodes);
+    }
     public String getOfferingNumber() { return offeringNumber; }
     public void setOfferingNumber(String offeringNumber) { this.offeringNumber = offeringNumber; }
     public String getFaceImageAttachmentId() { return faceImageAttachmentId; }
@@ -82,4 +96,6 @@ public class Member {
     public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

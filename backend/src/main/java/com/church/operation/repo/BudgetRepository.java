@@ -16,4 +16,7 @@ public interface BudgetRepository extends MongoRepository<Budget, String> {
 
     @Query("{ 'fiscalYear' : ?0, 'budgetType' : 'CARRY_OVER', 'deleted' : false }")
     List<Budget> findActiveCarryOver(int fiscalYear);
+
+    @Query(value = "{ 'fiscalYear' : ?0 }", sort = "{ 'budgetType' : 1, 'category' : 1, 'subCategory' : 1, '_id' : 1 }")
+    List<Budget> findAllByFiscalYear(int fiscalYear);
 }

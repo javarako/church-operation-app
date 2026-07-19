@@ -13,7 +13,7 @@ import build_user_guide as base
 GUIDE_DIR = Path(__file__).resolve().parent
 CONTENT_PATH = GUIDE_DIR / "user-guide-content-ko.md"
 OUTPUT_PATH = GUIDE_DIR / "교회운영 메뉴얼.docx"
-KOREAN_FONT = "Nanum Gothic"
+KOREAN_FONT = "AppleGothic"
 
 
 original_set_run_font = base.set_run_font

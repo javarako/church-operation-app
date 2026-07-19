@@ -31,10 +31,11 @@ public class ReferenceDataService {
         seed(ReferenceDataType.MEMBERSHIP_STATUS, "VISITOR", "Visitor", 30);
         seed(ReferenceDataType.MEMBERSHIP_STATUS, "TRANSFERRED", "Transferred", 40);
 
-        seed(ReferenceDataType.OFFERING_FUND_CATEGORY, "TITHE", "Tithe", 10);
-        seed(ReferenceDataType.OFFERING_FUND_CATEGORY, "THANKSGIVING", "Thanksgiving", 20);
-        seed(ReferenceDataType.OFFERING_FUND_CATEGORY, "MISSION", "Mission", 30);
-        seed(ReferenceDataType.OFFERING_FUND_CATEGORY, "BUILDING", "Building", 40);
+        seed(ReferenceDataType.OFFERING_FUND, "GENERAL", "General Fund", 10);
+        seed(ReferenceDataType.OFFERING_CATEGORY, "TITHE", "Tithe", 10, "GENERAL");
+        seed(ReferenceDataType.OFFERING_CATEGORY, "THANKSGIVING", "Thanksgiving", 20, "GENERAL");
+        seed(ReferenceDataType.OFFERING_CATEGORY, "MISSION", "Mission", 30, "GENERAL");
+        seed(ReferenceDataType.OFFERING_CATEGORY, "BUILDING", "Building", 40, "GENERAL");
 
         seed(ReferenceDataType.PAYMENT_METHOD, "CASH", "Cash", 10);
         seed(ReferenceDataType.PAYMENT_METHOD, "CHEQUE", "Cheque", 20);
@@ -63,7 +64,7 @@ public class ReferenceDataService {
 
     public List<ReferenceData> listActive(ReferenceDataType type, String parentCode) {
         String normalizedParentCode = trimToNull(parentCode);
-        if (type == ReferenceDataType.FINANCIAL_SUB_CATEGORY && normalizedParentCode != null) {
+        if (isChildType(type) && normalizedParentCode != null) {
             return referenceDataRepository.findByTypeAndParentCodeAndActiveTrueOrderBySortOrderAscLabelAsc(
                 type,
                 normalizedParentCode.toUpperCase(Locale.ROOT)
@@ -79,8 +80,8 @@ public class ReferenceDataService {
     public List<ReferenceData> listAll(Member actor, ReferenceDataType type, String parentCode) {
         requireReferenceDataManager(actor);
         String normalizedParentCode = trimToNull(parentCode);
-        if (type == ReferenceDataType.FINANCIAL_SUB_CATEGORY && normalizedParentCode != null) {
-            return referenceDataRepository.findByTypeAndParentCodeAndActiveTrueOrderBySortOrderAscLabelAsc(
+        if (isChildType(type) && normalizedParentCode != null) {
+            return referenceDataRepository.findByTypeAndParentCodeOrderBySortOrderAscLabelAsc(
                 type,
                 normalizedParentCode.toUpperCase(Locale.ROOT)
             );
@@ -90,6 +91,7 @@ public class ReferenceDataService {
 
     public ReferenceData create(Member actor, ReferenceDataRequest request) {
         requireReferenceDataManager(actor);
+        rejectLegacyType(request.type());
         ReferenceData referenceData = new ReferenceData();
         apply(referenceData, request);
         ensureUnique(referenceData);
@@ -98,8 +100,14 @@ public class ReferenceDataService {
 
     public ReferenceData update(Member actor, String id, ReferenceDataRequest request) {
         requireReferenceDataManager(actor);
+        rejectLegacyType(request.type());
         ReferenceData referenceData = referenceDataRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Reference data was not found."));
+        String requestedCode = normalizeCode(request.code());
+        if (referenceData.getType() != request.type()
+            || !Objects.equals(referenceData.getCode(), requestedCode)) {
+            throw new IllegalArgumentException("Reference data type and code cannot be changed after creation.");
+        }
         apply(referenceData, request);
         ensureUnique(referenceData);
         return referenceDataRepository.save(referenceData);
@@ -138,18 +146,27 @@ public class ReferenceDataService {
     }
 
     private String resolveParentCode(ReferenceDataType type, String parentCode) {
-        if (type != ReferenceDataType.FINANCIAL_SUB_CATEGORY) {
+        if (!isChildType(type)) {
             return null;
         }
 
         String normalizedParentCode = trimToNull(parentCode);
         if (normalizedParentCode == null) {
+            if (type == ReferenceDataType.OFFERING_CATEGORY) {
+                throw new IllegalArgumentException("Parent offering fund is required for offering category.");
+            }
             throw new IllegalArgumentException("Parent financial category is required for financial sub-category.");
         }
 
         normalizedParentCode = normalizedParentCode.toUpperCase(Locale.ROOT);
-        referenceDataRepository.findByTypeAndCode(ReferenceDataType.FINANCIAL_CATEGORY, normalizedParentCode)
-            .orElseThrow(() -> new IllegalArgumentException("Parent financial category was not found."));
+        ReferenceDataType parentType = type == ReferenceDataType.OFFERING_CATEGORY
+            ? ReferenceDataType.OFFERING_FUND
+            : ReferenceDataType.FINANCIAL_CATEGORY;
+        String missingMessage = type == ReferenceDataType.OFFERING_CATEGORY
+            ? "Parent offering fund was not found."
+            : "Parent financial category was not found.";
+        referenceDataRepository.findByTypeAndCode(parentType, normalizedParentCode)
+            .orElseThrow(() -> new IllegalArgumentException(missingMessage));
         return normalizedParentCode;
     }
 
@@ -162,8 +179,19 @@ public class ReferenceDataService {
     }
 
     private void requireReferenceDataManager(Member actor) {
-        if (!hasRole(actor, Role.ADMIN) && !hasRole(actor, Role.MEMBERSHIP) && !hasRole(actor, Role.TREASURER)) {
+        if (!hasRole(actor, Role.ADMIN)) {
             throw new SecurityException("You do not have permission to maintain reference data.");
+        }
+    }
+
+    private boolean isChildType(ReferenceDataType type) {
+        return type == ReferenceDataType.OFFERING_CATEGORY
+            || type == ReferenceDataType.FINANCIAL_SUB_CATEGORY;
+    }
+
+    private void rejectLegacyType(ReferenceDataType type) {
+        if (type == ReferenceDataType.OFFERING_FUND_CATEGORY) {
+            throw new IllegalArgumentException("The legacy combined offering reference type cannot be maintained.");
         }
     }
 

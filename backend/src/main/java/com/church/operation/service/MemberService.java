@@ -3,6 +3,8 @@ package com.church.operation.service;
 import com.church.operation.dto.MemberRequest;
 import com.church.operation.entity.Member;
 import com.church.operation.repo.MemberRepository;
+import com.church.operation.repo.ReferenceDataRepository;
+import com.church.operation.util.ReferenceDataType;
 import com.church.operation.util.Role;
 import org.springframework.stereotype.Service;
 
@@ -12,13 +14,19 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.time.Instant;
 
 @Service
 public class MemberService {
     private final MemberRepository memberRepository;
+    private final ReferenceDataRepository referenceDataRepository;
 
-    public MemberService(MemberRepository memberRepository) {
+    public MemberService(
+        MemberRepository memberRepository,
+        ReferenceDataRepository referenceDataRepository
+    ) {
         this.memberRepository = memberRepository;
+        this.referenceDataRepository = referenceDataRepository;
     }
 
     public Member createBootstrapAdminMember() {
@@ -34,6 +42,7 @@ public class MemberService {
         member.setActive(true);
         member.setLocked(false);
         member.setMustChangePassword(true);
+        member.setCreatedAt(Instant.now());
         return memberRepository.save(member);
     }
 
@@ -67,6 +76,7 @@ public class MemberService {
     public Member createMember(Member actor, MemberRequest request) {
         requireMembershipManager(actor);
         Member member = new Member();
+        member.setCreatedAt(Instant.now());
         applyManagedFields(member, request);
         ensureUniqueIdentity(member);
         return memberRepository.save(member);
@@ -120,6 +130,7 @@ public class MemberService {
         member.setBirthDate(request.birthDate());
         member.setGroupCode(trimToNull(request.groupCode()));
         member.setMembershipStatus(trimToNull(request.membershipStatus()));
+        member.setCommitteeCodes(normalizeCommitteeCodes(request.committeeCodes(), member.getCommitteeCodes()));
         member.setOfferingNumber(trimToNull(request.offeringNumber()));
         member.setFaceImageAttachmentId(trimToNull(request.faceImageAttachmentId()));
         member.setHouseholdName(trimToNull(request.householdName()));
@@ -182,6 +193,36 @@ public class MemberService {
             return new LinkedHashSet<>(Set.of(Role.MEMBER));
         }
         return new LinkedHashSet<>(roles);
+    }
+
+    private Set<String> normalizeCommitteeCodes(Set<String> committeeCodes, Set<String> existingCommitteeCodes) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (committeeCodes == null) {
+            return normalized;
+        }
+        Set<String> existing = existingCommitteeCodes == null
+            ? Set.of()
+            : existingCommitteeCodes.stream()
+                .map(code -> code.toUpperCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+        for (String committeeCode : committeeCodes) {
+            String code = trimToNull(committeeCode);
+            if (code == null) {
+                continue;
+            }
+            code = code.toUpperCase(Locale.ROOT);
+            if (!existing.contains(code)) {
+                boolean active = referenceDataRepository
+                    .findByTypeAndCode(ReferenceDataType.COMMITTEE_CODE, code)
+                    .filter(reference -> reference.isActive())
+                    .isPresent();
+                if (!active) {
+                    throw new IllegalArgumentException("Committee code was not found.");
+                }
+            }
+            normalized.add(code);
+        }
+        return normalized;
     }
 
     private void requireMembershipManager(Member actor) {
