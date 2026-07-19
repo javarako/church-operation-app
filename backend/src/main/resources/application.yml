@@ -29,6 +29,8 @@ management:
         include: health
 
 church:
+  reference-data:
+    seed-defaults: ${CHURCH_REFERENCE_DATA_SEED_DEFAULTS:false}
   data-management:
     temp-directory: ${CHURCH_DATA_TEMP_DIRECTORY:${java.io.tmpdir}/church-operation-data}
     operation-expiry: ${CHURCH_DATA_OPERATION_EXPIRY:30m}
