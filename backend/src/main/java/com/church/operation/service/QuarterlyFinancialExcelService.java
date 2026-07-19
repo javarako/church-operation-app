@@ -59,7 +59,6 @@ public class QuarterlyFinancialExcelService {
             configureColumns(sheet);
             createTopRows(sheet, report, styles);
             int finalRow = createReportRows(sheet, report, styles);
-            wrapColumnB(workbook, sheet);
             addLogo(workbook, sheet);
             configurePrint(workbook, sheet, finalRow);
             workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
@@ -78,24 +77,6 @@ public class QuarterlyFinancialExcelService {
         }
         sheet.setColumnWidth(8, (int) (9.33203125 * 256));
         sheet.setColumnWidth(9, (int) (16.5 * 256));
-    }
-
-    private void wrapColumnB(XSSFWorkbook workbook, XSSFSheet sheet) {
-        Map<Short, CellStyle> wrappedStyles = new HashMap<>();
-        for (Row row : sheet) {
-            Cell cell = row.getCell(1);
-            if (cell == null) {
-                continue;
-            }
-            short sourceStyleIndex = cell.getCellStyle().getIndex();
-            CellStyle wrappedStyle = wrappedStyles.computeIfAbsent(sourceStyleIndex, index -> {
-                CellStyle style = workbook.createCellStyle();
-                style.cloneStyleFrom(workbook.getCellStyleAt(index));
-                style.setWrapText(true);
-                return style;
-            });
-            cell.setCellStyle(wrappedStyle);
-        }
     }
 
     private void createTopRows(XSSFSheet sheet, QuarterlyFinancialReport report, Styles styles) {
@@ -146,6 +127,8 @@ public class QuarterlyFinancialExcelService {
                     row.getCell(0).setCellStyle(styles.fund());
                 }
                 row.getCell(1).setCellValue(item.itemLabel());
+                // enable wrap text for the item label cell
+                row.getCell(1).getCellStyle().setWrapText(true);
                 numeric(row.getCell(2), item.budget(), styles.currency());
                 for (int month = 0; month < 3; month++) {
                     numeric(row.getCell(3 + month), item.monthlyActuals().get(month), styles.currency());
