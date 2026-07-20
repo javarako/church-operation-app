@@ -16,6 +16,9 @@ import com.church.operation.service.QuarterlyExpenditureReportService;
 import com.church.operation.service.QuarterlyOfferingReportService;
 import com.church.operation.service.TaxReceiptPdfService;
 import com.church.operation.service.TaxReceiptService;
+import com.church.operation.service.YearlyExpenditureReportService;
+import com.church.operation.service.YearlyFinancialExcelService;
+import com.church.operation.service.YearlyOfferingReportService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -46,6 +49,9 @@ public class ReportController {
     private final QuarterlyOfferingReportService quarterlyOfferingReportService;
     private final QuarterlyExpenditureReportService quarterlyExpenditureReportService;
     private final QuarterlyFinancialExcelService quarterlyFinancialExcelService;
+    private final YearlyOfferingReportService yearlyOfferingReportService;
+    private final YearlyExpenditureReportService yearlyExpenditureReportService;
+    private final YearlyFinancialExcelService yearlyFinancialExcelService;
 
     public ReportController(
         ReportService reportService,
@@ -53,7 +59,10 @@ public class ReportController {
         TaxReceiptPdfService taxReceiptPdfService,
         QuarterlyOfferingReportService quarterlyOfferingReportService,
         QuarterlyExpenditureReportService quarterlyExpenditureReportService,
-        QuarterlyFinancialExcelService quarterlyFinancialExcelService
+        QuarterlyFinancialExcelService quarterlyFinancialExcelService,
+        YearlyOfferingReportService yearlyOfferingReportService,
+        YearlyExpenditureReportService yearlyExpenditureReportService,
+        YearlyFinancialExcelService yearlyFinancialExcelService
     ) {
         this.reportService = reportService;
         this.taxReceiptService = taxReceiptService;
@@ -61,6 +70,9 @@ public class ReportController {
         this.quarterlyOfferingReportService = quarterlyOfferingReportService;
         this.quarterlyExpenditureReportService = quarterlyExpenditureReportService;
         this.quarterlyFinancialExcelService = quarterlyFinancialExcelService;
+        this.yearlyOfferingReportService = yearlyOfferingReportService;
+        this.yearlyExpenditureReportService = yearlyExpenditureReportService;
+        this.yearlyFinancialExcelService = yearlyFinancialExcelService;
     }
 
     @GetMapping("/weekly-offerings")
@@ -196,6 +208,37 @@ public class ReportController {
                 HttpHeaders.CONTENT_DISPOSITION,
                 "attachment; filename=quarterly-expenditures-" + year + "-q" + quarter + ".xlsx"
             )
+            .body(workbook);
+    }
+
+    @GetMapping("/yearly-offerings.xlsx")
+    ResponseEntity<byte[]> downloadYearlyOfferings(
+        Authentication authentication,
+        @RequestParam("fiscalYear") int fiscalYear
+    ) {
+        byte[] workbook = yearlyFinancialExcelService.render(
+            yearlyOfferingReportService.build(actor(authentication), fiscalYear)
+        );
+        return excelAttachment(workbook, "yearly-offerings-" + fiscalYear + ".xlsx");
+    }
+
+    @GetMapping("/yearly-expenditures.xlsx")
+    ResponseEntity<byte[]> downloadYearlyExpenditures(
+        Authentication authentication,
+        @RequestParam("fiscalYear") int fiscalYear
+    ) {
+        byte[] workbook = yearlyFinancialExcelService.render(
+            yearlyExpenditureReportService.build(actor(authentication), fiscalYear)
+        );
+        return excelAttachment(workbook, "yearly-expenditures-" + fiscalYear + ".xlsx");
+    }
+
+    private ResponseEntity<byte[]> excelAttachment(byte[] workbook, String filename) {
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
             .body(workbook);
     }
 

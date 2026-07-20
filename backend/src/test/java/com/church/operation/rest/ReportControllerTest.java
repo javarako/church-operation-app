@@ -2,6 +2,7 @@ package com.church.operation.rest;
 
 import com.church.operation.dto.TaxReceiptSummaryRow;
 import com.church.operation.dto.QuarterlyFinancialReport;
+import com.church.operation.dto.YearlyFinancialReport;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.TaxReceipt;
 import com.church.operation.exception.GlobalExceptionHandler;
@@ -11,6 +12,9 @@ import com.church.operation.service.QuarterlyOfferingReportService;
 import com.church.operation.service.ReportService;
 import com.church.operation.service.TaxReceiptPdfService;
 import com.church.operation.service.TaxReceiptService;
+import com.church.operation.service.YearlyExpenditureReportService;
+import com.church.operation.service.YearlyFinancialExcelService;
+import com.church.operation.service.YearlyOfferingReportService;
 import com.church.operation.util.Role;
 import com.church.operation.util.TaxReceiptStatus;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +51,10 @@ class ReportControllerTest {
     private final QuarterlyExpenditureReportService quarterlyExpenditureReportService =
         mock(QuarterlyExpenditureReportService.class);
     private final QuarterlyFinancialExcelService quarterlyExcelService = mock(QuarterlyFinancialExcelService.class);
+    private final YearlyOfferingReportService yearlyOfferingReportService = mock(YearlyOfferingReportService.class);
+    private final YearlyExpenditureReportService yearlyExpenditureReportService =
+        mock(YearlyExpenditureReportService.class);
+    private final YearlyFinancialExcelService yearlyExcelService = mock(YearlyFinancialExcelService.class);
     private MockMvc mockMvc;
     private Member treasurer;
 
@@ -58,7 +66,10 @@ class ReportControllerTest {
             pdfService,
             quarterlyReportService,
             quarterlyExpenditureReportService,
-            quarterlyExcelService
+            quarterlyExcelService,
+            yearlyOfferingReportService,
+            yearlyExpenditureReportService,
+            yearlyExcelService
         ))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
@@ -216,6 +227,68 @@ class ReportControllerTest {
     }
 
     @Test
+    void downloadsYearlyOfferingWorkbookWithAttachmentHeaders() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        YearlyFinancialReport report = yearlyReport("Offering income", "수입 결산 및 예산안");
+        byte[] workbook = new byte[] {7, 8, 9};
+        when(yearlyOfferingReportService.build(viewer, 2026)).thenReturn(report);
+        when(yearlyExcelService.render(report)).thenReturn(workbook);
+
+        mockMvc.perform(get("/api/reports/yearly-offerings.xlsx")
+                .param("fiscalYear", "2026")
+                .principal(authentication(viewer)))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .andExpect(header().string(
+                "Content-Disposition",
+                "attachment; filename=yearly-offerings-2026.xlsx"
+            ))
+            .andExpect(content().bytes(workbook));
+
+        verify(yearlyOfferingReportService).build(viewer, 2026);
+        verify(yearlyExcelService).render(report);
+    }
+
+    @Test
+    void downloadsYearlyExpenditureWorkbookWithAttachmentHeaders() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        YearlyFinancialReport report = yearlyReport("Expenditure", "지출 결산 및 예산안");
+        byte[] workbook = new byte[] {10, 11, 12};
+        when(yearlyExpenditureReportService.build(viewer, 2026)).thenReturn(report);
+        when(yearlyExcelService.render(report)).thenReturn(workbook);
+
+        mockMvc.perform(get("/api/reports/yearly-expenditures.xlsx")
+                .param("fiscalYear", "2026")
+                .principal(authentication(viewer)))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .andExpect(header().string(
+                "Content-Disposition",
+                "attachment; filename=yearly-expenditures-2026.xlsx"
+            ))
+            .andExpect(content().bytes(workbook));
+
+        verify(yearlyExpenditureReportService).build(viewer, 2026);
+        verify(yearlyExcelService).render(report);
+    }
+
+    @Test
+    void rejectsInvalidYearlyReportSelection() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        when(yearlyOfferingReportService.build(viewer, 1999))
+            .thenThrow(new IllegalArgumentException("A valid fiscal year is required."));
+
+        mockMvc.perform(get("/api/reports/yearly-offerings.xlsx")
+                .param("fiscalYear", "1999")
+                .principal(authentication(viewer)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void downloadsBatchAsZipWithOneEntryPerReceipt() throws Exception {
         TaxReceipt first = receipt("r1", "2026-000001");
         TaxReceipt second = receipt("r2", "2026-000002");
@@ -282,6 +355,24 @@ class ReportControllerTest {
         receipt.setReceiptNumber(number);
         receipt.setStatus(TaxReceiptStatus.ISSUED);
         return receipt;
+    }
+
+    private YearlyFinancialReport yearlyReport(String sheetName, String titleSuffix) {
+        return new YearlyFinancialReport(
+            2026,
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 12, 31),
+            List.of(),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            false,
+            sheetName,
+            titleSuffix,
+            sheetName.equals("Offering income") ? "수입결산" : "지출결산",
+            sheetName.equals("Offering income") ? "수입대비" : "지출대비",
+            sheetName.equals("Offering income") ? "전년도 이월금" : "CONTINGENCY"
+        );
     }
 
     private TestingAuthenticationToken authentication(Member member) {
