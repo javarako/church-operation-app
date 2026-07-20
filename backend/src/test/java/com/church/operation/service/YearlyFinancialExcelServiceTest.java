@@ -163,6 +163,34 @@ class YearlyFinancialExcelServiceTest {
         assertThat(Files.size(expenditureOutput)).isGreaterThan(0);
     }
 
+    @Test
+    void keepsNextBudgetSummariesMissingWhenThereAreNoNormalGroups() throws Exception {
+        YearlyFinancialReport empty = new YearlyFinancialReport(
+            2026,
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 12, 31),
+            List.of(),
+            new BigDecimal("500"),
+            new BigDecimal("100"),
+            BigDecimal.ZERO,
+            false,
+            "Offering income",
+            "수입 결산 및 예산안",
+            "수입결산",
+            "수입대비",
+            "전년도 이월금"
+        );
+
+        byte[] bytes = service("/branding/church_logo.png").render(empty);
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            XSSFSheet sheet = workbook.getSheet("Offering income");
+            assertThat(sheet.getRow(4).getCell(5).getStringCellValue()).isEqualTo("-");
+            assertThat(sheet.getRow(5).getCell(5).getStringCellValue()).isEqualTo("-");
+            assertThat(sheet.getRow(6).getCell(5).getStringCellValue()).isEqualTo("-");
+        }
+    }
+
     private List<String> rowValues(XSSFSheet sheet, int rowIndex) {
         return java.util.stream.IntStream.range(0, 8)
             .mapToObj(column -> sheet.getRow(rowIndex).getCell(column).getStringCellValue())

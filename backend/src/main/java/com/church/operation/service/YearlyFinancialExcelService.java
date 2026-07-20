@@ -232,6 +232,11 @@ public class YearlyFinancialExcelService {
     }
 
     private void conditionalSumCells(Cell cell, int column, List<Integer> rows, CellStyle style) {
+        if (rows.isEmpty()) {
+            cell.setCellValue("-");
+            cell.setCellStyle(style);
+            return;
+        }
         String references = references(column, rows);
         cell.setCellFormula("IF(COUNT(" + references + ")=0,\"-\",SUM(" + references + "))");
         cell.setCellStyle(style);
