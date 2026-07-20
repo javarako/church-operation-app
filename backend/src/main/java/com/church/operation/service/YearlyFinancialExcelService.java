@@ -1,9 +1,9 @@
 package com.church.operation.service;
 
 import com.church.operation.config.ChurchInformationProperties;
-import com.church.operation.dto.QuarterlyFinancialGroup;
-import com.church.operation.dto.QuarterlyFinancialReport;
-import com.church.operation.dto.QuarterlyFinancialRow;
+import com.church.operation.dto.YearlyFinancialGroup;
+import com.church.operation.dto.YearlyFinancialReport;
+import com.church.operation.dto.YearlyFinancialRow;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -22,25 +22,22 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-
-import static org.apache.poi.ss.util.CellRangeAddress.valueOf;
 
 @Service
-public class QuarterlyFinancialExcelService {
-    private static final String[] HEADERS = {
-        "구 분", "항 목", "예산", "%d월", "%d월", "%d월", "분기 합계", "누적", "예산대비", "비고"
+public class YearlyFinancialExcelService {
+    private static final double[] COLUMN_WIDTHS = {
+        7.83203125, 28.83203125, 12.83203125, 12.83203125,
+        8.83203125, 12.83203125, 8.83203125, 32.83203125
     };
 
     private final ChurchInformationProperties properties;
 
-    public QuarterlyFinancialExcelService(ChurchInformationProperties properties) {
+    public YearlyFinancialExcelService(ChurchInformationProperties properties) {
         this.properties = properties;
     }
 
-    public byte[] render(QuarterlyFinancialReport report) {
+    public byte[] render(YearlyFinancialReport report) {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             XSSFSheet sheet = workbook.createSheet(report.sheetName());
@@ -48,27 +45,23 @@ public class QuarterlyFinancialExcelService {
             configureColumns(sheet);
             createTopRows(sheet, report, styles);
             int finalRow = createReportRows(sheet, report, styles);
-            FinancialExcelLayoutSupport.addLogo(workbook, sheet, properties, 7, 10);
-            FinancialExcelLayoutSupport.configurePrint(workbook, sheet, 9, finalRow);
+            FinancialExcelLayoutSupport.addLogo(workbook, sheet, properties, 6, 8);
+            FinancialExcelLayoutSupport.configurePrint(workbook, sheet, 7, finalRow);
             workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
             workbook.write(output);
             return output.toByteArray();
-        } catch (IOException ex) {
-            throw new IllegalStateException("Unable to create the quarterly financial workbook.", ex);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to create the yearly financial workbook.", exception);
         }
     }
 
     private void configureColumns(XSSFSheet sheet) {
-        sheet.setColumnWidth(0, (int) (7.83203125 * 256));
-        sheet.setColumnWidth(1, (int) (28.5 * 256));
-        for (int column = 2; column <= 7; column++) {
-            sheet.setColumnWidth(column, (int) (10.5 * 256));
+        for (int column = 0; column < COLUMN_WIDTHS.length; column++) {
+            sheet.setColumnWidth(column, (int) (COLUMN_WIDTHS[column] * 256));
         }
-        sheet.setColumnWidth(8, (int) (9.33203125 * 256));
-        sheet.setColumnWidth(9, (int) (16.5 * 256));
     }
 
-    private void createTopRows(XSSFSheet sheet, QuarterlyFinancialReport report, Styles styles) {
+    private void createTopRows(XSSFSheet sheet, YearlyFinancialReport report, Styles styles) {
         Row logoRow = sheet.createRow(0);
         logoRow.setHeightInPoints(45);
         createCells(logoRow, styles.blank());
@@ -76,57 +69,53 @@ public class QuarterlyFinancialExcelService {
         Row titleRow = sheet.createRow(1);
         titleRow.setHeightInPoints(23);
         createCells(titleRow, styles.title());
-        titleRow.getCell(0).setCellValue(
-            report.calendarYear() + " 년도 " + report.quarter() + "분기 " + report.titleSuffix()
-        );
-        sheet.addMergedRegion(valueOf("A2:J2"));
+        titleRow.getCell(0).setCellValue(report.fiscalYear() + "년도 " + report.titleSuffix());
+        sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(1, 1, 0, 7));
 
-        Row blank = sheet.createRow(2);
-        createCells(blank, styles.blank());
+        Row blankRow = sheet.createRow(2);
+        createCells(blankRow, styles.blank());
 
-        Row header = sheet.createRow(3);
-        for (int column = 0; column < HEADERS.length; column++) {
-            Cell cell = header.createCell(column);
+        String[] headers = {
+            "구 분",
+            "항 목",
+            report.fiscalYear() + " 예산",
+            report.actualHeader(),
+            report.actualRatioHeader(),
+            (report.fiscalYear() + 1) + " 예산",
+            "예산대비",
+            "비고"
+        };
+        Row headerRow = sheet.createRow(3);
+        for (int column = 0; column < headers.length; column++) {
+            Cell cell = headerRow.createCell(column);
+            cell.setCellValue(headers[column]);
             cell.setCellStyle(styles.header());
-            if (column >= 3 && column <= 5) {
-                cell.setCellValue(String.format(
-                    HEADERS[column],
-                    report.months().get(column - 3).getMonthValue()
-                ));
-            } else {
-                cell.setCellValue(HEADERS[column]);
-            }
         }
     }
 
     private int createReportRows(
         XSSFSheet sheet,
-        QuarterlyFinancialReport report,
+        YearlyFinancialReport report,
         Styles styles
     ) {
         int rowIndex = 4;
         List<Integer> subtotalRows = new ArrayList<>();
-        for (QuarterlyFinancialGroup group : report.groups()) {
+        for (YearlyFinancialGroup group : report.groups()) {
             int firstDetailRow = rowIndex;
-            for (QuarterlyFinancialRow item : group.rows()) {
+            for (YearlyFinancialRow item : group.rows()) {
                 Row row = sheet.createRow(rowIndex);
                 createCells(row, styles.body());
                 if (rowIndex == firstDetailRow) {
                     row.getCell(0).setCellValue(group.groupLabel());
-                    row.getCell(0).setCellStyle(styles.fund());
+                    row.getCell(0).setCellStyle(styles.group());
                 }
                 row.getCell(1).setCellValue(item.itemLabel());
-                // enable wrap text for the item label cell
                 row.getCell(1).getCellStyle().setWrapText(true);
-                numeric(row.getCell(2), item.budget(), styles.currency());
-                for (int month = 0; month < 3; month++) {
-                    numeric(row.getCell(3 + month), item.monthlyActuals().get(month), styles.currency());
-                }
-                row.getCell(6).setCellFormula("SUM(D" + (rowIndex + 1) + ":F" + (rowIndex + 1) + ")");
-                row.getCell(6).setCellStyle(styles.currency());
-                numeric(row.getCell(7), item.cumulativeActual(), styles.currency());
-                row.getCell(8).setCellFormula(percentageFormula(rowIndex));
-                row.getCell(8).setCellStyle(styles.percentage());
+                numeric(row.getCell(2), item.currentBudget(), styles.currency());
+                numeric(row.getCell(3), item.actual(), styles.currency());
+                ratio(row.getCell(4), actualRatioFormula(rowIndex), styles.percentage());
+                nextBudget(row.getCell(5), item.nextBudget(), item.nextBudgetPresent(), styles.currency());
+                ratio(row.getCell(6), nextRatioFormula(rowIndex), styles.percentage());
                 rowIndex++;
             }
 
@@ -134,15 +123,17 @@ public class QuarterlyFinancialExcelService {
             Row subtotal = sheet.createRow(subtotalRow);
             createCells(subtotal, styles.subtotal());
             subtotal.getCell(1).setCellValue("(" + group.sequence() + ") 소 계");
-            for (int column = 2; column <= 7; column++) {
-                subtotal.getCell(column).setCellFormula(
-                    "SUM(" + columnLetter(column) + (firstDetailRow + 1)
-                        + ":" + columnLetter(column) + subtotalRow + ")"
-                );
-                subtotal.getCell(column).setCellStyle(styles.subtotalCurrency());
-            }
-            subtotal.getCell(8).setCellFormula(percentageFormula(subtotalRow));
-            subtotal.getCell(8).setCellStyle(styles.subtotalPercentage());
+            sumRange(subtotal.getCell(2), 2, firstDetailRow, subtotalRow - 1, styles.subtotalCurrency());
+            sumRange(subtotal.getCell(3), 3, firstDetailRow, subtotalRow - 1, styles.subtotalCurrency());
+            ratio(subtotal.getCell(4), actualRatioFormula(subtotalRow), styles.subtotalPercentage());
+            conditionalSumRange(
+                subtotal.getCell(5),
+                5,
+                firstDetailRow,
+                subtotalRow - 1,
+                styles.subtotalCurrency()
+            );
+            ratio(subtotal.getCell(6), nextRatioFormula(subtotalRow), styles.subtotalPercentage());
             sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(
                 firstDetailRow,
                 subtotalRow,
@@ -158,54 +149,39 @@ public class QuarterlyFinancialExcelService {
         createCells(combined, styles.total());
         combined.getCell(0).setCellValue(combinedLabel(report.groups()));
         sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(combinedRow, combinedRow, 0, 1));
-        for (int column = 2; column <= 7; column++) {
-            combined.getCell(column).setCellFormula(sumCells(column, subtotalRows));
-            combined.getCell(column).setCellStyle(styles.totalCurrency());
-        }
-        combined.getCell(8).setCellFormula(percentageFormula(combinedRow));
-        combined.getCell(8).setCellStyle(styles.totalPercentage());
+        sumCells(combined.getCell(2), 2, subtotalRows, styles.totalCurrency());
+        sumCells(combined.getCell(3), 3, subtotalRows, styles.totalCurrency());
+        ratio(combined.getCell(4), actualRatioFormula(combinedRow), styles.totalPercentage());
+        conditionalSumCells(combined.getCell(5), 5, subtotalRows, styles.totalCurrency());
+        ratio(combined.getCell(6), nextRatioFormula(combinedRow), styles.totalPercentage());
 
-        int carryRow = rowIndex++;
-        Row carry = sheet.createRow(carryRow);
-        createCells(carry, styles.total());
-        carry.getCell(0).setCellValue(report.specialRowLabel());
-        sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(carryRow, carryRow, 0, 1));
-        numeric(carry.getCell(2), report.specialBudget(), styles.totalCurrency());
-        for (int month = 0; month < 3; month++) {
-            numeric(
-                carry.getCell(3 + month),
-                listValue(report.specialMonthlyActuals(), month),
-                styles.totalCurrency()
-            );
-        }
-        carry.getCell(6).setCellFormula("SUM(D" + (carryRow + 1) + ":F" + (carryRow + 1) + ")");
-        carry.getCell(6).setCellStyle(styles.totalCurrency());
-        numeric(carry.getCell(7), report.specialCumulativeActual(), styles.totalCurrency());
-        carry.getCell(8).setCellFormula(percentageFormula(carryRow));
-        carry.getCell(8).setCellStyle(styles.totalPercentage());
+        int specialRow = rowIndex++;
+        Row special = sheet.createRow(specialRow);
+        createCells(special, styles.total());
+        special.getCell(0).setCellValue(report.specialRowLabel());
+        sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(specialRow, specialRow, 0, 1));
+        numeric(special.getCell(2), report.specialCurrentBudget(), styles.totalCurrency());
+        numeric(special.getCell(3), report.specialActual(), styles.totalCurrency());
+        ratio(special.getCell(4), actualRatioFormula(specialRow), styles.totalPercentage());
+        nextBudget(
+            special.getCell(5),
+            report.specialNextBudget(),
+            report.specialNextBudgetPresent(),
+            styles.totalCurrency()
+        );
+        ratio(special.getCell(6), nextRatioFormula(specialRow), styles.totalPercentage());
 
         int finalRow = rowIndex;
         Row total = sheet.createRow(finalRow);
         createCells(total, styles.total());
         total.getCell(0).setCellValue("총 합 계");
         sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(finalRow, finalRow, 0, 1));
-        for (int column = 2; column <= 7; column++) {
-            total.getCell(column).setCellFormula(
-                columnLetter(column) + (combinedRow + 1)
-                    + "+" + columnLetter(column) + (carryRow + 1)
-            );
-            total.getCell(column).setCellStyle(styles.totalCurrency());
-        }
-        total.getCell(8).setCellFormula(percentageFormula(finalRow));
-        total.getCell(8).setCellStyle(styles.totalPercentage());
+        sumPair(total.getCell(2), 2, combinedRow, specialRow, styles.totalCurrency());
+        sumPair(total.getCell(3), 3, combinedRow, specialRow, styles.totalCurrency());
+        ratio(total.getCell(4), actualRatioFormula(finalRow), styles.totalPercentage());
+        conditionalSumPair(total.getCell(5), 5, combinedRow, specialRow, styles.totalCurrency());
+        ratio(total.getCell(6), nextRatioFormula(finalRow), styles.totalPercentage());
         return finalRow;
-    }
-
-    private void createCells(Row row, CellStyle style) {
-        for (int column = 0; column < 10; column++) {
-            Cell cell = row.createCell(column);
-            cell.setCellStyle(style);
-        }
     }
 
     private void numeric(Cell cell, BigDecimal value, CellStyle style) {
@@ -213,19 +189,89 @@ public class QuarterlyFinancialExcelService {
         cell.setCellStyle(style);
     }
 
-    private BigDecimal listValue(List<BigDecimal> values, int index) {
-        if (values == null || index < 0 || index >= values.size() || values.get(index) == null) {
-            return BigDecimal.ZERO;
+    private void nextBudget(Cell cell, BigDecimal value, boolean present, CellStyle style) {
+        if (present) {
+            numeric(cell, value, style);
+        } else {
+            cell.setCellValue("-");
+            cell.setCellStyle(style);
         }
-        return values.get(index);
     }
 
-    private String percentageFormula(int zeroBasedRow) {
+    private void ratio(Cell cell, String formula, CellStyle style) {
+        cell.setCellFormula(formula);
+        cell.setCellStyle(style);
+    }
+
+    private void sumRange(
+        Cell cell,
+        int column,
+        int firstRow,
+        int lastRow,
+        CellStyle style
+    ) {
+        cell.setCellFormula("SUM(" + cellReference(column, firstRow) + ":" + cellReference(column, lastRow) + ")");
+        cell.setCellStyle(style);
+    }
+
+    private void conditionalSumRange(
+        Cell cell,
+        int column,
+        int firstRow,
+        int lastRow,
+        CellStyle style
+    ) {
+        String range = cellReference(column, firstRow) + ":" + cellReference(column, lastRow);
+        cell.setCellFormula("IF(COUNT(" + range + ")=0,\"-\",SUM(" + range + "))");
+        cell.setCellStyle(style);
+    }
+
+    private void sumCells(Cell cell, int column, List<Integer> rows, CellStyle style) {
+        cell.setCellFormula("SUM(" + references(column, rows) + ")");
+        cell.setCellStyle(style);
+    }
+
+    private void conditionalSumCells(Cell cell, int column, List<Integer> rows, CellStyle style) {
+        String references = references(column, rows);
+        cell.setCellFormula("IF(COUNT(" + references + ")=0,\"-\",SUM(" + references + "))");
+        cell.setCellStyle(style);
+    }
+
+    private void sumPair(
+        Cell cell,
+        int column,
+        int firstRow,
+        int secondRow,
+        CellStyle style
+    ) {
+        String references = cellReference(column, firstRow) + "," + cellReference(column, secondRow);
+        cell.setCellFormula("SUM(" + references + ")");
+        cell.setCellStyle(style);
+    }
+
+    private void conditionalSumPair(
+        Cell cell,
+        int column,
+        int firstRow,
+        int secondRow,
+        CellStyle style
+    ) {
+        String references = cellReference(column, firstRow) + "," + cellReference(column, secondRow);
+        cell.setCellFormula("IF(COUNT(" + references + ")=0,\"-\",SUM(" + references + "))");
+        cell.setCellStyle(style);
+    }
+
+    private String actualRatioFormula(int zeroBasedRow) {
         int row = zeroBasedRow + 1;
-        return "IF(C" + row + "=0,\"-\",H" + row + "/C" + row + ")";
+        return "IF(C" + row + "=0,\"-\",D" + row + "/C" + row + ")";
     }
 
-    private String combinedLabel(List<QuarterlyFinancialGroup> groups) {
+    private String nextRatioFormula(int zeroBasedRow) {
+        int row = zeroBasedRow + 1;
+        return "IF(OR(C" + row + "=0,NOT(ISNUMBER(F" + row + "))),\"-\",F" + row + "/C" + row + ")";
+    }
+
+    private String combinedLabel(List<YearlyFinancialGroup> groups) {
         if (groups.isEmpty()) {
             return "합 계";
         }
@@ -235,24 +281,31 @@ public class QuarterlyFinancialExcelService {
             .orElse("") + " 합 계";
     }
 
-    private String sumCells(int column, List<Integer> rows) {
+    private String references(int column, List<Integer> rows) {
         if (rows.isEmpty()) {
             return "0";
         }
-        return "SUM(" + rows.stream()
-            .map(row -> columnLetter(column) + (row + 1))
+        return rows.stream()
+            .map(row -> cellReference(column, row))
             .reduce((left, right) -> left + "," + right)
-            .orElse("") + ")";
+            .orElse("0");
     }
 
-    private String columnLetter(int zeroBasedColumn) {
-        return String.valueOf((char) ('A' + zeroBasedColumn));
+    private String cellReference(int zeroBasedColumn, int zeroBasedRow) {
+        return String.valueOf((char) ('A' + zeroBasedColumn)) + (zeroBasedRow + 1);
+    }
+
+    private void createCells(Row row, CellStyle style) {
+        for (int column = 0; column < 8; column++) {
+            Cell cell = row.createCell(column);
+            cell.setCellStyle(style);
+        }
     }
 
     private static final class Styles {
         private final CellStyle body;
         private final CellStyle blank;
-        private final CellStyle fund;
+        private final CellStyle group;
         private final CellStyle title;
         private final CellStyle header;
         private final CellStyle currency;
@@ -271,14 +324,13 @@ public class QuarterlyFinancialExcelService {
 
             body = bordered(workbook, bodyFont);
             body.setVerticalAlignment(VerticalAlignment.CENTER);
-
             blank = workbook.createCellStyle();
             blank.setFont(bodyFont);
 
-            fund = clone(workbook, body);
-            fund.setAlignment(HorizontalAlignment.CENTER);
-            fund.setVerticalAlignment(VerticalAlignment.CENTER);
-            fund.setWrapText(true);
+            group = clone(workbook, body);
+            group.setAlignment(HorizontalAlignment.CENTER);
+            group.setVerticalAlignment(VerticalAlignment.CENTER);
+            group.setWrapText(true);
 
             title = workbook.createCellStyle();
             title.setFont(titleFont);
@@ -304,12 +356,14 @@ public class QuarterlyFinancialExcelService {
             subtotalCurrency.setDataFormat(currency.getDataFormat());
             subtotalPercentage = clone(workbook, subtotal);
             subtotalPercentage.setDataFormat(percentage.getDataFormat());
+            subtotalPercentage.setAlignment(HorizontalAlignment.RIGHT);
 
             total = bordered(workbook, boldFont);
             totalCurrency = clone(workbook, total);
             totalCurrency.setDataFormat(currency.getDataFormat());
             totalPercentage = clone(workbook, total);
             totalPercentage.setDataFormat(percentage.getDataFormat());
+            totalPercentage.setAlignment(HorizontalAlignment.RIGHT);
         }
 
         private static Font font(XSSFWorkbook workbook, int size, boolean bold, boolean underline) {
@@ -342,7 +396,7 @@ public class QuarterlyFinancialExcelService {
 
         private CellStyle body() { return body; }
         private CellStyle blank() { return blank; }
-        private CellStyle fund() { return fund; }
+        private CellStyle group() { return group; }
         private CellStyle title() { return title; }
         private CellStyle header() { return header; }
         private CellStyle currency() { return currency; }
