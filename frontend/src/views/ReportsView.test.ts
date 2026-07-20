@@ -7,6 +7,8 @@ import {
   downloadQuarterlyExpenditureReport,
   downloadQuarterlyOfferingReport,
   downloadTaxReceiptPdf,
+  downloadYearlyExpenditureReport,
+  downloadYearlyOfferingReport,
   issueBatchTaxReceipts,
   issueTaxReceipt,
   listFinancialBudgetReport,
@@ -32,6 +34,8 @@ vi.mock('../api/reports', async (importOriginal) => {
     listFinancialBudgetReport: vi.fn().mockResolvedValue([]),
     downloadQuarterlyExpenditureReport: vi.fn(),
     downloadQuarterlyOfferingReport: vi.fn(),
+    downloadYearlyExpenditureReport: vi.fn(),
+    downloadYearlyOfferingReport: vi.fn(),
     issueTaxReceipt: vi.fn(),
     issueBatchTaxReceipts: vi.fn(),
     downloadTaxReceiptPdf: vi.fn(),
@@ -48,6 +52,8 @@ const taxSummaryMock = vi.mocked(listTaxReceiptSummary);
 const financialMock = vi.mocked(listFinancialBudgetReport);
 const quarterlyExpenditureMock = vi.mocked(downloadQuarterlyExpenditureReport);
 const quarterlyMock = vi.mocked(downloadQuarterlyOfferingReport);
+const yearlyExpenditureMock = vi.mocked(downloadYearlyExpenditureReport);
+const yearlyOfferingMock = vi.mocked(downloadYearlyOfferingReport);
 const issueMock = vi.mocked(issueTaxReceipt);
 const batchMock = vi.mocked(issueBatchTaxReceipts);
 const pdfMock = vi.mocked(downloadTaxReceiptPdf);
@@ -83,6 +89,12 @@ describe('ReportsView', () => {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }));
     quarterlyExpenditureMock.mockResolvedValue(new Blob(['xlsx'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
+    yearlyOfferingMock.mockResolvedValue(new Blob(['xlsx'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
+    yearlyExpenditureMock.mockResolvedValue(new Blob(['xlsx'], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }));
     batchMock.mockResolvedValue(new Blob(['zip'], { type: 'application/zip' }));
@@ -199,6 +211,61 @@ describe('ReportsView', () => {
     await fireEvent.click(screen.getByRole('button', { name: /download quarterly expenditure excel/i }));
 
     expect(await screen.findByText('Expenditure workbook could not be generated.')).toBeTruthy();
+  });
+
+  it('downloads offering and expenditure workbooks for the selected fiscal year', async () => {
+    signIn('VIEWER');
+    URL.createObjectURL = vi.fn(() => 'blob:yearly');
+    URL.revokeObjectURL = vi.fn();
+    let downloadedFilename = '';
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload(
+      this: HTMLAnchorElement,
+    ) {
+      downloadedFilename = this.download;
+    });
+
+    render(ReportsView);
+    const tab = screen.getByRole('tab', { name: /yearly financial report/i });
+    await fireEvent.click(tab);
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(tab.classList.contains('active-report-tab')).toBe(true);
+
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2026');
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly offering excel/i }));
+    expect(yearlyOfferingMock).toHaveBeenCalledWith({ fiscalYear: 2026 });
+    expect(downloadedFilename).toBe('yearly-offerings-2026.xlsx');
+
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly expenditure excel/i }));
+    expect(yearlyExpenditureMock).toHaveBeenCalledWith({ fiscalYear: 2026 });
+    expect(downloadedFilename).toBe('yearly-expenditures-2026.xlsx');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:yearly');
+  });
+
+  it('keeps yearly downloads independent and shows generation failures', async () => {
+    signIn('VIEWER');
+    let resolveOffering = (_blob: Blob) => {};
+    yearlyOfferingMock.mockReturnValue(new Promise((resolve) => {
+      resolveOffering = resolve;
+    }));
+    yearlyExpenditureMock.mockRejectedValue(new Error('Yearly expenditure could not be generated.'));
+    URL.createObjectURL = vi.fn(() => 'blob:yearly');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    const offeringButton = screen.getByRole('button', { name: /download yearly offering excel/i });
+    const expenditureButton = screen.getByRole('button', { name: /download yearly expenditure excel/i });
+
+    await fireEvent.click(offeringButton);
+    expect((offeringButton as HTMLButtonElement).disabled).toBe(true);
+    expect((expenditureButton as HTMLButtonElement).disabled).toBe(false);
+
+    await fireEvent.click(expenditureButton);
+    expect(await screen.findByText('Yearly expenditure could not be generated.')).toBeTruthy();
+
+    resolveOffering(new Blob(['xlsx']));
+    await vi.waitFor(() => expect((offeringButton as HTMLButtonElement).disabled).toBe(false));
   });
 
   it('uses reference dropdowns and validates report date ranges', async () => {

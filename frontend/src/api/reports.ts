@@ -98,6 +98,10 @@ export interface QuarterlyFinancialReportFilters {
   quarter: 1 | 2 | 3 | 4;
 }
 
+export interface YearlyFinancialReportFilters {
+  fiscalYear: number;
+}
+
 function buildQuery(params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams();
 
@@ -159,4 +163,12 @@ export function downloadQuarterlyOfferingReport(filters: QuarterlyFinancialRepor
 
 export function downloadQuarterlyExpenditureReport(filters: QuarterlyFinancialReportFilters) {
   return getBlob(withQuery('/api/reports/quarterly-expenditures.xlsx', { ...filters }));
+}
+
+export function downloadYearlyOfferingReport(filters: YearlyFinancialReportFilters) {
+  return getBlob(withQuery('/api/reports/yearly-offerings.xlsx', { ...filters }));
+}
+
+export function downloadYearlyExpenditureReport(filters: YearlyFinancialReportFilters) {
+  return getBlob(withQuery('/api/reports/yearly-expenditures.xlsx', { ...filters }));
 }

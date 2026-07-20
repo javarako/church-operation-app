@@ -39,7 +39,7 @@
           Download all receipts
         </button>
         <button
-          v-else-if="activeVisibleReportId !== 'quarterly-financial'"
+          v-else-if="!isWorkbookDownloadTab"
           type="button"
           class="secondary"
           @click="exportActiveReport"
@@ -185,6 +185,38 @@
           </div>
         </template>
 
+        <template v-else-if="activeVisibleReportId === 'yearly-financial'">
+          <label>
+            Fiscal year
+            <input v-model.number="yearlyFilters.fiscalYear" type="number" min="2000" step="1" />
+          </label>
+
+          <div class="quarterly-downloads">
+            <div class="quarterly-download-row">
+              <strong>Yearly Offering Excel</strong>
+              <button
+                type="button"
+                aria-label="Download yearly offering Excel"
+                :disabled="yearlyOfferingBusy"
+                @click="downloadYearlyOfferingWorkbook"
+              >
+                {{ yearlyOfferingBusy ? 'Preparing...' : 'Download Excel' }}
+              </button>
+            </div>
+            <div class="quarterly-download-row">
+              <strong>Yearly Expenditure Excel</strong>
+              <button
+                type="button"
+                aria-label="Download yearly expenditure Excel"
+                :disabled="yearlyExpenditureBusy"
+                @click="downloadYearlyExpenditureWorkbook"
+              >
+                {{ yearlyExpenditureBusy ? 'Preparing...' : 'Download Excel' }}
+              </button>
+            </div>
+          </div>
+        </template>
+
         <template v-else>
           <label>
             Fiscal year
@@ -192,20 +224,20 @@
           </label>
         </template>
 
-        <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="actions">
+        <div v-if="!isWorkbookDownloadTab" class="actions">
           <button type="submit">Run report</button>
         </div>
       </form>
 
       <p v-if="error" class="error">{{ error }}</p>
 
-      <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="summary-strip">
+      <div v-if="!isWorkbookDownloadTab" class="summary-strip">
         <strong>{{ loading ? 'Loading...' : activeSummary.label }}</strong>
         <span>{{ activeSummary.rows }} row{{ activeSummary.rows === 1 ? '' : 's' }}</span>
         <span v-if="activeSummary.total">{{ activeSummary.total }}</span>
       </div>
 
-      <div v-if="activeVisibleReportId !== 'quarterly-financial'" class="table-wrap">
+      <div v-if="!isWorkbookDownloadTab" class="table-wrap">
         <table v-if="activeVisibleReportId === 'weekly-offerings'">
           <thead>
             <tr>
@@ -415,6 +447,8 @@ import {
   downloadQuarterlyExpenditureReport,
   downloadQuarterlyOfferingReport,
   downloadTaxReceiptPdf,
+  downloadYearlyExpenditureReport,
+  downloadYearlyOfferingReport,
   issueBatchTaxReceipts,
   issueTaxReceipt,
   listFinancialBudgetReport,
@@ -433,7 +467,7 @@ import { authState, type Role } from '../auth/authStore';
 import { usePagination } from '../composables/usePagination';
 
 interface ReportTab {
-  id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget' | 'quarterly-financial';
+  id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget' | 'quarterly-financial' | 'yearly-financial';
   label: string;
   title: string;
   description: string;
@@ -470,6 +504,12 @@ const reportTabs: ReportTab[] = [
     title: 'Quarterly Financial Report',
     description: 'Download the calendar-quarter offering and expenditure workbooks.',
   },
+  {
+    id: 'yearly-financial',
+    label: 'Yearly Financial Report',
+    title: 'Yearly Financial Report',
+    description: 'Download fiscal-year offering and expenditure workbooks with next-year budgets.',
+  },
 ];
 
 const officialTaxRoles: Role[] = ['ADMIN', 'TREASURER'];
@@ -492,6 +532,8 @@ const loading = ref(false);
 const receiptBusy = ref(false);
 const quarterlyOfferingBusy = ref(false);
 const quarterlyExpenditureBusy = ref(false);
+const yearlyOfferingBusy = ref(false);
+const yearlyExpenditureBusy = ref(false);
 const error = ref('');
 const thankYouNote = ref(DEFAULT_THANK_YOU_NOTE);
 
@@ -525,6 +567,10 @@ const quarterlyFilters = reactive({
   quarter: (Math.floor(now.getMonth() / 3) + 1) as 1 | 2 | 3 | 4,
 });
 
+const yearlyFilters = reactive({
+  fiscalYear: now.getFullYear(),
+});
+
 const visibleReportTabs = computed(() =>
   reportTabs.filter((report) => report.id !== 'tax-return' || hasOfficialTaxAccess()),
 );
@@ -541,6 +587,11 @@ const activeVisibleReportId = computed<ReportTab['id']>(() => {
     ? activeReportId.value
     : visibleReportTabs.value[0]?.id ?? 'weekly-offerings';
 });
+
+const isWorkbookDownloadTab = computed(() =>
+  activeVisibleReportId.value === 'quarterly-financial'
+    || activeVisibleReportId.value === 'yearly-financial',
+);
 
 const activeReport = computed(
   () => visibleReportTabs.value.find((report) => report.id === activeVisibleReportId.value) ?? visibleReportTabs.value[0],
@@ -609,7 +660,7 @@ function hasOfficialTaxAccess() {
 
 function selectTab(tabId: ReportTab['id']) {
   activeReportId.value = tabId;
-  if (tabId === 'quarterly-financial') {
+  if (tabId === 'quarterly-financial' || tabId === 'yearly-financial') {
     error.value = '';
     return;
   }
@@ -619,7 +670,7 @@ function selectTab(tabId: ReportTab['id']) {
 async function runActiveReport() {
   error.value = '';
 
-  if (activeVisibleReportId.value === 'quarterly-financial') {
+  if (isWorkbookDownloadTab.value) {
     return;
   }
 
@@ -714,6 +765,47 @@ async function downloadQuarterlyExpenditureWorkbook() {
     error.value = err instanceof Error ? err.message : 'Could not generate the quarterly workbook.';
   } finally {
     quarterlyExpenditureBusy.value = false;
+  }
+}
+
+function yearlyValidationError() {
+  if (yearlyFilters.fiscalYear < 2000) {
+    return 'A valid fiscal year is required.';
+  }
+  return '';
+}
+
+async function downloadYearlyOfferingWorkbook() {
+  error.value = yearlyValidationError();
+  if (error.value) {
+    return;
+  }
+
+  yearlyOfferingBusy.value = true;
+  try {
+    const blob = await downloadYearlyOfferingReport({ fiscalYear: yearlyFilters.fiscalYear });
+    downloadBlob(blob, `yearly-offerings-${yearlyFilters.fiscalYear}.xlsx`);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not generate the yearly workbook.';
+  } finally {
+    yearlyOfferingBusy.value = false;
+  }
+}
+
+async function downloadYearlyExpenditureWorkbook() {
+  error.value = yearlyValidationError();
+  if (error.value) {
+    return;
+  }
+
+  yearlyExpenditureBusy.value = true;
+  try {
+    const blob = await downloadYearlyExpenditureReport({ fiscalYear: yearlyFilters.fiscalYear });
+    downloadBlob(blob, `yearly-expenditures-${yearlyFilters.fiscalYear}.xlsx`);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Could not generate the yearly workbook.';
+  } finally {
+    yearlyExpenditureBusy.value = false;
   }
 }
 
