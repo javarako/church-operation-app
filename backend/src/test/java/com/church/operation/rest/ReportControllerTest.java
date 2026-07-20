@@ -289,6 +289,38 @@ class ReportControllerTest {
     }
 
     @Test
+    void rejectsInvalidYearlyExpenditureSelection() throws Exception {
+        Member viewer = member(Role.VIEWER);
+        when(yearlyExpenditureReportService.build(viewer, 1999))
+            .thenThrow(new IllegalArgumentException("A valid fiscal year is required."));
+
+        mockMvc.perform(get("/api/reports/yearly-expenditures.xlsx")
+                .param("fiscalYear", "1999")
+                .principal(authentication(viewer)))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsMemberRolesFromBothYearlyDownloads() throws Exception {
+        for (Role role : List.of(Role.MEMBER, Role.MEMBERSHIP)) {
+            Member unauthorized = member(role);
+            when(yearlyOfferingReportService.build(unauthorized, 2026))
+                .thenThrow(new SecurityException("You do not have permission to view reports."));
+            when(yearlyExpenditureReportService.build(unauthorized, 2026))
+                .thenThrow(new SecurityException("You do not have permission to view reports."));
+
+            mockMvc.perform(get("/api/reports/yearly-offerings.xlsx")
+                    .param("fiscalYear", "2026")
+                    .principal(authentication(unauthorized)))
+                .andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/reports/yearly-expenditures.xlsx")
+                    .param("fiscalYear", "2026")
+                    .principal(authentication(unauthorized)))
+                .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
     void downloadsBatchAsZipWithOneEntryPerReceipt() throws Exception {
         TaxReceipt first = receipt("r1", "2026-000001");
         TaxReceipt second = receipt("r2", "2026-000002");
