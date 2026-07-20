@@ -159,8 +159,8 @@
             </select>
           </label>
 
-          <div class="quarterly-downloads">
-            <div class="quarterly-download-row">
+          <div class="financial-downloads">
+            <div class="financial-download-row">
               <strong>Quarterly Offering Excel</strong>
               <button
                 type="button"
@@ -171,7 +171,7 @@
                 {{ quarterlyOfferingBusy ? 'Preparing...' : 'Download Excel' }}
               </button>
             </div>
-            <div class="quarterly-download-row">
+            <div class="financial-download-row">
               <strong>Quarterly Expenditure Excel</strong>
               <button
                 type="button"
@@ -191,8 +191,8 @@
             <input v-model.number="yearlyFilters.fiscalYear" type="number" min="2000" step="1" />
           </label>
 
-          <div class="quarterly-downloads">
-            <div class="quarterly-download-row">
+          <div class="financial-downloads">
+            <div class="financial-download-row">
               <strong>Yearly Offering Excel</strong>
               <button
                 type="button"
@@ -203,7 +203,7 @@
                 {{ yearlyOfferingBusy ? 'Preparing...' : 'Download Excel' }}
               </button>
             </div>
-            <div class="quarterly-download-row">
+            <div class="financial-download-row">
               <strong>Yearly Expenditure Excel</strong>
               <button
                 type="button"
@@ -1082,12 +1082,12 @@ function startOfYear(value: Date) {
   color: #344054;
 }
 
-.quarterly-downloads {
+.financial-downloads {
   grid-column: 1 / -1;
   border-top: 1px solid #d9dee5;
 }
 
-.quarterly-download-row {
+.financial-download-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1096,7 +1096,7 @@ function startOfYear(value: Date) {
   border-bottom: 1px solid #d9dee5;
 }
 
-.quarterly-download-row button {
+.financial-download-row button {
   flex: 0 0 auto;
   border: 1px solid #22577a;
   border-radius: 6px;
@@ -1108,7 +1108,7 @@ function startOfYear(value: Date) {
   cursor: pointer;
 }
 
-.quarterly-download-row button:disabled {
+.financial-download-row button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }

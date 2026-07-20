@@ -268,6 +268,22 @@ describe('ReportsView', () => {
     await vi.waitFor(() => expect((offeringButton as HTMLButtonElement).disabled).toBe(false));
   });
 
+  it('validates the yearly fiscal year and hides non-workbook controls', async () => {
+    signIn('VIEWER');
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+
+    expect(screen.queryByRole('button', { name: /export csv/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /run report/i })).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+
+    yearlyOfferingMock.mockClear();
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '1999');
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly offering excel/i }));
+    expect(screen.getByText('A valid fiscal year is required.')).toBeTruthy();
+    expect(yearlyOfferingMock).not.toHaveBeenCalled();
+  });
+
   it('uses reference dropdowns and validates report date ranges', async () => {
     signIn('VIEWER');
     render(ReportsView);
