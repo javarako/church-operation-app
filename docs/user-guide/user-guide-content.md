@@ -62,6 +62,24 @@ The initial administrator account is created with login ID `admin` and password 
 
 [[FIGURE:12-change-password.png|Required first-login password change]]
 
+### Create the permanent administrator account
+
+**Available to:** The initial system administrator
+
+The bootstrap `admin` account does not have an email address and therefore cannot receive a forgotten-password email. After the first successful login and password change, create an email-based administrator for normal ongoing use.
+
+1. Open **Members** and select **New member**.
+2. Enter the administrator's valid email address in **Primary email**. This email becomes the new administrator's login ID and password-reset address.
+3. Enter the administrator's name and other member details as available.
+4. In **Roles**, select **ADMIN**. Keep **MEMBER** selected as well when the administrator needs normal member self-service access.
+5. Ensure **Login enabled** is selected and **Login locked** is cleared.
+6. Select **Create member**.
+7. Sign out, select **Forgot password?**, and enter the new administrator's primary email.
+8. Open the reset email, follow its link, and set the new administrator's first password.
+9. Sign in with the new email-based administrator and confirm that the required administration menus are available.
+
+> **Important:** Keep the bootstrap `admin` password in a secure church-controlled location for emergency access. Complete and verify the email-based administrator account before changing or restricting any existing administrator account.
+
 ### Reset a forgotten password
 
 **Available to:** All users with an active, unlocked account and a valid primary email
