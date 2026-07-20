@@ -352,13 +352,16 @@ public class YearlyFinancialExcelService {
             currency.setDataFormat(workbook.createDataFormat().getFormat(
                 "\"$\"#,##0;[Red](\"$\"#,##0);\"\""
             ));
+            currency.setAlignment(HorizontalAlignment.RIGHT);
+
             percentage = clone(workbook, body);
-            percentage.setDataFormat(workbook.createDataFormat().getFormat("0.00%"));
+            percentage.setDataFormat(workbook.createDataFormat().getFormat("0%"));
             percentage.setAlignment(HorizontalAlignment.RIGHT);
 
             subtotal = bordered(workbook, boldFont);
             subtotalCurrency = clone(workbook, subtotal);
             subtotalCurrency.setDataFormat(currency.getDataFormat());
+            subtotalCurrency.setAlignment(HorizontalAlignment.RIGHT);
             subtotalPercentage = clone(workbook, subtotal);
             subtotalPercentage.setDataFormat(percentage.getDataFormat());
             subtotalPercentage.setAlignment(HorizontalAlignment.RIGHT);
@@ -366,6 +369,7 @@ public class YearlyFinancialExcelService {
             total = bordered(workbook, boldFont);
             totalCurrency = clone(workbook, total);
             totalCurrency.setDataFormat(currency.getDataFormat());
+            totalCurrency.setAlignment(HorizontalAlignment.RIGHT);
             totalPercentage = clone(workbook, total);
             totalPercentage.setDataFormat(percentage.getDataFormat());
             totalPercentage.setAlignment(HorizontalAlignment.RIGHT);

@@ -98,7 +98,7 @@ class YearlyFinancialExcelServiceTest {
             assertThat(displayed(sheet, 7, 2)).isEmpty();
             assertThat(displayed(sheet, 7, 4)).isEqualTo("-");
             assertThat(displayed(sheet, 4, 6)).isEqualTo("-");
-            assertThat(displayed(sheet, 5, 6)).isEqualTo("0.00%");
+            assertThat(displayed(sheet, 5, 6)).isEqualTo("0%");
             assertThat(sheet.getRow(4).getCell(6).getCellStyle().getAlignment())
                 .isEqualTo(HorizontalAlignment.RIGHT);
         }
