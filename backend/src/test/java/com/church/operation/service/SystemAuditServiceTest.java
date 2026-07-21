@@ -51,6 +51,25 @@ class SystemAuditServiceTest {
     }
 
     @Test
+    void allowsNonSensitiveYearEndClosingMetadata() {
+        service.recordSuccess(admin(), SystemAuditOperation.YEAR_END_CLOSE, Map.of(
+            "fiscalYear", 2025,
+            "reportType", "OFFERING",
+            "version", 2,
+            "closingId", "closing-2",
+            "gridFsFileId", "grid-2",
+            "checksum", "abc123",
+            "fileSize", 4096
+        ));
+
+        ArgumentCaptor<SystemAuditEvent> event = ArgumentCaptor.forClass(SystemAuditEvent.class);
+        verify(repository).save(event.capture());
+        assertThat(event.getValue().getMetadata()).containsEntry("reportType", "OFFERING");
+        assertThat(event.getValue().getMetadata()).containsEntry("version", "2");
+        assertThat(event.getValue().getMetadata()).containsEntry("checksum", "abc123");
+    }
+
+    @Test
     void recordsSanitizedAndTruncatedFailureSummary() {
         String longMessage = "Restore failed\npassword=secret " + "x".repeat(400);
 

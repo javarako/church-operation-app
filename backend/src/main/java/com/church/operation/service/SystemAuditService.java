@@ -23,7 +23,8 @@ public class SystemAuditService {
     private static final Set<String> ALLOWED_METADATA_KEYS = Set.of(
         "operationId", "archiveId", "fiscalYear", "taxYear", "receiptId", "receiptNumber",
         "memberId", "referenceDataId", "offeringNumber", "recordCount", "offeringCount",
-        "linkedIncomeCount", "expenseCount", "budgetCount", "receiptCount"
+        "linkedIncomeCount", "expenseCount", "budgetCount", "receiptCount", "reportType",
+        "version", "closingId", "gridFsFileId", "checksum", "fileSize"
     );
     private static final Set<String> FORBIDDEN_KEY_PARTS = Set.of("password", "hash", "bytes", "content");
     private static final Pattern SENSITIVE_ERROR_VALUE = Pattern.compile(

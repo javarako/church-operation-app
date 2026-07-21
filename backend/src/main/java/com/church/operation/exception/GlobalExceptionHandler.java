@@ -52,6 +52,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError("DELETION_BLOCKED", ex.getMessage()));
     }
 
+    @ExceptionHandler(YearEndClosingConflictException.class)
+    ResponseEntity<ApiError> handleYearEndClosingConflict(YearEndClosingConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(new ApiError("YEAR_END_CLOSING_CONFLICT", ex.getMessage()));
+    }
+
     record ReceiptValidationResponse(String code, String message, List<TaxReceiptValidationError> errors) {
     }
 }
