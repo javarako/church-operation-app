@@ -4,6 +4,7 @@ import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.YearlyFinancialGroup;
 import com.church.operation.dto.YearlyFinancialReport;
 import com.church.operation.dto.YearlyFinancialRow;
+import com.church.operation.util.YearEndClosingStatus;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -16,13 +17,17 @@ import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class YearlyFinancialExcelService {
@@ -38,12 +43,16 @@ public class YearlyFinancialExcelService {
     }
 
     public byte[] render(YearlyFinancialReport report) {
+        return render(report, YearlyWorkbookLifecycle.notClosed());
+    }
+
+    public byte[] render(YearlyFinancialReport report, YearlyWorkbookLifecycle lifecycle) {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             XSSFSheet sheet = workbook.createSheet(report.sheetName());
             Styles styles = new Styles(workbook);
             configureColumns(sheet);
-            createTopRows(sheet, report, styles);
+            createTopRows(sheet, report, lifecycle, styles);
             int finalRow = createReportRows(sheet, report, styles);
             FinancialExcelLayoutSupport.addLogo(workbook, sheet, properties, 6, 8);
             FinancialExcelLayoutSupport.configurePrint(workbook, sheet, 7, finalRow);
@@ -61,7 +70,12 @@ public class YearlyFinancialExcelService {
         }
     }
 
-    private void createTopRows(XSSFSheet sheet, YearlyFinancialReport report, Styles styles) {
+    private void createTopRows(
+        XSSFSheet sheet,
+        YearlyFinancialReport report,
+        YearlyWorkbookLifecycle lifecycle,
+        Styles styles
+    ) {
         Row logoRow = sheet.createRow(0);
         logoRow.setHeightInPoints(45);
         createCells(logoRow, styles.blank());
@@ -69,11 +83,16 @@ public class YearlyFinancialExcelService {
         Row titleRow = sheet.createRow(1);
         titleRow.setHeightInPoints(23);
         createCells(titleRow, styles.title());
-        titleRow.getCell(0).setCellValue(report.fiscalYear() + "년도 " + report.titleSuffix());
-        sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(1, 1, 0, 7));
+        String titleSuffix = lifecycle.finalized()
+            ? report.titleSuffix().replaceFirst("안$", "")
+            : report.titleSuffix();
+        titleRow.getCell(0).setCellValue(report.fiscalYear() + "년도 " + titleSuffix);
+        sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 7));
 
-        Row blankRow = sheet.createRow(2);
-        createCells(blankRow, styles.blank());
+        Row statusRow = sheet.createRow(2);
+        createCells(statusRow, styles.status());
+        statusRow.getCell(0).setCellValue(statusText(lifecycle));
+        sheet.addMergedRegion(new CellRangeAddress(2, 2, 0, 7));
 
         String[] headers = {
             "구 분",
@@ -91,6 +110,19 @@ public class YearlyFinancialExcelService {
             cell.setCellValue(headers[column]);
             cell.setCellStyle(styles.header());
         }
+    }
+
+    private String statusText(YearlyWorkbookLifecycle lifecycle) {
+        if (lifecycle.status() == YearEndClosingStatus.NOT_CLOSED) {
+            return "DRAFT - Year-end closing not completed";
+        }
+        String timestamp = DateTimeFormatter.ofPattern("MMM d, uuuu h:mm a", Locale.ENGLISH)
+            .withZone(ZoneId.systemDefault())
+            .format(lifecycle.eventAt());
+        if (lifecycle.status() == YearEndClosingStatus.REOPENED) {
+            return "DRAFT - Reopened " + timestamp;
+        }
+        return "YEAR-END CLOSED - " + timestamp + " - Version " + lifecycle.version();
     }
 
     private int createReportRows(
@@ -310,6 +342,7 @@ public class YearlyFinancialExcelService {
     private static final class Styles {
         private final CellStyle body;
         private final CellStyle blank;
+        private final CellStyle status;
         private final CellStyle group;
         private final CellStyle title;
         private final CellStyle header;
@@ -326,11 +359,18 @@ public class YearlyFinancialExcelService {
             Font bodyFont = font(workbook, 12, false, false);
             Font boldFont = font(workbook, 12, true, false);
             Font titleFont = font(workbook, 18, true, true);
+            Font statusFont = font(workbook, 9, false, false);
+            statusFont.setItalic(true);
+            statusFont.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
 
             body = bordered(workbook, bodyFont);
             body.setVerticalAlignment(VerticalAlignment.CENTER);
             blank = workbook.createCellStyle();
             blank.setFont(bodyFont);
+            status = workbook.createCellStyle();
+            status.setFont(statusFont);
+            status.setAlignment(HorizontalAlignment.LEFT);
+            status.setVerticalAlignment(VerticalAlignment.CENTER);
 
             group = clone(workbook, body);
             group.setAlignment(HorizontalAlignment.CENTER);
@@ -405,6 +445,7 @@ public class YearlyFinancialExcelService {
 
         private CellStyle body() { return body; }
         private CellStyle blank() { return blank; }
+        private CellStyle status() { return status; }
         private CellStyle group() { return group; }
         private CellStyle title() { return title; }
         private CellStyle header() { return header; }

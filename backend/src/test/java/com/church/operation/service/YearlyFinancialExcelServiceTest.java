@@ -19,12 +19,61 @@ import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class YearlyFinancialExcelServiceTest {
+    @Test
+    void rendersNeverClosedWorkbookAsDraft() throws Exception {
+        byte[] bytes = service("/branding/church_logo.png")
+            .render(offeringReport(), YearlyWorkbookLifecycle.notClosed());
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            XSSFSheet sheet = workbook.getSheet("Offering income");
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue())
+                .isEqualTo("2026년도 수입 결산 및 예산안");
+            assertThat(sheet.getRow(2).getCell(0).getStringCellValue())
+                .isEqualTo("DRAFT - Year-end closing not completed");
+        }
+    }
+
+    @Test
+    void rendersClosedWorkbookWithFinalTitleAndVersion() throws Exception {
+        byte[] bytes = service("/branding/church_logo.png").render(
+            offeringReport(),
+            YearlyWorkbookLifecycle.closed(Instant.parse("2026-07-21T19:42:00Z"), 2)
+        );
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            XSSFSheet sheet = workbook.getSheet("Offering income");
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue())
+                .isEqualTo("2026년도 수입 결산 및 예산");
+            assertThat(sheet.getRow(2).getCell(0).getStringCellValue())
+                .contains("YEAR-END CLOSED")
+                .contains("Version 2");
+            assertThat(sheet.getMergedRegions()).contains(new CellRangeAddress(2, 2, 0, 7));
+        }
+    }
+
+    @Test
+    void rendersReopenedWorkbookAsDraftWithTimestamp() throws Exception {
+        byte[] bytes = service("/branding/church_logo.png").render(
+            expenditureReport(),
+            YearlyWorkbookLifecycle.reopened(Instant.parse("2026-07-22T13:15:00Z"))
+        );
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            XSSFSheet sheet = workbook.getSheet("Expenditure");
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue())
+                .isEqualTo("2026년도 지출 결산 및 예산안");
+            assertThat(sheet.getRow(2).getCell(0).getStringCellValue())
+                .contains("DRAFT - Reopened");
+        }
+    }
+
     @Test
     void rendersOfferingTitleHeadersRowsAndFormulas() throws Exception {
         byte[] bytes = service("/branding/church_logo.png").render(offeringReport());
