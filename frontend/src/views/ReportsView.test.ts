@@ -402,6 +402,66 @@ describe('ReportsView', () => {
     expect(await screen.findByText('Current password is incorrect.')).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(password.value).toBe('');
+    expect(screen.getByRole('alert').textContent).toContain('Current password is incorrect.');
+  });
+
+  it('moves focus into the dialog, traps it, and restores focus after Escape', async () => {
+    signIn('ADMIN');
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2025,
+      fiscalEndDate: '2025-12-31',
+      closeEligible: true,
+      offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+      expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+    });
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+    await screen.findAllByText('Not closed');
+    const trigger = screen.getByRole('button', { name: /year-end close offering/i });
+    await fireEvent.click(trigger);
+
+    const dialog = screen.getByRole('dialog');
+    const password = within(dialog).getByLabelText('Current password');
+    await vi.waitFor(() => expect(document.activeElement).toBe(password));
+    const confirm = within(dialog).getByRole('button', { name: 'Confirm' });
+    await fireEvent.update(password, 'secret');
+    confirm.focus();
+    await fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(document.activeElement).toBe(password);
+
+    await fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it('disables lifecycle changes only for the report currently downloading', async () => {
+    signIn('ADMIN');
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2025,
+      fiscalEndDate: '2025-12-31',
+      closeEligible: true,
+      offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+      expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+    });
+    let resolveOffering = (_download: { blob: Blob; filename: string }) => {};
+    yearlyOfferingMock.mockReturnValue(new Promise((resolve) => {
+      resolveOffering = resolve;
+    }));
+    URL.createObjectURL = vi.fn(() => 'blob:yearly');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+    await screen.findAllByText('Not closed');
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly offering excel/i }));
+
+    expect((screen.getByRole('button', { name: /year-end close offering/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /year-end close expenditure/i }) as HTMLButtonElement).disabled).toBe(false);
+    resolveOffering({ blob: new Blob(['xlsx']), filename: 'yearly-offerings-2025-draft.xlsx' });
   });
 
   it('validates the yearly fiscal year and hides non-workbook controls', async () => {

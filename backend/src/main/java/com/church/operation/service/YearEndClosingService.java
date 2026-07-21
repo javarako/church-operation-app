@@ -17,6 +17,11 @@ import com.church.operation.util.YearEndClosingStatus;
 import com.church.operation.util.YearEndReportType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +43,7 @@ public class YearEndClosingService {
     private final YearlyExpenditureReportService expenditureReportService;
     private final YearlyFinancialExcelService excelService;
     private final SystemAuditService audit;
+    private final MongoTemplate mongoTemplate;
     private final Clock clock;
 
     @Autowired
@@ -50,7 +56,8 @@ public class YearEndClosingService {
         YearlyOfferingReportService offeringReportService,
         YearlyExpenditureReportService expenditureReportService,
         YearlyFinancialExcelService excelService,
-        SystemAuditService audit
+        SystemAuditService audit,
+        MongoTemplate mongoTemplate
     ) {
         this(
             repository,
@@ -62,6 +69,7 @@ public class YearEndClosingService {
             expenditureReportService,
             excelService,
             audit,
+            mongoTemplate,
             Clock.systemDefaultZone()
         );
     }
@@ -76,6 +84,7 @@ public class YearEndClosingService {
         YearlyExpenditureReportService expenditureReportService,
         YearlyFinancialExcelService excelService,
         SystemAuditService audit,
+        MongoTemplate mongoTemplate,
         Clock clock
     ) {
         this.repository = repository;
@@ -87,6 +96,7 @@ public class YearEndClosingService {
         this.expenditureReportService = expenditureReportService;
         this.excelService = excelService;
         this.audit = audit;
+        this.mongoTemplate = mongoTemplate;
         this.clock = clock;
     }
 
@@ -128,18 +138,28 @@ public class YearEndClosingService {
         try {
             Member current = verifyLifecycleActor(actor, request.currentPassword());
             period(request.fiscalYear());
-            YearEndClosing closing = repository
-                .findByFiscalYearAndReportTypeAndActiveTrue(request.fiscalYear(), reportType)
-                .orElseThrow(() -> new YearEndClosingConflictException(
+            Query query = Query.query(Criteria.where("fiscalYear").is(request.fiscalYear())
+                .and("reportType").is(reportType)
+                .and("active").is(true)
+                .and("status").is(YearEndClosingStatus.CLOSED));
+            Update update = new Update()
+                .set("status", YearEndClosingStatus.REOPENED)
+                .set("active", false)
+                .unset("activeKey")
+                .set("reopenedByMemberId", current.getId())
+                .set("reopenedByEmail", current.getPrimaryEmail())
+                .set("reopenedAt", Instant.now(clock));
+            YearEndClosing saved = mongoTemplate.findAndModify(
+                query,
+                update,
+                FindAndModifyOptions.options().returnNew(true),
+                YearEndClosing.class
+            );
+            if (saved == null) {
+                throw new YearEndClosingConflictException(
                     "This yearly report is not currently closed."
-                ));
-            closing.setStatus(YearEndClosingStatus.REOPENED);
-            closing.setActive(false);
-            closing.setActiveKey(null);
-            closing.setReopenedByMemberId(current.getId());
-            closing.setReopenedByEmail(current.getPrimaryEmail());
-            closing.setReopenedAt(Instant.now(clock));
-            YearEndClosing saved = repository.save(closing);
+                );
+            }
             audit.recordSuccess(current, SystemAuditOperation.YEAR_END_REOPEN, auditMetadata(saved));
             return toStatus(saved);
         } catch (RuntimeException | Error exception) {
@@ -338,7 +358,8 @@ public class YearEndClosingService {
         try {
             snapshotStore.delete(gridFsFileId);
         } catch (RuntimeException cleanupFailure) {
-            primaryFailure.addSuppressed(cleanupFailure);
+            cleanupFailure.addSuppressed(primaryFailure);
+            throw new IllegalStateException("Year-end snapshot cleanup failed.", cleanupFailure);
         }
     }
 }

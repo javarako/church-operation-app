@@ -18,10 +18,16 @@ import com.church.operation.util.YearEndReportType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
@@ -64,6 +70,7 @@ class YearEndClosingServiceTest {
     @Mock private YearlyExpenditureReportService expenditureReportService;
     @Mock private YearlyFinancialExcelService excelService;
     @Mock private SystemAuditService audit;
+    @Mock private MongoTemplate mongoTemplate;
 
     private YearEndClosingService service;
     private Member admin;
@@ -81,6 +88,7 @@ class YearEndClosingServiceTest {
             expenditureReportService,
             excelService,
             audit,
+            mongoTemplate,
             CLOCK
         );
         admin = member("admin-id", "admin@church.local", Role.ADMIN);
@@ -133,12 +141,13 @@ class YearEndClosingServiceTest {
         verifyNoInteractions(offeringReportService, expenditureReportService, excelService, snapshotStore);
     }
 
-    @Test
-    void rejectsNonFinanceRoleForClosing() {
-        Member pastor = member("pastor-id", "pastor@church.local", Role.PASTOR);
-        when(memberRepository.findById(pastor.getId())).thenReturn(Optional.of(pastor));
+    @ParameterizedTest
+    @EnumSource(value = Role.class, names = {"PASTOR", "VIEWER", "MEMBERSHIP", "MEMBER"})
+    void rejectsNonFinanceRolesForClosing(Role role) {
+        Member actor = member(role.name().toLowerCase() + "-id", role.name().toLowerCase() + "@church.local", role);
+        when(memberRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
 
-        assertThatThrownBy(() -> service.close(pastor, OFFERING, request("secret")))
+        assertThatThrownBy(() -> service.close(actor, OFFERING, request("secret")))
             .isInstanceOf(SecurityException.class)
             .hasMessage("You do not have permission to close yearly reports.");
 
@@ -146,8 +155,18 @@ class YearEndClosingServiceTest {
     }
 
     @Test
-    void rejectsInactiveOrLockedCurrentAccount() {
+    void rejectsLockedCurrentAccount() {
         admin.setLocked(true);
+        when(memberRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+
+        assertThatThrownBy(() -> service.close(admin, OFFERING, request("secret")))
+            .isInstanceOf(SecurityException.class)
+            .hasMessage("Your account is not permitted to close yearly reports.");
+    }
+
+    @Test
+    void rejectsInactiveCurrentAccount() {
+        admin.setActive(false);
         when(memberRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
 
         assertThatThrownBy(() -> service.close(admin, OFFERING, request("secret")))
@@ -235,26 +254,75 @@ class YearEndClosingServiceTest {
     }
 
     @Test
-    void reopensActiveClosingWithoutDeletingSnapshot() {
+    void surfacesSnapshotCleanupFailureAfterClosingConflict() {
         stubValidPassword(admin);
-        YearEndClosing closing = closing(OFFERING, 1, CLOSED, true);
         when(repository.findByFiscalYearAndReportTypeAndActiveTrue(2025, OFFERING))
-            .thenReturn(Optional.of(closing));
-        when(repository.save(closing)).thenReturn(closing);
+            .thenReturn(Optional.empty());
+        when(repository.findFirstByFiscalYearAndReportTypeOrderByVersionDesc(2025, OFFERING))
+            .thenReturn(Optional.empty());
+        when(offeringReportService.build(admin, 2025)).thenReturn(report);
+        when(excelService.render(eq(report), any(YearlyWorkbookLifecycle.class))).thenReturn(WORKBOOK);
+        when(snapshotStore.store(any(), anyString(), eq(2025), eq(OFFERING), eq(1)))
+            .thenReturn(new YearEndSnapshotStore.StoredSnapshot("orphan", 3, "checksum"));
+        when(repository.save(any(YearEndClosing.class)))
+            .thenThrow(new DuplicateKeyException("active closing"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("GridFS unavailable"))
+            .when(snapshotStore).delete("orphan");
 
-        YearEndClosingReportStatus result = service.reopen(admin, OFFERING, request("secret"));
+        assertThatThrownBy(() -> service.close(admin, OFFERING, request("secret")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Year-end snapshot cleanup failed.")
+            .hasCauseInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void allowsTreasurerToAtomicallyReopenWithoutDeletingSnapshot() {
+        Member treasurer = member("treasurer-id", "treasurer@church.local", Role.TREASURER);
+        treasurer.setPasswordHash("encoded");
+        stubValidPassword(treasurer);
+        YearEndClosing closing = closing(OFFERING, 1, CLOSED, true);
+        closing.setStatus(REOPENED);
+        closing.setActive(false);
+        closing.setActiveKey(null);
+        closing.setReopenedByMemberId(treasurer.getId());
+        closing.setReopenedByEmail(treasurer.getPrimaryEmail());
+        closing.setReopenedAt(CLOCK.instant());
+        when(mongoTemplate.findAndModify(
+            any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(YearEndClosing.class)
+        )).thenReturn(closing);
+
+        YearEndClosingReportStatus result = service.reopen(treasurer, OFFERING, request("secret"));
 
         assertThat(result.status()).isEqualTo(REOPENED);
         assertThat(closing.isActive()).isFalse();
         assertThat(closing.getActiveKey()).isNull();
         assertThat(closing.getGridFsFileId()).isEqualTo("grid-1");
-        assertThat(closing.getReopenedByMemberId()).isEqualTo("admin-id");
+        assertThat(closing.getReopenedByMemberId()).isEqualTo("treasurer-id");
         assertThat(closing.getReopenedAt()).isEqualTo(CLOCK.instant());
         verify(snapshotStore, never()).delete(anyString());
         verify(audit).recordSuccess(
-            eq(admin),
+            eq(treasurer),
             eq(SystemAuditOperation.YEAR_END_REOPEN),
             any(Map.class)
+        );
+    }
+
+    @Test
+    void rejectsReopenWhenAnotherRequestAlreadyReopenedTheReport() {
+        stubValidPassword(admin);
+        when(mongoTemplate.findAndModify(
+            any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(YearEndClosing.class)
+        )).thenReturn(null);
+
+        assertThatThrownBy(() -> service.reopen(admin, OFFERING, request("secret")))
+            .isInstanceOf(YearEndClosingConflictException.class)
+            .hasMessage("This yearly report is not currently closed.");
+
+        verify(audit).recordFailure(
+            eq(admin),
+            eq(SystemAuditOperation.YEAR_END_REOPEN),
+            any(Map.class),
+            any(YearEndClosingConflictException.class)
         );
     }
 

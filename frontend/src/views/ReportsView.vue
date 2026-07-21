@@ -218,8 +218,8 @@
                   type="button"
                   class="secondary lifecycle-button"
                   :aria-label="yearEndActionAriaLabel('OFFERING')"
-                  :disabled="yearEndBusy.OFFERING || (yearEndReportStatus('OFFERING') !== 'CLOSED' && !yearEndStatus.closeEligible)"
-                  @click="openClosingDialog('OFFERING')"
+                  :disabled="yearlyOfferingBusy || yearEndBusy.OFFERING || (yearEndReportStatus('OFFERING') !== 'CLOSED' && !yearEndStatus.closeEligible)"
+                  @click="openClosingDialog('OFFERING', $event)"
                 >
                   {{ yearEndReportStatus('OFFERING') === 'CLOSED' ? 'Reopen closing' : 'Year-End closing' }}
                 </button>
@@ -244,8 +244,8 @@
                   type="button"
                   class="secondary lifecycle-button"
                   :aria-label="yearEndActionAriaLabel('EXPENDITURE')"
-                  :disabled="yearEndBusy.EXPENDITURE || (yearEndReportStatus('EXPENDITURE') !== 'CLOSED' && !yearEndStatus.closeEligible)"
-                  @click="openClosingDialog('EXPENDITURE')"
+                  :disabled="yearlyExpenditureBusy || yearEndBusy.EXPENDITURE || (yearEndReportStatus('EXPENDITURE') !== 'CLOSED' && !yearEndStatus.closeEligible)"
+                  @click="openClosingDialog('EXPENDITURE', $event)"
                 >
                   {{ yearEndReportStatus('EXPENDITURE') === 'CLOSED' ? 'Reopen closing' : 'Year-End closing' }}
                 </button>
@@ -480,6 +480,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="closing-dialog-title"
+        @keydown="handleClosingDialogKeydown"
       >
         <h3 id="closing-dialog-title">{{ closingDialogTitle }}</h3>
         <p>{{ closingDialogReportLabel }} report for fiscal year {{ closingDialog.fiscalYear }}</p>
@@ -487,13 +488,22 @@
           <label>
             Current password
             <input
+              ref="closingPasswordInput"
               v-model="closingDialog.password"
               type="password"
               autocomplete="current-password"
+              :aria-describedby="closingDialog.error ? 'closing-dialog-error' : undefined"
               required
             />
           </label>
-          <p v-if="closingDialog.error" class="error">{{ closingDialog.error }}</p>
+          <p
+            v-if="closingDialog.error"
+            id="closing-dialog-error"
+            class="error"
+            role="alert"
+          >
+            {{ closingDialog.error }}
+          </p>
           <div class="dialog-actions">
             <button type="button" class="secondary" :disabled="closingDialog.busy" @click="closeClosingDialog">
               Cancel
@@ -509,7 +519,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import PaginationControls from '../components/PaginationControls.vue';
 import {
   DEFAULT_THANK_YOU_NOTE,
@@ -623,6 +633,8 @@ const closingDialog = reactive({
   busy: false,
   error: '',
 });
+const closingPasswordInput = ref<HTMLInputElement | null>(null);
+let closingDialogTrigger: HTMLElement | null = null;
 let yearEndStatusSequence = 0;
 const error = ref('');
 const thankYouNote = ref(DEFAULT_THANK_YOU_NOTE);
@@ -966,22 +978,58 @@ function yearEndActionAriaLabel(reportType: YearEndReportType) {
     : `Year-end close ${report}`;
 }
 
-function openClosingDialog(reportType: YearEndReportType) {
+function openClosingDialog(reportType: YearEndReportType, event?: Event) {
+  closingDialogTrigger = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
   closingDialog.open = true;
   closingDialog.reportType = reportType;
   closingDialog.action = yearEndReportStatus(reportType) === 'CLOSED' ? 'reopen' : 'close';
   closingDialog.fiscalYear = yearlyFilters.fiscalYear;
   closingDialog.password = '';
   closingDialog.error = '';
+  void nextTick(() => closingPasswordInput.value?.focus());
 }
 
 function closeClosingDialog() {
   if (closingDialog.busy) {
     return;
   }
+  dismissClosingDialog();
+}
+
+function dismissClosingDialog() {
+  const trigger = closingDialogTrigger;
   closingDialog.open = false;
   closingDialog.password = '';
   closingDialog.error = '';
+  closingDialogTrigger = null;
+  void nextTick(() => trigger?.focus());
+}
+
+function handleClosingDialogKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && !closingDialog.busy) {
+    event.preventDefault();
+    closeClosingDialog();
+    return;
+  }
+  if (event.key !== 'Tab') {
+    return;
+  }
+  const dialog = event.currentTarget as HTMLElement;
+  const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+    'input:not([disabled]), button:not([disabled])',
+  ));
+  if (!focusable.length) {
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 const closingDialogTitle = computed(() =>
@@ -1011,12 +1059,13 @@ async function submitClosingAction() {
     } else {
       await reopenYearEndReport(reportType, request);
     }
-    closingDialog.open = false;
-    closingDialog.password = '';
+    dismissClosingDialog();
     await loadYearEndStatus();
   } catch (err) {
     closingDialog.password = '';
     closingDialog.error = err instanceof Error ? err.message : 'Could not update year-end closing.';
+    await nextTick();
+    closingPasswordInput.value?.focus();
   } finally {
     closingDialog.busy = false;
     yearEndBusy[reportType] = false;
