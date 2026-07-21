@@ -36,6 +36,10 @@ export async function getBlob(path: string): Promise<Blob> {
   return response.blob();
 }
 
+export function getBlobResponse(path: string): Promise<Response> {
+  return request(path);
+}
+
 export async function postBlob<TRequest>(path: string, body: TRequest): Promise<Blob> {
   const response = await request(path, {
     method: 'POST',
