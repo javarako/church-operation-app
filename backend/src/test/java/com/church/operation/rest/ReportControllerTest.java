@@ -2,7 +2,10 @@ package com.church.operation.rest;
 
 import com.church.operation.dto.TaxReceiptSummaryRow;
 import com.church.operation.dto.QuarterlyFinancialReport;
-import com.church.operation.dto.YearlyFinancialReport;
+import com.church.operation.dto.YearEndClosingReportStatus;
+import com.church.operation.dto.YearEndClosingRequest;
+import com.church.operation.dto.YearEndClosingStatusResponse;
+import com.church.operation.dto.YearlyWorkbookDownload;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.TaxReceipt;
 import com.church.operation.exception.GlobalExceptionHandler;
@@ -12,11 +15,11 @@ import com.church.operation.service.QuarterlyOfferingReportService;
 import com.church.operation.service.ReportService;
 import com.church.operation.service.TaxReceiptPdfService;
 import com.church.operation.service.TaxReceiptService;
-import com.church.operation.service.YearlyExpenditureReportService;
-import com.church.operation.service.YearlyFinancialExcelService;
-import com.church.operation.service.YearlyOfferingReportService;
+import com.church.operation.service.YearEndClosingService;
 import com.church.operation.util.Role;
 import com.church.operation.util.TaxReceiptStatus;
+import com.church.operation.util.YearEndClosingStatus;
+import com.church.operation.util.YearEndReportType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -25,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
@@ -51,10 +55,7 @@ class ReportControllerTest {
     private final QuarterlyExpenditureReportService quarterlyExpenditureReportService =
         mock(QuarterlyExpenditureReportService.class);
     private final QuarterlyFinancialExcelService quarterlyExcelService = mock(QuarterlyFinancialExcelService.class);
-    private final YearlyOfferingReportService yearlyOfferingReportService = mock(YearlyOfferingReportService.class);
-    private final YearlyExpenditureReportService yearlyExpenditureReportService =
-        mock(YearlyExpenditureReportService.class);
-    private final YearlyFinancialExcelService yearlyExcelService = mock(YearlyFinancialExcelService.class);
+    private final YearEndClosingService yearEndClosingService = mock(YearEndClosingService.class);
     private MockMvc mockMvc;
     private Member treasurer;
 
@@ -67,9 +68,7 @@ class ReportControllerTest {
             quarterlyReportService,
             quarterlyExpenditureReportService,
             quarterlyExcelService,
-            yearlyOfferingReportService,
-            yearlyExpenditureReportService,
-            yearlyExcelService
+            yearEndClosingService
         ))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
@@ -229,10 +228,12 @@ class ReportControllerTest {
     @Test
     void downloadsYearlyOfferingWorkbookWithAttachmentHeaders() throws Exception {
         Member viewer = member(Role.VIEWER);
-        YearlyFinancialReport report = yearlyReport("Offering income", "수입 결산 및 예산안");
         byte[] workbook = new byte[] {7, 8, 9};
-        when(yearlyOfferingReportService.build(viewer, 2026)).thenReturn(report);
-        when(yearlyExcelService.render(report)).thenReturn(workbook);
+        when(yearEndClosingService.download(viewer, YearEndReportType.OFFERING, 2026))
+            .thenReturn(new YearlyWorkbookDownload(
+                workbook,
+                "yearly-offerings-2026-closed-v2.xlsx"
+            ));
 
         mockMvc.perform(get("/api/reports/yearly-offerings.xlsx")
                 .param("fiscalYear", "2026")
@@ -243,21 +244,22 @@ class ReportControllerTest {
             ))
             .andExpect(header().string(
                 "Content-Disposition",
-                "attachment; filename=yearly-offerings-2026.xlsx"
+                "attachment; filename=yearly-offerings-2026-closed-v2.xlsx"
             ))
             .andExpect(content().bytes(workbook));
 
-        verify(yearlyOfferingReportService).build(viewer, 2026);
-        verify(yearlyExcelService).render(report);
+        verify(yearEndClosingService).download(viewer, YearEndReportType.OFFERING, 2026);
     }
 
     @Test
     void downloadsYearlyExpenditureWorkbookWithAttachmentHeaders() throws Exception {
         Member viewer = member(Role.VIEWER);
-        YearlyFinancialReport report = yearlyReport("Expenditure", "지출 결산 및 예산안");
         byte[] workbook = new byte[] {10, 11, 12};
-        when(yearlyExpenditureReportService.build(viewer, 2026)).thenReturn(report);
-        when(yearlyExcelService.render(report)).thenReturn(workbook);
+        when(yearEndClosingService.download(viewer, YearEndReportType.EXPENDITURE, 2026))
+            .thenReturn(new YearlyWorkbookDownload(
+                workbook,
+                "yearly-expenditures-2026-draft.xlsx"
+            ));
 
         mockMvc.perform(get("/api/reports/yearly-expenditures.xlsx")
                 .param("fiscalYear", "2026")
@@ -268,18 +270,17 @@ class ReportControllerTest {
             ))
             .andExpect(header().string(
                 "Content-Disposition",
-                "attachment; filename=yearly-expenditures-2026.xlsx"
+                "attachment; filename=yearly-expenditures-2026-draft.xlsx"
             ))
             .andExpect(content().bytes(workbook));
 
-        verify(yearlyExpenditureReportService).build(viewer, 2026);
-        verify(yearlyExcelService).render(report);
+        verify(yearEndClosingService).download(viewer, YearEndReportType.EXPENDITURE, 2026);
     }
 
     @Test
     void rejectsInvalidYearlyReportSelection() throws Exception {
         Member viewer = member(Role.VIEWER);
-        when(yearlyOfferingReportService.build(viewer, 1999))
+        when(yearEndClosingService.download(viewer, YearEndReportType.OFFERING, 1999))
             .thenThrow(new IllegalArgumentException("A valid fiscal year is required."));
 
         mockMvc.perform(get("/api/reports/yearly-offerings.xlsx")
@@ -291,7 +292,7 @@ class ReportControllerTest {
     @Test
     void rejectsInvalidYearlyExpenditureSelection() throws Exception {
         Member viewer = member(Role.VIEWER);
-        when(yearlyExpenditureReportService.build(viewer, 1999))
+        when(yearEndClosingService.download(viewer, YearEndReportType.EXPENDITURE, 1999))
             .thenThrow(new IllegalArgumentException("A valid fiscal year is required."));
 
         mockMvc.perform(get("/api/reports/yearly-expenditures.xlsx")
@@ -304,9 +305,9 @@ class ReportControllerTest {
     void rejectsMemberRolesFromBothYearlyDownloads() throws Exception {
         for (Role role : List.of(Role.MEMBER, Role.MEMBERSHIP)) {
             Member unauthorized = member(role);
-            when(yearlyOfferingReportService.build(unauthorized, 2026))
+            when(yearEndClosingService.download(unauthorized, YearEndReportType.OFFERING, 2026))
                 .thenThrow(new SecurityException("You do not have permission to view reports."));
-            when(yearlyExpenditureReportService.build(unauthorized, 2026))
+            when(yearEndClosingService.download(unauthorized, YearEndReportType.EXPENDITURE, 2026))
                 .thenThrow(new SecurityException("You do not have permission to view reports."));
 
             mockMvc.perform(get("/api/reports/yearly-offerings.xlsx")
@@ -318,6 +319,83 @@ class ReportControllerTest {
                     .principal(authentication(unauthorized)))
                 .andExpect(status().isForbidden());
         }
+    }
+
+    @Test
+    void returnsIndependentYearEndClosingStatus() throws Exception {
+        Instant closedAt = Instant.parse("2026-07-21T19:42:00Z");
+        YearEndClosingStatusResponse response = new YearEndClosingStatusResponse(
+            2025,
+            LocalDate.of(2025, 12, 31),
+            true,
+            new YearEndClosingReportStatus(
+                YearEndReportType.OFFERING,
+                YearEndClosingStatus.CLOSED,
+                2,
+                closedAt
+            ),
+            new YearEndClosingReportStatus(
+                YearEndReportType.EXPENDITURE,
+                YearEndClosingStatus.NOT_CLOSED,
+                null,
+                null
+            )
+        );
+        when(yearEndClosingService.status(treasurer, 2025)).thenReturn(response);
+
+        mockMvc.perform(get("/api/reports/yearly-closing-status")
+                .param("fiscalYear", "2025")
+                .principal(authentication(treasurer)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.closeEligible").value(true))
+            .andExpect(jsonPath("$.offering.status").value("CLOSED"))
+            .andExpect(jsonPath("$.offering.version").value(2))
+            .andExpect(jsonPath("$.expenditure.status").value("NOT_CLOSED"));
+    }
+
+    @Test
+    void closesAndReopensSelectedYearEndReport() throws Exception {
+        YearEndClosingReportStatus closed = new YearEndClosingReportStatus(
+            YearEndReportType.OFFERING,
+            YearEndClosingStatus.CLOSED,
+            1,
+            Instant.parse("2026-07-21T19:42:00Z")
+        );
+        YearEndClosingReportStatus reopened = new YearEndClosingReportStatus(
+            YearEndReportType.OFFERING,
+            YearEndClosingStatus.REOPENED,
+            1,
+            Instant.parse("2026-07-22T13:15:00Z")
+        );
+        YearEndClosingRequest request = new YearEndClosingRequest(2025, "secret-value");
+        when(yearEndClosingService.close(treasurer, YearEndReportType.OFFERING, request))
+            .thenReturn(closed);
+        when(yearEndClosingService.reopen(treasurer, YearEndReportType.OFFERING, request))
+            .thenReturn(reopened);
+
+        String body = "{\"fiscalYear\":2025,\"currentPassword\":\"secret-value\"}";
+        mockMvc.perform(post("/api/reports/yearly-closing/OFFERING/close")
+                .contentType("application/json")
+                .content(body)
+                .principal(authentication(treasurer)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CLOSED"));
+        mockMvc.perform(post("/api/reports/yearly-closing/OFFERING/reopen")
+                .contentType("application/json")
+                .content(body)
+                .principal(authentication(treasurer)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("REOPENED"));
+    }
+
+    @Test
+    void rejectsBlankClosingPassword() throws Exception {
+        mockMvc.perform(post("/api/reports/yearly-closing/EXPENDITURE/close")
+                .contentType("application/json")
+                .content("{\"fiscalYear\":2025,\"currentPassword\":\"\"}")
+                .principal(authentication(treasurer)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test
@@ -387,24 +465,6 @@ class ReportControllerTest {
         receipt.setReceiptNumber(number);
         receipt.setStatus(TaxReceiptStatus.ISSUED);
         return receipt;
-    }
-
-    private YearlyFinancialReport yearlyReport(String sheetName, String titleSuffix) {
-        return new YearlyFinancialReport(
-            2026,
-            LocalDate.of(2026, 1, 1),
-            LocalDate.of(2026, 12, 31),
-            List.of(),
-            BigDecimal.ZERO,
-            BigDecimal.ZERO,
-            BigDecimal.ZERO,
-            false,
-            sheetName,
-            titleSuffix,
-            sheetName.equals("Offering income") ? "수입결산" : "지출결산",
-            sheetName.equals("Offering income") ? "수입대비" : "지출대비",
-            sheetName.equals("Offering income") ? "전년도 이월금" : "CONTINGENCY"
-        );
     }
 
     private TestingAuthenticationToken authentication(Member member) {
