@@ -9,6 +9,7 @@ import com.church.operation.dto.YearlyWorkbookDownload;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.YearEndClosing;
 import com.church.operation.exception.YearEndClosingConflictException;
+import com.church.operation.exception.YearEndSnapshotException;
 import com.church.operation.repo.MemberRepository;
 import com.church.operation.repo.YearEndClosingRepository;
 import com.church.operation.util.Role;
@@ -359,7 +360,7 @@ public class YearEndClosingService {
             snapshotStore.delete(gridFsFileId);
         } catch (RuntimeException cleanupFailure) {
             cleanupFailure.addSuppressed(primaryFailure);
-            throw new IllegalStateException("Year-end snapshot cleanup failed.", cleanupFailure);
+            throw new YearEndSnapshotException("Year-end snapshot cleanup failed.", cleanupFailure);
         }
     }
 }

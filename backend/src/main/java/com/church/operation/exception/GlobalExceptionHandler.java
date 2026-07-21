@@ -58,6 +58,12 @@ public class GlobalExceptionHandler {
             .body(new ApiError("YEAR_END_CLOSING_CONFLICT", ex.getMessage()));
     }
 
+    @ExceptionHandler(YearEndSnapshotException.class)
+    ResponseEntity<ApiError> handleYearEndSnapshot(YearEndSnapshotException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ApiError("YEAR_END_SNAPSHOT_ERROR", ex.getMessage()));
+    }
+
     record ReceiptValidationResponse(String code, String message, List<TaxReceiptValidationError> errors) {
     }
 }

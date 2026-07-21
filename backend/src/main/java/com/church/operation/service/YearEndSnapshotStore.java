@@ -1,6 +1,7 @@
 package com.church.operation.service;
 
 import com.church.operation.entity.YearEndClosing;
+import com.church.operation.exception.YearEndSnapshotException;
 import com.church.operation.util.YearEndReportType;
 import com.mongodb.client.gridfs.model.GridFSFile;
 import org.bson.Document;
@@ -57,7 +58,7 @@ public class YearEndSnapshotStore {
     public byte[] load(YearEndClosing closing) {
         GridFSFile file = gridFsTemplate.findOne(idQuery(closing.getGridFsFileId()));
         if (file == null) {
-            throw new IllegalStateException("Closed yearly workbook snapshot was not found.");
+            throw new YearEndSnapshotException("Closed yearly workbook snapshot was not found.");
         }
         GridFsResource resource = gridFsTemplate.getResource(file);
         try {
@@ -66,11 +67,11 @@ public class YearEndSnapshotStore {
                 closing.getChecksum().getBytes(StandardCharsets.UTF_8),
                 sha256(bytes).getBytes(StandardCharsets.UTF_8)
             )) {
-                throw new IllegalStateException("Closed yearly workbook checksum verification failed.");
+                throw new YearEndSnapshotException("Closed yearly workbook checksum verification failed.");
             }
             return bytes;
         } catch (IOException exception) {
-            throw new IllegalStateException("Closed yearly workbook snapshot could not be read.", exception);
+            throw new YearEndSnapshotException("Closed yearly workbook snapshot could not be read.", exception);
         }
     }
 

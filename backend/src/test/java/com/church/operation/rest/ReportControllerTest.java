@@ -9,6 +9,7 @@ import com.church.operation.dto.YearlyWorkbookDownload;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.TaxReceipt;
 import com.church.operation.exception.GlobalExceptionHandler;
+import com.church.operation.exception.YearEndSnapshotException;
 import com.church.operation.service.QuarterlyFinancialExcelService;
 import com.church.operation.service.QuarterlyExpenditureReportService;
 import com.church.operation.service.QuarterlyOfferingReportService;
@@ -396,6 +397,23 @@ class ReportControllerTest {
                 .principal(authentication(treasurer)))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void returnsActionableYearEndSnapshotErrors() throws Exception {
+        when(yearEndClosingService.download(treasurer, YearEndReportType.OFFERING, 2025))
+            .thenThrow(new YearEndSnapshotException(
+                "Closed yearly workbook checksum verification failed."
+            ));
+
+        mockMvc.perform(get("/api/reports/yearly-offerings.xlsx")
+                .param("fiscalYear", "2025")
+                .principal(authentication(treasurer)))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.code").value("YEAR_END_SNAPSHOT_ERROR"))
+            .andExpect(jsonPath("$.message").value(
+                "Closed yearly workbook checksum verification failed."
+            ));
     }
 
     @Test
