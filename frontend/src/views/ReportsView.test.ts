@@ -512,6 +512,28 @@ describe('ReportsView', () => {
     expect(rows[2].textContent).toContain('Ten');
   });
 
+  it('sorts missing offering numbers last without crashing and prevents issuance', async () => {
+    signIn('TREASURER');
+    taxSummaryMock.mockResolvedValue([
+      {
+        ...receiptRow, memberId: 'numbered', offeringNumber: '102', donorName: 'Numbered Member',
+        receiptId: undefined, receiptNumber: undefined, receiptStatus: undefined,
+      },
+      {
+        ...receiptRow, memberId: 'missing', offeringNumber: null, donorName: 'Missing Number',
+        receiptId: undefined, receiptNumber: undefined, receiptStatus: undefined,
+      },
+    ]);
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /official tax/i }));
+
+    const rows = await screen.findAllByRole('row');
+    expect(rows[1].textContent).toContain('Numbered Member');
+    expect(rows[2].textContent).toContain('Missing Number');
+    expect(within(rows[2]).getByText('Missing')).toBeTruthy();
+    expect((within(rows[2]).getByRole('button', { name: 'Issue receipt' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('issues and downloads an individual receipt', async () => {
     signIn('TREASURER');
     taxSummaryMock.mockResolvedValue([{ ...receiptRow, receiptId: undefined, receiptNumber: undefined, receiptStatus: undefined }]);

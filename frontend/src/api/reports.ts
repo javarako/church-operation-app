@@ -30,7 +30,7 @@ export type TaxReceiptStatus = 'ISSUED' | 'VOID';
 
 export interface TaxReceiptSummaryRow {
   memberId: string;
-  offeringNumber: string;
+  offeringNumber: string | null;
   donorName: string;
   donorAddress?: string;
   taxYear: number;

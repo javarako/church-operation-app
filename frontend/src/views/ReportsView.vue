@@ -352,7 +352,7 @@
               v-for="row in taxPagination.paginatedRows.value"
               :key="`${row.memberId}-${row.taxYear}`"
             >
-              <td>{{ row.offeringNumber }}</td>
+              <td>{{ row.offeringNumber || 'Missing' }}</td>
               <td>{{ row.donorName }}</td>
               <td>{{ row.donorAddress || '-' }}</td>
               <td>{{ row.taxYear }}</td>
@@ -368,7 +368,8 @@
                 <button
                   v-if="!row.receiptId"
                   type="button"
-                  :disabled="receiptBusy"
+                  :disabled="receiptBusy || !row.offeringNumber"
+                  :title="!row.offeringNumber ? 'Assign an offering number on the member record before issuing a receipt.' : undefined"
                   @click="issueReceipt(row)"
                 >
                   Issue receipt
@@ -816,10 +817,9 @@ async function runActiveReport() {
 
     if (activeVisibleReportId.value === 'tax-return') {
       const rows = await listTaxReceiptSummary({ ...taxFilters });
-      taxRows.value = rows.sort((left, right) => left.offeringNumber.localeCompare(
+      taxRows.value = rows.sort((left, right) => compareOfferingNumbers(
+        left.offeringNumber,
         right.offeringNumber,
-        undefined,
-        { numeric: true, sensitivity: 'base' },
       ));
       taxPagination.resetPage();
       return;
@@ -1138,15 +1138,25 @@ function exportActiveReport() {
 }
 
 async function issueReceipt(row: TaxReceiptSummaryRow) {
+  const offeringNumber = row.offeringNumber;
+  if (!offeringNumber) return;
   await runReceiptAction(async () => {
     const receipt = await issueTaxReceipt({
       taxYear: row.taxYear,
-      offeringNumber: row.offeringNumber,
+      offeringNumber,
       thankYouNote: thankYouNote.value,
     });
     await downloadReceiptResult(receipt.id, `receipt-${receipt.receiptNumber}.pdf`);
     await runActiveReport();
   });
+}
+
+function compareOfferingNumbers(left: string | null, right: string | null) {
+  const leftNumber = left?.trim();
+  const rightNumber = right?.trim();
+  if (!leftNumber) return rightNumber ? 1 : 0;
+  if (!rightNumber) return -1;
+  return leftNumber.localeCompare(rightNumber, undefined, { numeric: true, sensitivity: 'base' });
 }
 
 async function downloadReceipt(row: TaxReceiptSummaryRow) {
