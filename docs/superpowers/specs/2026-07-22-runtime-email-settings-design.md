@@ -138,7 +138,9 @@ The form contains:
 - `Reset to server defaults` command
 
 The test recipient initially uses the signed-in administrator's primary email
-and remains editable. The password input is always blank when settings are
+when it is a valid email address and remains editable. The exceptional
+bootstrap login ID `admin` is not treated as an email address, so its test
+recipient starts blank. The password input is always blank when settings are
 loaded. Adjacent status text communicates whether a password is already
 configured without revealing it.
 
@@ -197,10 +199,10 @@ Validate on both client and server:
 
 - Host is required and has a reasonable maximum length.
 - Port is between 1 and 65535.
-- Username is required.
+- Username is required when `MAIL_SMTP_AUTH` is enabled and optional otherwise.
 - From address and test recipient are valid email addresses.
-- A password is required when neither a stored password nor an environment
-  password exists.
+- A password is required when `MAIL_SMTP_AUTH` is enabled and neither a stored
+  password nor an environment password exists.
 - All input sizes are bounded.
 
 Map email failures to actionable categories without leaking provider response
