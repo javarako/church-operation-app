@@ -120,6 +120,10 @@ class MongoDatabaseRoundTripIntegrationTest {
                 .first();
             assertThat(churchSettings).isNotNull();
             assertThat(churchSettings.getString("name")).isEqualTo("Runtime Church");
+            assertThat(churchSettings.getString("timeZone")).isEqualTo("America/Vancouver");
+            assertThat(churchSettings.getInteger("fiscalYearStartMonth")).isEqualTo(4);
+            assertThat(churchSettings.getInteger("listPageSize")).isEqualTo(50);
+            assertThat(churchSettings.getString("dataOperationExpiry")).isEqualTo("PT1H");
             assertThat(downloadGridFs(database, new ObjectId(churchSettings.getString("logoGridFsId"))))
                 .isEqualTo(churchLogoBytes());
             assertThat(downloadGridFs(database, new ObjectId(churchSettings.getString("bannerGridFsId"))))
@@ -458,6 +462,10 @@ class MongoDatabaseRoundTripIntegrationTest {
         );
         database.getCollection("church_settings").insertOne(new Document("_id", "church-settings")
             .append("name", "Runtime Church")
+            .append("timeZone", "America/Vancouver")
+            .append("fiscalYearStartMonth", 4)
+            .append("listPageSize", 50)
+            .append("dataOperationExpiry", "PT1H")
             .append("logoGridFsId", logoId.toHexString())
             .append("logoContentType", "image/png")
             .append("bannerGridFsId", bannerId.toHexString())
