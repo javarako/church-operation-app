@@ -1,5 +1,5 @@
 import { computed, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue';
-import { getChurchInformation } from '../api/churchInformation';
+import { churchInformationState, loadChurchInformation } from '../stores/churchInformationStore';
 
 const fallbackPageSize = 20;
 
@@ -22,12 +22,20 @@ export function usePagination<T>(rows: Ref<T[]> | ComputedRef<T[]>) {
     }
   });
 
+  watch(
+    () => churchInformationState.value?.listPageSize,
+    (value) => {
+      if (value && value >= 5 && value <= 100) {
+        pageSize.value = value;
+        currentPage.value = 1;
+      }
+    },
+    { immediate: true },
+  );
+
   onMounted(async () => {
     try {
-      const information = await getChurchInformation();
-      if (information.listPageSize > 0) {
-        pageSize.value = information.listPageSize;
-      }
+      await loadChurchInformation();
     } catch {
       pageSize.value = fallbackPageSize;
     }

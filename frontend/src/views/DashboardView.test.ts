@@ -73,6 +73,8 @@ describe('DashboardView', () => {
       website: '',
       bannerPath: '/branding/church_banner_sample.png',
       logPath: '/branding/church_logo_sample.png',
+      timeZone: 'America/Toronto',
+      fiscalYearStartMonth: 1,
       listPageSize: 20,
       applicationVersion: '1.0.0',
     });
@@ -92,6 +94,8 @@ describe('DashboardView', () => {
       website: '',
       bannerPath: '/api/church-information/banner?v=2',
       logPath: '/api/church-information/logo?v=2',
+      timeZone: 'America/Toronto',
+      fiscalYearStartMonth: 1,
       listPageSize: 20,
       applicationVersion: '1.0.1',
     });

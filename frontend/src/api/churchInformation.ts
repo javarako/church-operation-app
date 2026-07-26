@@ -10,6 +10,8 @@ export interface ChurchInformation {
   website: string;
   bannerPath: string;
   logPath: string;
+  timeZone: string;
+  fiscalYearStartMonth: number;
   listPageSize: number;
   applicationVersion: string;
 }

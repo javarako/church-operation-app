@@ -18,6 +18,8 @@ vi.mock('../api/churchInformation', () => ({
     website: '',
     bannerPath: '/branding/church_banner_sample.png',
     logPath: '/branding/church_logo_sample.png',
+    timeZone: 'America/Toronto',
+    fiscalYearStartMonth: 1,
     listPageSize: 20,
     applicationVersion: '1.0.0',
   }),
@@ -76,6 +78,8 @@ describe('AppLayout', () => {
       website: '',
       bannerPath: '/branding/church_banner_sample.png',
       logPath: '/branding/church_logo_sample.png',
+      timeZone: 'America/Toronto',
+      fiscalYearStartMonth: 1,
       listPageSize: 20,
       applicationVersion: '1.0.0',
     });

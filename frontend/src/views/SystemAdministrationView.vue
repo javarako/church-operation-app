@@ -300,6 +300,33 @@
         <label class="church-website-field">Church website<input v-model.trim="churchForm.website" type="url" maxlength="500" placeholder="https://" /></label>
       </div>
 
+      <section class="church-operational-settings" aria-labelledby="operational-settings-title">
+        <h4 id="operational-settings-title">Operational Settings</h4>
+        <div class="administration-fields church-settings-grid">
+          <label>Church time zone
+            <select v-model="churchForm.timeZone" required>
+              <option v-for="zone in churchTimeZones" :key="zone" :value="zone">{{ zone }}</option>
+            </select>
+          </label>
+          <label>Fiscal year starts
+            <select v-model.number="churchForm.fiscalYearStartMonth" required>
+              <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
+            </select>
+          </label>
+          <label>List page size
+            <input v-model.number="churchForm.listPageSize" type="number" min="5" max="100" required />
+          </label>
+          <label>Data operation expiry
+            <select v-model.number="churchForm.dataOperationExpiryMinutes" required>
+              <option v-for="minutes in operationExpiryOptions" :key="minutes" :value="minutes">
+                {{ minutes }} minutes
+              </option>
+            </select>
+          </label>
+        </div>
+        <p class="administration-note">Changes apply immediately. Prepared restore operations keep their existing expiry time.</p>
+      </section>
+
       <div class="branding-upload-grid">
         <section class="branding-upload">
           <div class="branding-preview logo-preview">
@@ -543,7 +570,26 @@ const churchForm = reactive<ChurchSettingsDraft>({
   charityRegistrationNumber: '',
   receiptIssueLocation: '',
   website: '',
+  timeZone: 'America/Toronto',
+  fiscalYearStartMonth: 1,
+  listPageSize: 20,
+  dataOperationExpiryMinutes: 30,
 });
+const churchTimeZones = [
+  'America/Toronto',
+  'America/St_Johns',
+  'America/Halifax',
+  'America/Winnipeg',
+  'America/Edmonton',
+  'America/Vancouver',
+  'America/Whitehorse',
+  'UTC',
+];
+const fiscalMonths = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+].map((label, index) => ({ label, value: index + 1 }));
+const operationExpiryOptions = [10, 20, 30, 60, 120];
 const churchLogoFile = ref<File | null>(null);
 const churchBannerFile = ref<File | null>(null);
 const logoPreviewUrl = ref('');
@@ -706,6 +752,10 @@ function applyChurchSettings(settings: ChurchSettingsResponse) {
   churchForm.charityRegistrationNumber = settings.charityRegistrationNumber;
   churchForm.receiptIssueLocation = settings.receiptIssueLocation;
   churchForm.website = settings.website;
+  churchForm.timeZone = settings.timeZone;
+  churchForm.fiscalYearStartMonth = settings.fiscalYearStartMonth;
+  churchForm.listPageSize = settings.listPageSize;
+  churchForm.dataOperationExpiryMinutes = settings.dataOperationExpiryMinutes;
   applyEffectiveChurchInformation(settings);
 }
 
@@ -721,7 +771,9 @@ function applyEffectiveChurchInformation(settings: ChurchSettingsResponse) {
     website: settings.website,
     logPath: settings.logoUrl,
     bannerPath: settings.bannerUrl,
-    listPageSize: current?.listPageSize ?? 20,
+    timeZone: settings.timeZone,
+    fiscalYearStartMonth: settings.fiscalYearStartMonth,
+    listPageSize: settings.listPageSize,
     applicationVersion: current?.applicationVersion ?? '',
   });
 }

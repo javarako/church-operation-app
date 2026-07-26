@@ -22,6 +22,8 @@ const initial: ChurchInformation = {
   website: 'https://church.example.org',
   bannerPath: '/branding/church_banner_sample.png',
   logPath: '/branding/church_logo_sample.png',
+  timeZone: 'America/Toronto',
+  fiscalYearStartMonth: 1,
   listPageSize: 20,
   applicationVersion: '1.0.0',
 };

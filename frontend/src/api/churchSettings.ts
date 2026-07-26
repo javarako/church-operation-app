@@ -10,6 +10,10 @@ export interface ChurchSettingsDraft {
   charityRegistrationNumber: string;
   receiptIssueLocation: string;
   website: string;
+  timeZone: string;
+  fiscalYearStartMonth: number;
+  listPageSize: number;
+  dataOperationExpiryMinutes: number;
 }
 
 export interface ChurchSettingsResponse extends ChurchSettingsDraft {

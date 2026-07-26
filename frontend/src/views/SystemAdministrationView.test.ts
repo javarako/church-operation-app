@@ -89,6 +89,10 @@ const churchSettingsResponse = {
   website: 'https://church.example.org',
   logoUrl: '/branding/church_logo_sample.png',
   bannerUrl: '/branding/church_banner_sample.png',
+  timeZone: 'America/Toronto',
+  fiscalYearStartMonth: 1,
+  listPageSize: 20,
+  dataOperationExpiryMinutes: 30,
   source: 'SERVER_DEFAULTS' as const,
 };
 
@@ -113,7 +117,9 @@ describe('SystemAdministrationView', () => {
       ...churchSettingsResponse,
       logPath: churchSettingsResponse.logoUrl,
       bannerPath: churchSettingsResponse.bannerUrl,
-      listPageSize: 20,
+      timeZone: churchSettingsResponse.timeZone,
+      fiscalYearStartMonth: churchSettingsResponse.fiscalYearStartMonth,
+      listPageSize: churchSettingsResponse.listPageSize,
       applicationVersion: '1.0.0',
     });
     authState.currentUser = {
@@ -208,6 +214,40 @@ describe('SystemAdministrationView', () => {
     );
     expect(churchInformationState.value?.name).toBe('Updated Church');
     expect(churchInformationState.value?.logPath).toBe('/api/church-information/logo?v=2');
+  });
+
+  it('saves operational settings and refreshes shared values immediately', async () => {
+    saveChurchSettingsMock.mockResolvedValueOnce({
+      ...churchSettingsResponse,
+      timeZone: 'America/Vancouver',
+      fiscalYearStartMonth: 4,
+      listPageSize: 50,
+      dataOperationExpiryMinutes: 60,
+      source: 'DATABASE',
+    });
+    render(SystemAdministrationView);
+    await fireEvent.click(screen.getByRole('tab', { name: 'Church Settings' }));
+    await screen.findByLabelText('Church time zone');
+
+    await fireEvent.update(screen.getByLabelText('Church time zone'), 'America/Vancouver');
+    await fireEvent.update(screen.getByLabelText('Fiscal year starts'), '4');
+    await fireEvent.update(screen.getByLabelText('List page size'), '50');
+    await fireEvent.update(screen.getByLabelText('Data operation expiry'), '60');
+    await fireEvent.click(screen.getByRole('button', { name: 'Save church settings' }));
+
+    expect(saveChurchSettingsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeZone: 'America/Vancouver',
+        fiscalYearStartMonth: 4,
+        listPageSize: 50,
+        dataOperationExpiryMinutes: 60,
+      }),
+      undefined,
+      undefined,
+    );
+    expect(churchInformationState.value?.timeZone).toBe('America/Vancouver');
+    expect(churchInformationState.value?.fiscalYearStartMonth).toBe(4);
+    expect(churchInformationState.value?.listPageSize).toBe(50);
   });
 
   it('rejects unsupported branding files and confirms reset to defaults', async () => {
