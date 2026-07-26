@@ -12,6 +12,10 @@ public record ChurchSettingsAdminResponse(
     String website,
     String logoUrl,
     String bannerUrl,
+    String timeZone,
+    int fiscalYearStartMonth,
+    int listPageSize,
+    long dataOperationExpiryMinutes,
     String source,
     Instant updatedAt
 ) {

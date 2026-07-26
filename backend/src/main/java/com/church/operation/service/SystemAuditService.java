@@ -25,7 +25,9 @@ public class SystemAuditService {
         "memberId", "referenceDataId", "offeringNumber", "recordCount", "offeringCount",
         "linkedIncomeCount", "expenseCount", "budgetCount", "receiptCount", "reportType",
         "version", "closingId", "gridFsFileId", "checksum", "fileSize",
-        "configurationSource", "configurationVersion", "logoChanged", "bannerChanged"
+        "configurationSource", "configurationVersion", "logoChanged", "bannerChanged",
+        "timeZoneChanged", "fiscalYearStartMonthChanged", "listPageSizeChanged",
+        "dataOperationExpiryChanged"
     );
     private static final Set<String> FORBIDDEN_KEY_PARTS = Set.of("password", "hash", "bytes", "content");
     private static final Pattern SENSITIVE_ERROR_VALUE = Pattern.compile(

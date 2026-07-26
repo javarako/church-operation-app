@@ -89,7 +89,11 @@ class SystemAuditServiceTest {
         service.recordSuccess(admin(), SystemAuditOperation.CHURCH_SETTINGS_UPDATE, Map.of(
             "configurationSource", "DATABASE",
             "logoChanged", true,
-            "bannerChanged", false
+            "bannerChanged", false,
+            "timeZoneChanged", true,
+            "fiscalYearStartMonthChanged", true,
+            "listPageSizeChanged", true,
+            "dataOperationExpiryChanged", true
         ));
 
         ArgumentCaptor<SystemAuditEvent> event = ArgumentCaptor.forClass(SystemAuditEvent.class);
@@ -97,7 +101,11 @@ class SystemAuditServiceTest {
         assertThat(event.getValue().getMetadata()).containsExactlyInAnyOrderEntriesOf(Map.of(
             "configurationSource", "DATABASE",
             "logoChanged", "true",
-            "bannerChanged", "false"
+            "bannerChanged", "false",
+            "timeZoneChanged", "true",
+            "fiscalYearStartMonthChanged", "true",
+            "listPageSizeChanged", "true",
+            "dataOperationExpiryChanged", "true"
         ));
     }
 

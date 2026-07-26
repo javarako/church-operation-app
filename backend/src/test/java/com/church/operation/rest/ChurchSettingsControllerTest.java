@@ -85,7 +85,7 @@ class ChurchSettingsControllerTest {
         return new ChurchSettingsAdminResponse(
             "Runtime Church", "123 Church Street", "contact@example.org", "Treasurer",
             "123456789RR0001", "Toronto, Ontario", "https://church.example.org",
-            "/logo", "/banner", source, null
+            "/logo", "/banner", "America/Toronto", 1, 20, 30, source, null
         );
     }
 
@@ -93,7 +93,9 @@ class ChurchSettingsControllerTest {
         return """
             {"name":"Runtime Church","address":"123 Church Street","contactInfo":"contact@example.org",
              "treasurerName":"Treasurer","charityRegistrationNumber":"123456789RR0001",
-             "receiptIssueLocation":"Toronto, Ontario","website":"https://church.example.org"}
+             "receiptIssueLocation":"Toronto, Ontario","website":"https://church.example.org",
+             "timeZone":"America/Toronto","fiscalYearStartMonth":1,"listPageSize":20,
+             "dataOperationExpiryMinutes":30}
             """;
     }
 }

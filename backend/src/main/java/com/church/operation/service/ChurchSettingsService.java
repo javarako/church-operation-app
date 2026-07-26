@@ -13,7 +13,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
 import java.time.Clock;
+import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Optional;
 
@@ -23,6 +27,7 @@ public class ChurchSettingsService {
     private final ChurchInformationResolver resolver;
     private final ChurchBrandingService branding;
     private final SystemAuditService audit;
+    private final RuntimeOperationalSettings operationalSettings;
     private final Clock clock;
 
     @Autowired
@@ -30,9 +35,10 @@ public class ChurchSettingsService {
         ChurchSettingsRepository repository,
         ChurchInformationResolver resolver,
         ChurchBrandingService branding,
-        SystemAuditService audit
+        SystemAuditService audit,
+        RuntimeOperationalSettings operationalSettings
     ) {
-        this(repository, resolver, branding, audit, Clock.systemUTC());
+        this(repository, resolver, branding, audit, operationalSettings, Clock.systemUTC());
     }
 
     ChurchSettingsService(
@@ -40,12 +46,14 @@ public class ChurchSettingsService {
         ChurchInformationResolver resolver,
         ChurchBrandingService branding,
         SystemAuditService audit,
+        RuntimeOperationalSettings operationalSettings,
         Clock clock
     ) {
         this.repository = repository;
         this.resolver = resolver;
         this.branding = branding;
         this.audit = audit;
+        this.operationalSettings = operationalSettings;
         this.clock = clock;
     }
 
@@ -91,7 +99,7 @@ public class ChurchSettingsService {
             });
             ChurchSettingsAdminResponse response = response("SERVER_DEFAULTS");
             audit.recordSuccess(actor, SystemAuditOperation.CHURCH_SETTINGS_RESET, metadata(
-                "SERVER_DEFAULTS", logoChanged, bannerChanged
+                "SERVER_DEFAULTS", logoChanged, bannerChanged, existing.orElse(null), null
             ));
             return response;
         } catch (RuntimeException exception) {
@@ -137,7 +145,7 @@ public class ChurchSettingsService {
         }
         ChurchSettingsAdminResponse response = response("DATABASE");
         audit.recordSuccess(actor, SystemAuditOperation.CHURCH_SETTINGS_UPDATE, metadata(
-            "DATABASE", logoChanged, bannerChanged
+            "DATABASE", logoChanged, bannerChanged, existing, normalized
         ));
         return response;
     }
@@ -157,6 +165,10 @@ public class ChurchSettingsService {
         updated.setCharityRegistrationNumber(values.charityRegistrationNumber());
         updated.setReceiptIssueLocation(values.receiptIssueLocation());
         updated.setWebsite(values.website());
+        updated.setTimeZone(values.timeZone());
+        updated.setFiscalYearStartMonth(values.fiscalYearStartMonth());
+        updated.setListPageSize(values.listPageSize());
+        updated.setDataOperationExpiry(values.dataOperationExpiry());
         updated.setLogoGridFsId(logo == null ? existing.getLogoGridFsId() : logo.id());
         updated.setLogoContentType(logo == null ? existing.getLogoContentType() : logo.contentType());
         updated.setBannerGridFsId(banner == null ? existing.getBannerGridFsId() : banner.id());
@@ -183,9 +195,32 @@ public class ChurchSettingsService {
         String issueLocation = optional(request.receiptIssueLocation(), "Receipt issue location", 200);
         String website = optional(request.website(), "Church website", 500);
         validateWebsite(website);
+        String timeZone = required(request.timeZone(), "Church time zone", 100);
+        validateTimeZone(timeZone);
+        int fiscalYearStartMonth = request.fiscalYearStartMonth();
+        if (fiscalYearStartMonth < 1 || fiscalYearStartMonth > 12) {
+            throw new IllegalArgumentException("Fiscal year start month must be between 1 and 12.");
+        }
+        int listPageSize = request.listPageSize();
+        if (listPageSize < 5 || listPageSize > 100) {
+            throw new IllegalArgumentException("List page size must be between 5 and 100.");
+        }
+        long expiryMinutes = request.dataOperationExpiryMinutes();
+        if (expiryMinutes < 1 || expiryMinutes > 120) {
+            throw new IllegalArgumentException("Data operation expiry must be between 1 and 120 minutes.");
+        }
         return new NormalizedSettings(
-            name, address, contactInfo, treasurerName, charityNumber, issueLocation, website
+            name, address, contactInfo, treasurerName, charityNumber, issueLocation, website,
+            timeZone, fiscalYearStartMonth, listPageSize, Duration.ofMinutes(expiryMinutes)
         );
+    }
+
+    private void validateTimeZone(String timeZone) {
+        try {
+            ZoneId.of(timeZone);
+        } catch (DateTimeException exception) {
+            throw new IllegalArgumentException("Church time zone must be a valid IANA time zone.");
+        }
     }
 
     private void validateWebsite(String website) {
@@ -222,10 +257,13 @@ public class ChurchSettingsService {
 
     private ChurchSettingsAdminResponse response(String source) {
         EffectiveChurchInformation effective = resolver.resolve();
+        RuntimeOperationalSettings.EffectiveSettings operations = operationalSettings.resolve();
         return new ChurchSettingsAdminResponse(
             effective.name(), effective.address(), effective.contactInfo(), effective.treasurerName(),
             effective.charityRegistrationNumber(), effective.receiptIssueLocation(), effective.website(),
-            effective.logoUrl(), effective.bannerUrl(), source, effective.updatedAt()
+            effective.logoUrl(), effective.bannerUrl(), operations.timeZone().getId(),
+            operations.fiscalYearStartMonth(), operations.listPageSize(),
+            operations.dataOperationExpiry().toMinutes(), source, effective.updatedAt()
         );
     }
 
@@ -236,11 +274,41 @@ public class ChurchSettingsService {
     }
 
     private Map<String, ?> metadata(String source, boolean logoChanged, boolean bannerChanged) {
+        return metadata(source, logoChanged, bannerChanged, null, null);
+    }
+
+    private Map<String, ?> metadata(
+        String source,
+        boolean logoChanged,
+        boolean bannerChanged,
+        ChurchSettings existing,
+        NormalizedSettings values
+    ) {
         return Map.of(
             "configurationSource", source,
             "logoChanged", logoChanged,
-            "bannerChanged", bannerChanged
+            "bannerChanged", bannerChanged,
+            "timeZoneChanged", operationalChanged(
+                existing == null ? null : existing.getTimeZone(),
+                values == null ? null : values.timeZone(), values == null
+            ),
+            "fiscalYearStartMonthChanged", operationalChanged(
+                existing == null ? null : existing.getFiscalYearStartMonth(),
+                values == null ? null : values.fiscalYearStartMonth(), values == null
+            ),
+            "listPageSizeChanged", operationalChanged(
+                existing == null ? null : existing.getListPageSize(),
+                values == null ? null : values.listPageSize(), values == null
+            ),
+            "dataOperationExpiryChanged", operationalChanged(
+                existing == null ? null : existing.getDataOperationExpiry(),
+                values == null ? null : values.dataOperationExpiry(), values == null
+            )
         );
+    }
+
+    private boolean operationalChanged(Object existing, Object replacement, boolean reset) {
+        return reset ? existing != null : !Objects.equals(existing, replacement);
     }
 
     private boolean supplied(MultipartFile file) {
@@ -264,7 +332,11 @@ public class ChurchSettingsService {
         String treasurerName,
         String charityRegistrationNumber,
         String receiptIssueLocation,
-        String website
+        String website,
+        String timeZone,
+        int fiscalYearStartMonth,
+        int listPageSize,
+        Duration dataOperationExpiry
     ) {
     }
 }

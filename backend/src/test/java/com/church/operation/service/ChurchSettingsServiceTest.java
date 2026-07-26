@@ -16,6 +16,8 @@ import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.Duration;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
@@ -25,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +38,7 @@ class ChurchSettingsServiceTest {
     @Mock private ChurchInformationResolver resolver;
     @Mock private ChurchBrandingService branding;
     @Mock private SystemAuditService audit;
+    @Mock private RuntimeOperationalSettings operationalSettings;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-26T18:00:00Z"), ZoneOffset.UTC);
     private ChurchSettingsService service;
@@ -42,8 +46,11 @@ class ChurchSettingsServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ChurchSettingsService(repository, resolver, branding, audit, clock);
+        service = new ChurchSettingsService(repository, resolver, branding, audit, operationalSettings, clock);
         admin = member(Role.ADMIN);
+        lenient().when(operationalSettings.resolve()).thenReturn(new RuntimeOperationalSettings.EffectiveSettings(
+            ZoneId.of("America/Toronto"), 1, 20, Duration.ofMinutes(30)
+        ));
     }
 
     @Test
@@ -66,6 +73,10 @@ class ChurchSettingsServiceTest {
             "Runtime Church".equals(saved.getName())
                 && "new-logo".equals(saved.getLogoGridFsId())
                 && "old-banner".equals(saved.getBannerGridFsId())
+                && "America/Toronto".equals(saved.getTimeZone())
+                && Integer.valueOf(1).equals(saved.getFiscalYearStartMonth())
+                && Integer.valueOf(20).equals(saved.getListPageSize())
+                && Duration.ofMinutes(30).equals(saved.getDataOperationExpiry())
                 && clock.instant().equals(saved.getUpdatedAt())
         ));
         assertThat(response.source()).isEqualTo("DATABASE");
@@ -121,6 +132,28 @@ class ChurchSettingsServiceTest {
             .hasMessageContaining("HTTP or HTTPS");
     }
 
+    @Test
+    void rejectsInvalidOperationalSettingsBeforePersistence() {
+        assertThatThrownBy(() -> service.save(admin,
+            request("Church", "", "Not/AZone", 1, 20, 30), null, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("time zone");
+        assertThatThrownBy(() -> service.save(admin,
+            request("Church", "", "America/Toronto", 0, 20, 30), null, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("start month");
+        assertThatThrownBy(() -> service.save(admin,
+            request("Church", "", "America/Toronto", 1, 4, 30), null, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("page size");
+        assertThatThrownBy(() -> service.save(admin,
+            request("Church", "", "America/Toronto", 1, 20, 121), null, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("expiry");
+
+        verify(repository, never()).save(any());
+    }
+
     private ChurchSettings existingSettings() {
         ChurchSettings settings = new ChurchSettings();
         settings.setLogoGridFsId("old-logo");
@@ -133,6 +166,17 @@ class ChurchSettingsServiceTest {
     }
 
     private ChurchSettingsSaveRequest request(String name, String website) {
+        return request(name, website, "America/Toronto", 1, 20, 30);
+    }
+
+    private ChurchSettingsSaveRequest request(
+        String name,
+        String website,
+        String timeZone,
+        int fiscalYearStartMonth,
+        int listPageSize,
+        long dataOperationExpiryMinutes
+    ) {
         return new ChurchSettingsSaveRequest(
             name,
             "  123 Church Street  ",
@@ -140,7 +184,11 @@ class ChurchSettingsServiceTest {
             " Treasurer ",
             " 123456789RR0001 ",
             " Toronto, Ontario ",
-            website
+            website,
+            timeZone,
+            fiscalYearStartMonth,
+            listPageSize,
+            dataOperationExpiryMinutes
         );
     }
 
