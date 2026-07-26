@@ -125,7 +125,7 @@ def add_contents(doc: Document) -> None:
     chapters = [
         "이 안내서 소개", "역할 및 접근 권한", "시작하기", "대시보드", "교인 정보",
         "헌금 관리", "재정 관리", "예산 관리", "기준정보", "보고서", "내 프로필",
-        "로그아웃", "문제 해결 및 보안 안내",
+        "시스템 관리", "로그아웃", "문제 해결 및 보안 안내",
     ]
     for chapter in chapters:
         doc.add_paragraph(chapter, style="List Bullet")

@@ -32,6 +32,7 @@ The menu changes according to the roles assigned to the signed-in member. A user
 | Reports | Admin, Treasurer, Pastor, Viewer |
 | Official Tax Return report | Treasurer |
 | My Profile | Admin, Member |
+| System Administration | Admin |
 | Password reset and Logout | All users |
 
 ## Getting Started
@@ -308,6 +309,59 @@ For table reports that show **Export CSV**, select it to download the current re
 4. Select **Save profile**.
 
 [[FIGURE:11-profile.png|Personal profile maintenance]]
+
+## System Administration
+
+**Available to:** Admin
+
+System Administration contains the Full Backup, Full Restore, Fiscal Archive, Church Settings, and Email Settings workflows. These functions affect the whole church database or application-wide configuration and should be used only from an authorized church device.
+
+### Church Settings
+
+Administrators can change the church identity and branding without editing server files or restarting the application.
+
+1. Select **System Administration**, then **Church Settings**.
+2. Enter the church name and address. These two fields are required.
+3. Enter the contact information, treasurer name, charity registration number, receipt issue location, and church website as applicable.
+4. To replace the church logo or dashboard banner, select a PNG or JPEG image no larger than 5 MB. The preview shows the current image until a replacement is selected.
+5. Select **Save church settings**.
+
+Saved changes appear immediately without signing in again. The church name and logo update in the left menu, and the banner and contact information update on the dashboard. New official tax receipt PDFs and quarterly and yearly financial workbooks use the saved church information and logo. Reports already issued or closed remain unchanged.
+
+Uploaded branding and church settings are stored in the database and included in a full backup. The application version appears below **Church Operations** in the left menu and is supplied by the deployed application build; it cannot be edited on this page.
+
+### Reset church settings
+
+1. Select **Reset church settings**.
+2. Review the warning and select **Confirm reset church settings**.
+3. The database settings and uploaded branding are removed. The application immediately returns to the church information and bundled images configured by the server.
+
+### Email Settings
+
+Administrators can change the SMTP host, port, username, password, and sender address without restarting the application.
+
+1. Select **System Administration**, then **Email Settings**.
+2. Enter the SMTP host, port, username, and **From address** supplied by the email provider.
+3. Enter **SMTP password** when setting or replacing the provider password. Leave it blank to keep the currently configured password.
+4. Enter an accessible address in **Test recipient** and select **Send test email**.
+5. Confirm that the message arrives. **Save settings** becomes available only after the exact values on screen pass the test.
+6. Select **Save settings**. Password-reset messages use the saved configuration immediately.
+
+The status identifies whether the active values come from **Database settings** or **Server defaults** and whether a password is configured. It never displays the password. Select the information icon for the administration guide.
+
+### Reset email settings
+
+1. Enter a valid **Test recipient**.
+2. Select **Reset to server defaults** and confirm.
+3. The application tests the values from `.env` first. The database override is removed only when that test succeeds.
+
+### Server administrator responsibilities
+
+- `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS`, and `PASSWORD_RESET_FRONTEND_BASE_URL` remain in `.env` and require a backend restart when changed.
+- Generate `CHURCH_SETTINGS_ENCRYPTION_KEY` once as a Base64-encoded 32-byte key, keep it secret, and do not change or lose it.
+- The SMTP password is encrypted in MongoDB. A full backup includes that encrypted value but never includes the encryption key.
+- A server that restores the backup must use the same `CHURCH_SETTINGS_ENCRYPTION_KEY`, or the restored SMTP password cannot be decrypted.
+- Keep the `.env` file and encryption key in a secure church-controlled password manager or secret store, separate from database backup files.
 
 ## Logout
 
