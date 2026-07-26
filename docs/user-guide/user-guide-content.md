@@ -326,7 +326,7 @@ Administrators can change the church identity and branding without editing serve
 4. To replace the church logo or dashboard banner, select a PNG or JPEG image no larger than 5 MB. The preview shows the current image until a replacement is selected.
 5. Select **Save church settings**.
 
-Saved changes appear immediately without signing in again. The church name and logo update in the left menu, and the banner and contact information update on the dashboard. New official tax receipt PDFs and quarterly and yearly financial workbooks use the saved church information and logo. Reports already issued or closed remain unchanged.
+Saved changes appear immediately without signing in again. The church name and logo update in the left menu, and the banner and contact information update on the dashboard. New official tax receipt PDFs and quarterly and yearly financial workbooks use the saved church information and logo. Previously downloaded files and closed year-end report snapshots remain unchanged.
 
 Uploaded branding and church settings are stored in the database and included in a full backup. The application version appears below **Church Operations** in the left menu and is supplied by the deployed application build; it cannot be edited on this page.
 

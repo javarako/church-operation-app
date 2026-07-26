@@ -87,8 +87,8 @@ const churchSettingsResponse = {
   charityRegistrationNumber: '123456789RR0001',
   receiptIssueLocation: 'Toronto, Ontario',
   website: 'https://church.example.org',
-  logoUrl: '/branding/church_logo.png',
-  bannerUrl: '/branding/church-banner.png',
+  logoUrl: '/branding/church_logo_sample.png',
+  bannerUrl: '/branding/church_banner_sample.png',
   source: 'SERVER_DEFAULTS' as const,
 };
 
@@ -162,6 +162,11 @@ describe('SystemAdministrationView', () => {
     resetChurchSettingsMock.mockResolvedValue(churchSettingsResponse);
     URL.createObjectURL = vi.fn(() => 'blob:download');
     URL.revokeObjectURL = vi.fn();
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({
+      width: 100,
+      height: 100,
+      close: vi.fn(),
+    }));
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   });
 
@@ -173,6 +178,7 @@ describe('SystemAdministrationView', () => {
     resetChurchInformationStore();
     URL.createObjectURL = originalCreateObjectUrl;
     URL.revokeObjectURL = originalRevokeObjectUrl;
+    vi.unstubAllGlobals();
   });
 
   it('loads editable church settings and shows their source', async () => {
@@ -184,7 +190,7 @@ describe('SystemAdministrationView', () => {
       .toBe('Grace Community Church');
     expect(screen.getByText('Server defaults')).toBeTruthy();
     expect(screen.getByAltText('Current church logo').getAttribute('src'))
-      .toBe('/branding/church_logo.png');
+      .toBe('/branding/church_logo_sample.png');
   });
 
   it('uploads church settings and refreshes shared branding immediately', async () => {
@@ -219,6 +225,23 @@ describe('SystemAdministrationView', () => {
 
     expect(resetChurchSettingsMock).toHaveBeenCalled();
     expect(churchInformationState.value?.name).toBe('Grace Community Church');
+  });
+
+  it('rejects branding images whose decoded dimensions exceed the safe limits', async () => {
+    vi.mocked(createImageBitmap).mockResolvedValueOnce({
+      width: 8_001,
+      height: 100,
+      close: vi.fn(),
+    } as unknown as ImageBitmap);
+    render(SystemAdministrationView);
+    await fireEvent.click(screen.getByRole('tab', { name: 'Church Settings' }));
+    await screen.findByLabelText('Church name');
+    const oversized = new File([new Uint8Array([1, 2, 3])], 'wide.png', { type: 'image/png' });
+
+    await fireEvent.change(screen.getByLabelText('Church logo'), { target: { files: [oversized] } });
+
+    expect((await screen.findByRole('alert')).textContent).toContain('8,000 pixels or 40 megapixels');
+    expect(saveChurchSettingsMock).not.toHaveBeenCalled();
   });
 
   it('requires matching backup passwords and clears them after download', async () => {

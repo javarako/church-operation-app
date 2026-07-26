@@ -726,7 +726,7 @@ function applyEffectiveChurchInformation(settings: ChurchSettingsResponse) {
   });
 }
 
-function selectBrandingFile(kind: 'logo' | 'banner', event: Event) {
+async function selectBrandingFile(kind: 'logo' | 'banner', event: Event) {
   clearMessages();
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -741,6 +741,20 @@ function selectBrandingFile(kind: 'logo' | 'banner', event: Event) {
     input.value = '';
     return;
   }
+  try {
+    const dimensions = await decodeImageDimensions(file);
+    if (dimensions.width <= 0 || dimensions.height <= 0
+      || dimensions.width > 8_000 || dimensions.height > 8_000
+      || dimensions.width * dimensions.height > 40_000_000) {
+      error.value = 'The image dimensions must not exceed 8,000 pixels or 40 megapixels.';
+      input.value = '';
+      return;
+    }
+  } catch {
+    error.value = 'The image must be a valid PNG or JPEG file.';
+    input.value = '';
+    return;
+  }
 
   if (kind === 'logo') {
     revokePreview(logoPreviewUrl.value);
@@ -750,6 +764,29 @@ function selectBrandingFile(kind: 'logo' | 'banner', event: Event) {
     revokePreview(bannerPreviewUrl.value);
     churchBannerFile.value = file;
     bannerPreviewUrl.value = URL.createObjectURL(file);
+  }
+}
+
+async function decodeImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    try {
+      return { width: bitmap.width, height: bitmap.height };
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  const source = URL.createObjectURL(file);
+  try {
+    return await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error('Invalid image'));
+      image.src = source;
+    });
+  } finally {
+    URL.revokeObjectURL(source);
   }
 }
 

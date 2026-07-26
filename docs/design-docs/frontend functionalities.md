@@ -260,7 +260,7 @@ Types: `GROUP_CODE`, `MEMBERSHIP_STATUS`, `COMMITTEE_CODE`, `OFFERING_FUND`, `OF
 1. Load own profile → edit contact/address/notes/photo → save.
 
 ### System administration (ADMIN)
-**Church settings:** edit church identity/contact/receipt fields and upload PNG/JPEG logo or banner images. Save/reset updates the shared menu and dashboard branding immediately; no relogin is required. The application version is displayed below **Church Operations** in the menu.
+**Church settings:** edit church identity/contact/receipt fields and upload PNG/JPEG logo or banner images. The browser and backend enforce the 5 MB, 8,000-pixel, and 40-megapixel limits. Save/reset updates the shared menu and dashboard branding immediately; no relogin is required. The application version is displayed below **Church Operations** in the menu.
 
 **Full backup:** password → download encrypted ZIP.
 
