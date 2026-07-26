@@ -669,6 +669,64 @@ tbody tr.read-only-row {
   gap: 10px;
 }
 
+.church-settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.church-website-field {
+  grid-column: 1 / -1;
+}
+
+.branding-upload-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(320px, 1.3fr);
+  gap: 18px;
+}
+
+.branding-upload {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.branding-upload label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.branding-upload small,
+.administration-note {
+  color: #667085;
+}
+
+.branding-preview {
+  display: grid;
+  place-items: center;
+  min-height: 132px;
+  overflow: hidden;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #667085;
+}
+
+.branding-preview img {
+  display: block;
+  width: 100%;
+  height: 132px;
+  object-fit: contain;
+}
+
+.logo-preview img {
+  width: min(180px, 100%);
+}
+
+.administration-note {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
 .email-settings-status {
   padding-bottom: 14px;
   border-bottom: 1px solid #edf0f4;
@@ -849,6 +907,11 @@ tbody tr.read-only-row {
 
   .administration-tabs {
     overflow-x: auto;
+  }
+
+  .church-settings-grid,
+  .branding-upload-grid {
+    grid-template-columns: 1fr;
   }
 
   .restore-step {

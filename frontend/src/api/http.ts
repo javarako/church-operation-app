@@ -62,6 +62,13 @@ export async function postMultipartJson<TResponse>(path: string, formData: FormD
   });
 }
 
+export async function putMultipartJson<TResponse>(path: string, formData: FormData): Promise<TResponse> {
+  return requestJson<TResponse>(path, {
+    method: 'PUT',
+    body: formData,
+  });
+}
+
 export async function putFile<TResponse>(path: string, field: string, file: File): Promise<TResponse> {
   const formData = new FormData();
   formData.append(field, file);
