@@ -70,6 +70,38 @@ class SystemAuditServiceTest {
     }
 
     @Test
+    void allowsOnlySafeEmailConfigurationMetadata() {
+        service.recordSuccess(admin(), SystemAuditOperation.EMAIL_SETTINGS_UPDATE, Map.of(
+            "configurationSource", "DATABASE",
+            "configurationVersion", 1
+        ));
+
+        ArgumentCaptor<SystemAuditEvent> event = ArgumentCaptor.forClass(SystemAuditEvent.class);
+        verify(repository).save(event.capture());
+        assertThat(event.getValue().getMetadata()).containsExactlyInAnyOrderEntriesOf(Map.of(
+            "configurationSource", "DATABASE",
+            "configurationVersion", "1"
+        ));
+    }
+
+    @Test
+    void allowsOnlySafeChurchSettingsChangeMetadata() {
+        service.recordSuccess(admin(), SystemAuditOperation.CHURCH_SETTINGS_UPDATE, Map.of(
+            "configurationSource", "DATABASE",
+            "logoChanged", true,
+            "bannerChanged", false
+        ));
+
+        ArgumentCaptor<SystemAuditEvent> event = ArgumentCaptor.forClass(SystemAuditEvent.class);
+        verify(repository).save(event.capture());
+        assertThat(event.getValue().getMetadata()).containsExactlyInAnyOrderEntriesOf(Map.of(
+            "configurationSource", "DATABASE",
+            "logoChanged", "true",
+            "bannerChanged", "false"
+        ));
+    }
+
+    @Test
     void recordsSanitizedAndTruncatedFailureSummary() {
         String longMessage = "Restore failed\npassword=secret " + "x".repeat(400);
 
