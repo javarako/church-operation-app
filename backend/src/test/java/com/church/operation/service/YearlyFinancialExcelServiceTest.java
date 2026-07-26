@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 class YearlyFinancialExcelServiceTest {
     @Test
     void rendersNeverClosedWorkbookAsDraft() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png")
+        byte[] bytes = service("/branding/church_logo_sample.png")
             .render(offeringReport(), YearlyWorkbookLifecycle.notClosed());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
@@ -45,7 +45,7 @@ class YearlyFinancialExcelServiceTest {
 
     @Test
     void rendersClosedWorkbookWithFinalTitleAndVersion() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(
+        byte[] bytes = service("/branding/church_logo_sample.png").render(
             offeringReport(),
             YearlyWorkbookLifecycle.closed(Instant.parse("2026-07-21T19:42:00Z"), 2)
         );
@@ -63,7 +63,7 @@ class YearlyFinancialExcelServiceTest {
 
     @Test
     void rendersReopenedWorkbookAsDraftWithTimestamp() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(
+        byte[] bytes = service("/branding/church_logo_sample.png").render(
             expenditureReport(),
             YearlyWorkbookLifecycle.reopened(Instant.parse("2026-07-22T13:15:00Z"))
         );
@@ -79,7 +79,7 @@ class YearlyFinancialExcelServiceTest {
 
     @Test
     void rendersOfferingTitleHeadersRowsAndFormulas() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(offeringReport());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(offeringReport());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             XSSFSheet sheet = workbook.getSheet("Offering income");
@@ -124,7 +124,7 @@ class YearlyFinancialExcelServiceTest {
 
     @Test
     void rendersExpenditureMetadataAndMissingSpecialNextBudget() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(expenditureReport());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(expenditureReport());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             XSSFSheet sheet = workbook.getSheet("Expenditure");
@@ -142,7 +142,7 @@ class YearlyFinancialExcelServiceTest {
 
     @Test
     void calculatesTotalsAndDisplaysZeroValuesLikeTheSample() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(offeringReport());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(offeringReport());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             XSSFSheet sheet = workbook.getSheet("Offering income");
@@ -158,7 +158,7 @@ class YearlyFinancialExcelServiceTest {
 
     @Test
     void embedsLogoAndAppliesSampleColumnAndPrintLayout() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(offeringReport());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(offeringReport());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             XSSFSheet sheet = workbook.getSheet("Offering income");
@@ -209,8 +209,8 @@ class YearlyFinancialExcelServiceTest {
         Path offeringOutput = Path.of("target", "yearly-offerings-preview.xlsx");
         Path expenditureOutput = Path.of("target", "yearly-expenditures-preview.xlsx");
         Files.createDirectories(offeringOutput.getParent());
-        Files.write(offeringOutput, service("/branding/church_logo.png").render(offeringReport()));
-        Files.write(expenditureOutput, service("/branding/church_logo.png").render(expenditureReport()));
+        Files.write(offeringOutput, service("/branding/church_logo_sample.png").render(offeringReport()));
+        Files.write(expenditureOutput, service("/branding/church_logo_sample.png").render(expenditureReport()));
         assertThat(Files.size(offeringOutput)).isGreaterThan(0);
         assertThat(Files.size(expenditureOutput)).isGreaterThan(0);
     }
@@ -233,7 +233,7 @@ class YearlyFinancialExcelServiceTest {
             "전년도 이월금"
         );
 
-        byte[] bytes = service("/branding/church_logo.png").render(empty);
+        byte[] bytes = service("/branding/church_logo_sample.png").render(empty);
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             XSSFSheet sheet = workbook.getSheet("Offering income");
@@ -267,11 +267,11 @@ class YearlyFinancialExcelServiceTest {
     }
 
     private byte[] logoBytes(String logoPath) {
-        if (!"/branding/church_logo.png".equals(logoPath)) {
+        if (!"/branding/church_logo_sample.png".equals(logoPath)) {
             return new byte[0];
         }
         try {
-            return new org.springframework.core.io.ClassPathResource("static/branding/church_logo.png")
+            return new org.springframework.core.io.ClassPathResource("static/branding/church_logo_sample.png")
                 .getContentAsByteArray();
         } catch (java.io.IOException exception) {
             throw new IllegalStateException(exception);

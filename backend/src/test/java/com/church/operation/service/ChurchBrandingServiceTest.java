@@ -48,8 +48,8 @@ class ChurchBrandingServiceTest {
         ChurchInformationProperties properties = new ChurchInformationProperties(
             new ChurchInformationProperties.Information("Church", "", "", "", "", "", ""),
             new ChurchInformationProperties.Branding(
-                "/branding/church-banner.png",
-                "/branding/church_logo.png"
+                "/branding/church_banner_sample.png",
+                "/branding/church_logo_sample.png"
             ),
             new ChurchInformationProperties.Ui(20)
         );

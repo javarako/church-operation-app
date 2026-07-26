@@ -14,8 +14,8 @@ vi.mock('../api/churchInformation', () => ({
     address: '123 Church Street',
     contactInfo: '416-555-0100',
     treasurerName: 'Daniel Kim',
-    bannerPath: '/branding/church-banner.png',
-    logPath: '/branding/church_logo.png',
+    bannerPath: '/branding/church_banner_sample.png',
+    logPath: '/branding/church_logo_sample.png',
     listPageSize: 20,
   }),
 }));

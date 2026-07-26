@@ -64,6 +64,18 @@ public class GlobalExceptionHandler {
             .body(new ApiError("YEAR_END_SNAPSHOT_ERROR", ex.getMessage()));
     }
 
+    @ExceptionHandler(EmailConfigurationException.class)
+    ResponseEntity<ApiError> handleEmailConfiguration(EmailConfigurationException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(new ApiError("EMAIL_CONFIGURATION_ERROR", ex.getMessage()));
+    }
+
+    @ExceptionHandler(EmailDeliveryException.class)
+    ResponseEntity<ApiError> handleEmailDelivery(EmailDeliveryException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .body(new ApiError("EMAIL_DELIVERY_ERROR", ex.getMessage()));
+    }
+
     record ReceiptValidationResponse(String code, String message, List<TaxReceiptValidationError> errors) {
     }
 }

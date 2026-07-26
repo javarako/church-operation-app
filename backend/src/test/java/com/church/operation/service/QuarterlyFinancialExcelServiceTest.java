@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 class QuarterlyFinancialExcelServiceTest {
     @Test
     void rendersSampleStructureFormulasAndTotals() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(report());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(report());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Offering income");
@@ -82,7 +82,7 @@ class QuarterlyFinancialExcelServiceTest {
 
     @Test
     void embedsConfiguredLogoAndAppliesPrintLayout() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(report());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(report());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Offering income");
@@ -124,7 +124,7 @@ class QuarterlyFinancialExcelServiceTest {
 
     @Test
     void leavesZeroAmountsBlankAndShowsDashOnlyForZeroBudgetPercentage() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(report());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(report());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Offering income");
@@ -159,7 +159,7 @@ class QuarterlyFinancialExcelServiceTest {
             "CONTINGENCY"
         );
 
-        byte[] bytes = service("/branding/church_logo.png").render(expenditure);
+        byte[] bytes = service("/branding/church_logo_sample.png").render(expenditure);
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Expenditure");
@@ -180,10 +180,10 @@ class QuarterlyFinancialExcelServiceTest {
         Path expenditureOutput = Path.of("target", "quarterly-expenditures-preview.xlsx");
 
         Files.createDirectories(offeringOutput.getParent());
-        Files.write(offeringOutput, service("/branding/church_logo.png").render(report()));
+        Files.write(offeringOutput, service("/branding/church_logo_sample.png").render(report()));
         Files.write(
             expenditureOutput,
-            service("/branding/church_logo.png").render(report("Expenditure", "지출", "CONTINGENCY"))
+            service("/branding/church_logo_sample.png").render(report("Expenditure", "지출", "CONTINGENCY"))
         );
 
         assertThat(offeringOutput).exists();
@@ -202,11 +202,11 @@ class QuarterlyFinancialExcelServiceTest {
     }
 
     private byte[] logoBytes(String logoPath) {
-        if (!"/branding/church_logo.png".equals(logoPath)) {
+        if (!"/branding/church_logo_sample.png".equals(logoPath)) {
             return new byte[0];
         }
         try {
-            return new org.springframework.core.io.ClassPathResource("static/branding/church_logo.png")
+            return new org.springframework.core.io.ClassPathResource("static/branding/church_logo_sample.png")
                 .getContentAsByteArray();
         } catch (java.io.IOException exception) {
             throw new IllegalStateException(exception);

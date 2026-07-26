@@ -71,8 +71,8 @@ describe('DashboardView', () => {
       charityRegistrationNumber: '',
       receiptIssueLocation: '',
       website: '',
-      bannerPath: '/branding/church-banner.png',
-      logPath: '/branding/church_logo.png',
+      bannerPath: '/branding/church_banner_sample.png',
+      logPath: '/branding/church_logo_sample.png',
       listPageSize: 20,
       applicationVersion: '1.0.0',
     });

@@ -68,7 +68,7 @@
 ```java
 @Test
 void rendersNeverClosedWorkbookAsDraft() throws Exception {
-    byte[] bytes = service("/branding/church_logo.png")
+    byte[] bytes = service("/branding/church_logo_sample.png")
         .render(offeringReport(), YearlyWorkbookLifecycle.notClosed());
     try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
         XSSFSheet sheet = workbook.getSheet("Offering income");
@@ -81,7 +81,7 @@ void rendersNeverClosedWorkbookAsDraft() throws Exception {
 
 @Test
 void rendersClosedWorkbookWithFinalTitleAndVersion() throws Exception {
-    byte[] bytes = service("/branding/church_logo.png").render(
+    byte[] bytes = service("/branding/church_logo_sample.png").render(
         offeringReport(),
         YearlyWorkbookLifecycle.closed(Instant.parse("2026-07-21T19:42:00Z"), 2)
     );
@@ -97,7 +97,7 @@ void rendersClosedWorkbookWithFinalTitleAndVersion() throws Exception {
 
 @Test
 void rendersReopenedWorkbookAsDraftWithTimestamp() throws Exception {
-    byte[] bytes = service("/branding/church_logo.png").render(
+    byte[] bytes = service("/branding/church_logo_sample.png").render(
         expenditureReport(),
         YearlyWorkbookLifecycle.reopened(Instant.parse("2026-07-22T13:15:00Z"))
     );

@@ -235,13 +235,13 @@ church:
 
 - [ ] **Step 4: Create branding placeholders**
 
-Create `backend/src/main/resources/static/branding/church-banner.png`:
+Create `backend/src/main/resources/static/branding/church_banner_sample.png`:
 
 ```text
 Replace this file with the church banner image.
 ```
 
-Create `backend/src/main/resources/static/branding/church_logo.png`:
+Create `backend/src/main/resources/static/branding/church_logo_sample.png`:
 
 ```text
 Replace this file with the church logo image.

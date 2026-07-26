@@ -16,8 +16,8 @@ vi.mock('../api/churchInformation', () => ({
     charityRegistrationNumber: '',
     receiptIssueLocation: '',
     website: '',
-    bannerPath: '/branding/church-banner.png',
-    logPath: '/branding/church_logo.png',
+    bannerPath: '/branding/church_banner_sample.png',
+    logPath: '/branding/church_logo_sample.png',
     listPageSize: 20,
     applicationVersion: '1.0.0',
   }),
@@ -74,8 +74,8 @@ describe('AppLayout', () => {
       charityRegistrationNumber: '',
       receiptIssueLocation: '',
       website: '',
-      bannerPath: '/branding/church-banner.png',
-      logPath: '/branding/church_logo.png',
+      bannerPath: '/branding/church_banner_sample.png',
+      logPath: '/branding/church_logo_sample.png',
       listPageSize: 20,
       applicationVersion: '1.0.0',
     });
@@ -99,7 +99,7 @@ describe('AppLayout', () => {
 
     const logo = await screen.findByAltText('Grace Community Church logo');
 
-    expect(logo.getAttribute('src')).toBe('/branding/church_logo.png');
+    expect(logo.getAttribute('src')).toBe('/branding/church_logo_sample.png');
     expect(screen.getByText('Church Operations')).toBeTruthy();
     expect(screen.getByText('v1.0.0')).toBeTruthy();
     expect(screen.getByText('Page Content')).toBeTruthy();
