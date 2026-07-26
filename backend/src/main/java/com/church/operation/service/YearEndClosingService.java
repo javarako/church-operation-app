@@ -1,6 +1,7 @@
 package com.church.operation.service;
 
 import com.church.operation.config.FiscalYearProperties;
+import com.church.operation.config.ChurchTimeZoneProperties;
 import com.church.operation.dto.YearEndClosingReportStatus;
 import com.church.operation.dto.YearEndClosingRequest;
 import com.church.operation.dto.YearEndClosingStatusResponse;
@@ -46,6 +47,7 @@ public class YearEndClosingService {
     private final SystemAuditService audit;
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
+    private final ChurchTimeZoneProperties timeZoneProperties;
 
     @Autowired
     public YearEndClosingService(
@@ -58,7 +60,8 @@ public class YearEndClosingService {
         YearlyExpenditureReportService expenditureReportService,
         YearlyFinancialExcelService excelService,
         SystemAuditService audit,
-        MongoTemplate mongoTemplate
+        MongoTemplate mongoTemplate,
+        ChurchTimeZoneProperties timeZoneProperties
     ) {
         this(
             repository,
@@ -71,7 +74,8 @@ public class YearEndClosingService {
             excelService,
             audit,
             mongoTemplate,
-            Clock.systemDefaultZone()
+            timeZoneProperties,
+            Clock.systemUTC()
         );
     }
 
@@ -88,6 +92,25 @@ public class YearEndClosingService {
         MongoTemplate mongoTemplate,
         Clock clock
     ) {
+        this(repository, snapshotStore, memberRepository, passwordEncoder, fiscalYearProperties,
+            offeringReportService, expenditureReportService, excelService, audit, mongoTemplate,
+            new ChurchTimeZoneProperties(clock.getZone().getId()), clock);
+    }
+
+    private YearEndClosingService(
+        YearEndClosingRepository repository,
+        YearEndSnapshotStore snapshotStore,
+        MemberRepository memberRepository,
+        PasswordEncoder passwordEncoder,
+        FiscalYearProperties fiscalYearProperties,
+        YearlyOfferingReportService offeringReportService,
+        YearlyExpenditureReportService expenditureReportService,
+        YearlyFinancialExcelService excelService,
+        SystemAuditService audit,
+        MongoTemplate mongoTemplate,
+        ChurchTimeZoneProperties timeZoneProperties,
+        Clock clock
+    ) {
         this.repository = repository;
         this.snapshotStore = snapshotStore;
         this.memberRepository = memberRepository;
@@ -99,6 +122,7 @@ public class YearEndClosingService {
         this.audit = audit;
         this.mongoTemplate = mongoTemplate;
         this.clock = clock;
+        this.timeZoneProperties = timeZoneProperties;
     }
 
     public YearEndClosingStatusResponse status(Member actor, int fiscalYear) {
@@ -107,7 +131,7 @@ public class YearEndClosingService {
         return new YearEndClosingStatusResponse(
             fiscalYear,
             period.fiscalEnd(),
-            LocalDate.now(clock).isAfter(period.fiscalEnd()),
+            localToday().isAfter(period.fiscalEnd()),
             latestStatus(fiscalYear, YearEndReportType.OFFERING),
             latestStatus(fiscalYear, YearEndReportType.EXPENDITURE)
         );
@@ -201,7 +225,7 @@ public class YearEndClosingService {
         int fiscalYear
     ) {
         YearlyFinancialPeriod period = period(fiscalYear);
-        if (!LocalDate.now(clock).isAfter(period.fiscalEnd())) {
+        if (!localToday().isAfter(period.fiscalEnd())) {
             throw new IllegalArgumentException(
                 "Year-end closing is available after " + period.fiscalEnd() + "."
             );
@@ -310,6 +334,10 @@ public class YearEndClosingService {
 
     private YearlyFinancialPeriod period(int fiscalYear) {
         return YearlyFinancialPeriod.from(fiscalYear, fiscalYearProperties.startMonth());
+    }
+
+    private LocalDate localToday() {
+        return LocalDate.now(clock.withZone(timeZoneProperties.zoneId()));
     }
 
     private void requireReportAccess(Member actor) {

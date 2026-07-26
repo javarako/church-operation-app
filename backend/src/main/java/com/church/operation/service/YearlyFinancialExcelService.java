@@ -1,5 +1,6 @@
 package com.church.operation.service;
 
+import com.church.operation.config.ChurchTimeZoneProperties;
 import com.church.operation.dto.YearlyFinancialGroup;
 import com.church.operation.dto.YearlyFinancialReport;
 import com.church.operation.dto.YearlyFinancialRow;
@@ -18,11 +19,11 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,13 +38,24 @@ public class YearlyFinancialExcelService {
 
     private final ChurchBrandingService branding;
     private final ChurchInformationResolver churchInformationResolver;
+    private final ChurchTimeZoneProperties timeZoneProperties;
 
+    @Autowired
     public YearlyFinancialExcelService(
         ChurchBrandingService branding,
-        ChurchInformationResolver churchInformationResolver
+        ChurchInformationResolver churchInformationResolver,
+        ChurchTimeZoneProperties timeZoneProperties
     ) {
         this.branding = branding;
         this.churchInformationResolver = churchInformationResolver;
+        this.timeZoneProperties = timeZoneProperties;
+    }
+
+    YearlyFinancialExcelService(
+        ChurchBrandingService branding,
+        ChurchInformationResolver churchInformationResolver
+    ) {
+        this(branding, churchInformationResolver, new ChurchTimeZoneProperties("UTC"));
     }
 
     public byte[] render(YearlyFinancialReport report) {
@@ -122,7 +134,7 @@ public class YearlyFinancialExcelService {
             return "DRAFT - Year-end closing not completed";
         }
         String timestamp = DateTimeFormatter.ofPattern("MMM d, uuuu h:mm a", Locale.ENGLISH)
-            .withZone(ZoneId.systemDefault())
+            .withZone(timeZoneProperties.zoneId())
             .format(lifecycle.eventAt());
         if (lifecycle.status() == YearEndClosingStatus.REOPENED) {
             return "DRAFT - Reopened " + timestamp;

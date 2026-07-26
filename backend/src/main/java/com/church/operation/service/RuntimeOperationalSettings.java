@@ -1,9 +1,9 @@
 package com.church.operation.service;
 
 import com.church.operation.config.ChurchInformationProperties;
-import com.church.operation.config.ChurchTimeZoneProperties;
+import com.church.operation.config.ChurchTimeZoneDefaultsProperties;
 import com.church.operation.config.DataManagementProperties;
-import com.church.operation.config.FiscalYearProperties;
+import com.church.operation.config.FiscalYearDefaultsProperties;
 import com.church.operation.entity.ChurchSettings;
 import com.church.operation.repo.ChurchSettingsRepository;
 import org.springframework.stereotype.Service;
@@ -23,8 +23,8 @@ public class RuntimeOperationalSettings {
 
     public RuntimeOperationalSettings(
         ChurchSettingsRepository repository,
-        ChurchTimeZoneProperties timeZoneProperties,
-        FiscalYearProperties fiscalYearProperties,
+        ChurchTimeZoneDefaultsProperties timeZoneProperties,
+        FiscalYearDefaultsProperties fiscalYearProperties,
         ChurchInformationProperties informationProperties,
         DataManagementProperties dataManagementProperties
     ) {

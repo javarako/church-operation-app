@@ -1,9 +1,9 @@
 package com.church.operation.service;
 
 import com.church.operation.config.ChurchInformationProperties;
-import com.church.operation.config.ChurchTimeZoneProperties;
+import com.church.operation.config.ChurchTimeZoneDefaultsProperties;
 import com.church.operation.config.DataManagementProperties;
-import com.church.operation.config.FiscalYearProperties;
+import com.church.operation.config.FiscalYearDefaultsProperties;
 import com.church.operation.entity.ChurchSettings;
 import com.church.operation.repo.ChurchSettingsRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,8 +39,8 @@ class RuntimeOperationalSettingsTest {
         );
         resolver = new RuntimeOperationalSettings(
             repository,
-            new ChurchTimeZoneProperties("America/Toronto"),
-            new FiscalYearProperties(1),
+            new ChurchTimeZoneDefaultsProperties("America/Toronto"),
+            new FiscalYearDefaultsProperties(1),
             information,
             dataManagement
         );

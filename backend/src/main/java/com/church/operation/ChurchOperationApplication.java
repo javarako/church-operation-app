@@ -1,9 +1,9 @@
 package com.church.operation;
 
 import com.church.operation.config.ChurchInformationProperties;
-import com.church.operation.config.ChurchTimeZoneProperties;
+import com.church.operation.config.ChurchTimeZoneDefaultsProperties;
 import com.church.operation.config.DataManagementProperties;
-import com.church.operation.config.FiscalYearProperties;
+import com.church.operation.config.FiscalYearDefaultsProperties;
 import com.church.operation.config.PasswordResetProperties;
 import com.church.operation.config.MemberImageProperties;
 import com.church.operation.config.RuntimeEmailProperties;
@@ -14,9 +14,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @SpringBootApplication
 @EnableConfigurationProperties({
     ChurchInformationProperties.class,
-    ChurchTimeZoneProperties.class,
+    ChurchTimeZoneDefaultsProperties.class,
     DataManagementProperties.class,
-    FiscalYearProperties.class,
+    FiscalYearDefaultsProperties.class,
     PasswordResetProperties.class,
     MemberImageProperties.class,
     RuntimeEmailProperties.class

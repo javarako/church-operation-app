@@ -1,5 +1,6 @@
 package com.church.operation.service;
 
+import com.church.operation.config.ChurchTimeZoneProperties;
 import com.church.operation.dto.TaxReceiptSummaryRow;
 import com.church.operation.dto.TaxReceiptValidationError;
 import com.church.operation.entity.Address;
@@ -44,6 +45,7 @@ public class TaxReceiptService {
     private final ChurchInformationResolver churchInformationResolver;
     private final SystemAuditService audit;
     private final Clock clock;
+    private final ChurchTimeZoneProperties timeZoneProperties;
 
     @Autowired
     public TaxReceiptService(
@@ -52,10 +54,11 @@ public class TaxReceiptService {
         TaxReceiptRepository receiptRepository,
         TaxReceiptCounterService counterService,
         ChurchInformationResolver churchInformationResolver,
-        SystemAuditService audit
+        SystemAuditService audit,
+        ChurchTimeZoneProperties timeZoneProperties
     ) {
         this(offeringRepository, memberRepository, receiptRepository, counterService, churchInformationResolver, audit,
-            Clock.systemDefaultZone());
+            timeZoneProperties, Clock.systemUTC());
     }
 
     TaxReceiptService(
@@ -67,6 +70,20 @@ public class TaxReceiptService {
         SystemAuditService audit,
         Clock clock
     ) {
+        this(offeringRepository, memberRepository, receiptRepository, counterService, churchInformationResolver,
+            audit, new ChurchTimeZoneProperties(clock.getZone().getId()), clock);
+    }
+
+    private TaxReceiptService(
+        OfferingRepository offeringRepository,
+        MemberRepository memberRepository,
+        TaxReceiptRepository receiptRepository,
+        TaxReceiptCounterService counterService,
+        ChurchInformationResolver churchInformationResolver,
+        SystemAuditService audit,
+        ChurchTimeZoneProperties timeZoneProperties,
+        Clock clock
+    ) {
         this.offeringRepository = offeringRepository;
         this.memberRepository = memberRepository;
         this.receiptRepository = receiptRepository;
@@ -74,6 +91,7 @@ public class TaxReceiptService {
         this.churchInformationResolver = churchInformationResolver;
         this.audit = audit;
         this.clock = clock;
+        this.timeZoneProperties = timeZoneProperties;
     }
 
     public List<TaxReceiptSummaryRow> summary(Member actor, int taxYear, String offeringNumber) {
@@ -269,7 +287,7 @@ public class TaxReceiptService {
         receipt.setReceiptNumber(counterService.nextReceiptNumber(taxYear));
         receipt.setStatus(TaxReceiptStatus.ISSUED);
         receipt.setTaxYear(taxYear);
-        receipt.setIssueDate(LocalDate.now(clock));
+        receipt.setIssueDate(LocalDate.now(clock.withZone(timeZoneProperties.zoneId())));
         receipt.setIssuedByMemberId(actor.getId());
         receipt.setMemberId(member.getId());
         receipt.setOfferingNumber(member.getOfferingNumber());
