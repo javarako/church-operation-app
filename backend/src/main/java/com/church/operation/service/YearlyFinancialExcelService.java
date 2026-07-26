@@ -1,6 +1,5 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.YearlyFinancialGroup;
 import com.church.operation.dto.YearlyFinancialReport;
 import com.church.operation.dto.YearlyFinancialRow;
@@ -36,10 +35,15 @@ public class YearlyFinancialExcelService {
         8.83203125, 12.83203125, 8.83203125, 32.83203125
     };
 
-    private final ChurchInformationProperties properties;
+    private final ChurchBrandingService branding;
+    private final ChurchInformationResolver churchInformationResolver;
 
-    public YearlyFinancialExcelService(ChurchInformationProperties properties) {
-        this.properties = properties;
+    public YearlyFinancialExcelService(
+        ChurchBrandingService branding,
+        ChurchInformationResolver churchInformationResolver
+    ) {
+        this.branding = branding;
+        this.churchInformationResolver = churchInformationResolver;
     }
 
     public byte[] render(YearlyFinancialReport report) {
@@ -54,7 +58,8 @@ public class YearlyFinancialExcelService {
             configureColumns(sheet);
             createTopRows(sheet, report, lifecycle, styles);
             int finalRow = createReportRows(sheet, report, styles);
-            FinancialExcelLayoutSupport.addLogo(workbook, sheet, properties, 6, 8);
+            byte[] logo = branding.effectiveLogoBytes(churchInformationResolver.savedSettings().orElse(null));
+            FinancialExcelLayoutSupport.addLogo(workbook, sheet, logo, 6, 8);
             FinancialExcelLayoutSupport.configurePrint(workbook, sheet, 7, finalRow);
             workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
             workbook.write(output);

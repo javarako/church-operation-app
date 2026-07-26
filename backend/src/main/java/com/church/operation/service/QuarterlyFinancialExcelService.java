@@ -1,6 +1,5 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.QuarterlyFinancialGroup;
 import com.church.operation.dto.QuarterlyFinancialReport;
 import com.church.operation.dto.QuarterlyFinancialRow;
@@ -34,10 +33,15 @@ public class QuarterlyFinancialExcelService {
         "구 분", "항 목", "예산", "%d월", "%d월", "%d월", "분기 합계", "누적", "예산대비", "비고"
     };
 
-    private final ChurchInformationProperties properties;
+    private final ChurchBrandingService branding;
+    private final ChurchInformationResolver churchInformationResolver;
 
-    public QuarterlyFinancialExcelService(ChurchInformationProperties properties) {
-        this.properties = properties;
+    public QuarterlyFinancialExcelService(
+        ChurchBrandingService branding,
+        ChurchInformationResolver churchInformationResolver
+    ) {
+        this.branding = branding;
+        this.churchInformationResolver = churchInformationResolver;
     }
 
     public byte[] render(QuarterlyFinancialReport report) {
@@ -48,7 +52,8 @@ public class QuarterlyFinancialExcelService {
             configureColumns(sheet);
             createTopRows(sheet, report, styles);
             int finalRow = createReportRows(sheet, report, styles);
-            FinancialExcelLayoutSupport.addLogo(workbook, sheet, properties, 7, 10);
+            byte[] logo = branding.effectiveLogoBytes(churchInformationResolver.savedSettings().orElse(null));
+            FinancialExcelLayoutSupport.addLogo(workbook, sheet, logo, 7, 10);
             FinancialExcelLayoutSupport.configurePrint(workbook, sheet, 9, finalRow);
             workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
             workbook.write(output);

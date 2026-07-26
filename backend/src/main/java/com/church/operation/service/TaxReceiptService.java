@@ -1,6 +1,5 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.TaxReceiptSummaryRow;
 import com.church.operation.dto.TaxReceiptValidationError;
 import com.church.operation.entity.Address;
@@ -42,7 +41,7 @@ public class TaxReceiptService {
     private final MemberRepository memberRepository;
     private final TaxReceiptRepository receiptRepository;
     private final TaxReceiptCounterService counterService;
-    private final ChurchInformationProperties churchProperties;
+    private final ChurchInformationResolver churchInformationResolver;
     private final SystemAuditService audit;
     private final Clock clock;
 
@@ -52,10 +51,10 @@ public class TaxReceiptService {
         MemberRepository memberRepository,
         TaxReceiptRepository receiptRepository,
         TaxReceiptCounterService counterService,
-        ChurchInformationProperties churchProperties,
+        ChurchInformationResolver churchInformationResolver,
         SystemAuditService audit
     ) {
-        this(offeringRepository, memberRepository, receiptRepository, counterService, churchProperties, audit,
+        this(offeringRepository, memberRepository, receiptRepository, counterService, churchInformationResolver, audit,
             Clock.systemDefaultZone());
     }
 
@@ -64,7 +63,7 @@ public class TaxReceiptService {
         MemberRepository memberRepository,
         TaxReceiptRepository receiptRepository,
         TaxReceiptCounterService counterService,
-        ChurchInformationProperties churchProperties,
+        ChurchInformationResolver churchInformationResolver,
         SystemAuditService audit,
         Clock clock
     ) {
@@ -72,7 +71,7 @@ public class TaxReceiptService {
         this.memberRepository = memberRepository;
         this.receiptRepository = receiptRepository;
         this.counterService = counterService;
-        this.churchProperties = churchProperties;
+        this.churchInformationResolver = churchInformationResolver;
         this.audit = audit;
         this.clock = clock;
     }
@@ -263,7 +262,7 @@ public class TaxReceiptService {
         String replacesReceiptId
     ) {
         Instant now = Instant.now(clock);
-        ChurchInformationProperties.Information church = churchProperties.information();
+        EffectiveChurchInformation church = churchInformationResolver.resolve();
         List<Offering> sorted = offerings.stream().sorted(Comparator.comparing(Offering::getId)).toList();
         BigDecimal total = total(sorted);
         TaxReceipt receipt = new TaxReceipt();
@@ -321,7 +320,7 @@ public class TaxReceiptService {
         }
         if (offerings == null || offerings.isEmpty()) errors.add("eligible offerings are required");
         if (note != null && note.length() > 500) errors.add("thank-you note must be 500 characters or fewer");
-        ChurchInformationProperties.Information church = churchProperties.information();
+        EffectiveChurchInformation church = churchInformationResolver.resolve();
         if (Stream.of(church.name(), church.address(), church.charityRegistrationNumber(), church.website(),
             church.receiptIssueLocation(), church.treasurerName()).anyMatch(this::isBlank)) {
             errors.add("church receipt configuration is incomplete");

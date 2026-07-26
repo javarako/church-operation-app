@@ -1,9 +1,9 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.YearlyFinancialGroup;
 import com.church.operation.dto.YearlyFinancialReport;
 import com.church.operation.dto.YearlyFinancialRow;
+import com.church.operation.entity.ChurchSettings;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Font;
@@ -22,8 +22,11 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class YearlyFinancialExcelServiceTest {
     @Test
@@ -255,20 +258,24 @@ class YearlyFinancialExcelServiceTest {
     }
 
     private YearlyFinancialExcelService service(String logoPath) {
-        ChurchInformationProperties properties = new ChurchInformationProperties(
-            new ChurchInformationProperties.Information(
-                "Capstone Presbyterian Church",
-                "111 Cactus Ave",
-                "contact@example.com",
-                "Treasurer",
-                "1234567890",
-                "Toronto, ON",
-                "https://example.com"
-            ),
-            new ChurchInformationProperties.Branding("/branding/banner.png", logoPath),
-            new ChurchInformationProperties.Ui(20)
-        );
-        return new YearlyFinancialExcelService(properties);
+        ChurchBrandingService branding = mock(ChurchBrandingService.class);
+        ChurchInformationResolver resolver = mock(ChurchInformationResolver.class);
+        ChurchSettings settings = new ChurchSettings();
+        when(resolver.savedSettings()).thenReturn(Optional.of(settings));
+        when(branding.effectiveLogoBytes(settings)).thenReturn(logoBytes(logoPath));
+        return new YearlyFinancialExcelService(branding, resolver);
+    }
+
+    private byte[] logoBytes(String logoPath) {
+        if (!"/branding/church_logo.png".equals(logoPath)) {
+            return new byte[0];
+        }
+        try {
+            return new org.springframework.core.io.ClassPathResource("static/branding/church_logo.png")
+                .getContentAsByteArray();
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private YearlyFinancialReport offeringReport() {

@@ -1,6 +1,5 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -10,13 +9,11 @@ import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
 import org.apache.poi.xssf.usermodel.XSSFDrawing;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.core.io.ClassPathResource;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.List;
 
 final class FinancialExcelLayoutSupport {
     private FinancialExcelLayoutSupport() {
@@ -25,12 +22,11 @@ final class FinancialExcelLayoutSupport {
     static void addLogo(
         XSSFWorkbook workbook,
         XSSFSheet sheet,
-        ChurchInformationProperties properties,
+        byte[] imageBytes,
         int firstColumn,
         int lastColumnExclusive
     ) {
-        byte[] imageBytes = loadLogo(properties);
-        if (imageBytes == null) {
+        if (imageBytes == null || imageBytes.length == 0) {
             return;
         }
         try {
@@ -87,25 +83,6 @@ final class FinancialExcelLayoutSupport {
         sheet.getFooter().setCenter("Page &P");
         workbook.setPrintArea(0, 0, lastColumn, 0, finalRow);
         sheet.setRepeatingRows(CellRangeAddress.valueOf("1:4"));
-    }
-
-    private static byte[] loadLogo(ChurchInformationProperties properties) {
-        String path = properties.branding() == null ? null : properties.branding().logPath();
-        if (path == null || path.isBlank()) {
-            return null;
-        }
-        String normalized = path.replaceFirst("^/", "");
-        for (String candidate : List.of(normalized, "static/" + normalized)) {
-            try {
-                ClassPathResource resource = new ClassPathResource(candidate);
-                if (resource.exists()) {
-                    return resource.getContentAsByteArray();
-                }
-            } catch (IOException | IllegalArgumentException ignored) {
-                // Try the alternate classpath form.
-            }
-        }
-        return null;
     }
 
     private static boolean isJpeg(byte[] bytes) {

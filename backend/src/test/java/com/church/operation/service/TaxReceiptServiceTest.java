@@ -1,6 +1,5 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.TaxReceiptSummaryRow;
 import com.church.operation.entity.Address;
 import com.church.operation.entity.Member;
@@ -45,24 +44,24 @@ class TaxReceiptServiceTest {
     @Mock private TaxReceiptRepository receiptRepository;
     @Mock private TaxReceiptCounterService counterService;
     @Mock private SystemAuditService audit;
+    @Mock private ChurchInformationResolver churchInformationResolver;
     private TaxReceiptService service;
 
     @BeforeEach
     void setUp() {
-        ChurchInformationProperties properties = new ChurchInformationProperties(
-            new ChurchInformationProperties.Information(
+        org.mockito.Mockito.lenient().when(churchInformationResolver.resolve()).thenReturn(
+            new EffectiveChurchInformation(
                 "Grace Church", "1 Hope Rd, Toronto, ON", "416-555-0100", "Daniel Kim",
-                "123456789RR0001", "Toronto, Ontario", "https://grace.example.org"
-            ),
-            new ChurchInformationProperties.Branding("/banner.png", "/logo.png"),
-            new ChurchInformationProperties.Ui(20)
+                "123456789RR0001", "Toronto, Ontario", "https://grace.example.org",
+                "/logo.png", "/banner.png", null
+            )
         );
         service = new TaxReceiptService(
             offeringRepository,
             memberRepository,
             receiptRepository,
             counterService,
-            properties,
+            churchInformationResolver,
             audit,
             Clock.fixed(Instant.parse("2027-02-15T15:00:00Z"), ZoneOffset.UTC)
         );
