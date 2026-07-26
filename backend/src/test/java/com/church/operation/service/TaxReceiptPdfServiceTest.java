@@ -14,11 +14,14 @@ import org.apache.pdfbox.text.TextPosition;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import javax.imageio.ImageIO;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Offset.offset;
@@ -72,7 +75,15 @@ class TaxReceiptPdfServiceTest {
 
     @Test
     void embedsConfiguredClasspathLogo() throws Exception {
-        byte[] runtimeLogo = new ClassPathResource("static/branding/church_logo.png").getContentAsByteArray();
+        byte[] runtimeLogo = new ClassPathResource("static/branding/church_logo_sample.png").getContentAsByteArray();
+        var image = ImageIO.read(new ByteArrayInputStream(runtimeLogo));
+        float scale = Math.min(
+            TaxReceiptPdfService.LOGO_MAX_WIDTH / image.getWidth(),
+            TaxReceiptPdfService.LOGO_MAX_HEIGHT / image.getHeight()
+        );
+        float expectedWidth = image.getWidth() * scale;
+        float expectedHeight = image.getHeight() * scale;
+        float expectedTextX = 30f + expectedWidth + 10f;
 
         TaxReceipt receipt = receipt();
         receipt.setTreasurerName("Treasurer");
@@ -82,14 +93,14 @@ class TaxReceiptPdfServiceTest {
             List<float[]> imageTransforms = imageTransforms(document);
             assertThat(imageTransforms).hasSize(2);
             assertThat(imageTransforms).allSatisfy(transform -> {
-                assertThat(transform[0]).isCloseTo(112.32f, offset(0.01f));
-                assertThat(transform[1]).isCloseTo(38.11f, offset(0.01f));
+                assertThat(transform[0]).isCloseTo(expectedWidth, offset(0.01f));
+                assertThat(transform[1]).isCloseTo(expectedHeight, offset(0.01f));
                 assertThat(transform[2]).isEqualTo(30f);
             });
-            assertThat(imageTransforms.get(0)[3]).isCloseTo(710.95f, offset(0.01f));
-            assertThat(imageTransforms.get(1)[3]).isCloseTo(314.95f, offset(0.01f));
+            assertThat(imageTransforms.get(0)[3]).isCloseTo(730f - expectedHeight / 2f, offset(0.01f));
+            assertThat(imageTransforms.get(1)[3]).isCloseTo(334f - expectedHeight / 2f, offset(0.01f));
             assertThat(textXPositions(document, "Grace Community Church")).allSatisfy(
-                x -> assertThat(x).isCloseTo(152.32f, offset(0.01f))
+                x -> assertThat(x).isCloseTo(expectedTextX, offset(0.01f))
             );
         }
     }
