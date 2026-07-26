@@ -29,6 +29,7 @@ management:
         include: health
 
 church:
+  application-version: ${CHURCH_APPLICATION_VERSION:1.0.0-SNAPSHOT}
   runtime-email:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}

@@ -87,13 +87,21 @@ public class ChurchBrandingService {
     }
 
     public byte[] effectiveLogoBytes(ChurchSettings settings) {
-        if (settings != null && settings.getLogoGridFsId() != null) {
-            Optional<BrandingContent> stored = databaseFile(settings.getLogoGridFsId());
-            if (stored.isPresent()) {
-                return stored.get().bytes();
-            }
-        }
-        return bundledResource(properties.branding().logPath());
+        return effectiveLogo(settings).bytes();
+    }
+
+    public BrandingContent effectiveLogo(ChurchSettings settings) {
+        return effective(
+            settings == null ? null : settings.getLogoGridFsId(),
+            properties.branding().logPath()
+        );
+    }
+
+    public BrandingContent effectiveBanner(ChurchSettings settings) {
+        return effective(
+            settings == null ? null : settings.getBannerGridFsId(),
+            properties.branding().bannerPath()
+        );
     }
 
     public void deleteQuietly(String id) {
@@ -193,6 +201,18 @@ public class ChurchBrandingService {
         } catch (IOException exception) {
             throw new IllegalStateException("Default church branding could not be read.", exception);
         }
+    }
+
+    private BrandingContent effective(String gridFsId, String defaultPath) {
+        if (gridFsId != null && !gridFsId.isBlank()) {
+            Optional<BrandingContent> stored = databaseFile(gridFsId);
+            if (stored.isPresent()) {
+                return stored.get();
+            }
+        }
+        byte[] bytes = bundledResource(defaultPath);
+        String contentType = detectContentType(bytes);
+        return new BrandingContent(bytes, contentType == null ? "application/octet-stream" : contentType);
     }
 
     private ChurchBrandingValidationException invalidImage() {

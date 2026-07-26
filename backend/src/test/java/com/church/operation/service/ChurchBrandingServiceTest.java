@@ -122,6 +122,8 @@ class ChurchBrandingServiceTest {
 
         ChurchSettings defaults = new ChurchSettings();
         assertThat(service.effectiveLogoBytes(defaults)).isNotEmpty();
+        assertThat(service.effectiveLogo(defaults).contentType()).isEqualTo("image/png");
+        assertThat(service.effectiveBanner(defaults).contentType()).isEqualTo("image/png");
     }
 
     @Test
