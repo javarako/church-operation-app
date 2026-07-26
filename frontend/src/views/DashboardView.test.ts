@@ -4,6 +4,7 @@ import DashboardView from './DashboardView.vue';
 import { authState, type Role } from '../auth/authStore';
 import { getChurchInformation } from '../api/churchInformation';
 import { getDashboard } from '../api/dashboard';
+import { applyChurchInformation, resetChurchInformationStore } from '../stores/churchInformationStore';
 
 vi.mock('../api/dashboard', () => ({
   getDashboard: vi.fn(),
@@ -60,16 +61,45 @@ async function renderDashboard(role: Role = 'ADMIN') {
 
 describe('DashboardView', () => {
   beforeEach(() => {
+    resetChurchInformationStore();
     dashboardMock.mockResolvedValue(dashboardResponse);
     churchInformationMock.mockResolvedValue({
       name: 'Grace Community Church',
       address: '123 Church Street, Toronto, ON M1A 1A1',
       contactInfo: '416-555-0100',
       treasurerName: 'Daniel Kim',
+      charityRegistrationNumber: '',
+      receiptIssueLocation: '',
+      website: '',
       bannerPath: '/branding/church-banner.png',
       logPath: '/branding/church_logo.png',
       listPageSize: 20,
+      applicationVersion: '1.0.0',
     });
+  });
+
+  it('reacts immediately when saved church information is applied', async () => {
+    const { container } = render(DashboardView);
+    await screen.findByText('Grace Community Church');
+
+    applyChurchInformation({
+      name: 'Updated Church',
+      address: '456 Updated Avenue',
+      contactInfo: 'updated@example.org',
+      treasurerName: 'Updated Treasurer',
+      charityRegistrationNumber: '',
+      receiptIssueLocation: '',
+      website: '',
+      bannerPath: '/api/church-information/banner?v=2',
+      logPath: '/api/church-information/logo?v=2',
+      listPageSize: 20,
+      applicationVersion: '1.0.1',
+    });
+
+    expect(await screen.findByText('Updated Church')).toBeTruthy();
+    expect(screen.getByText('456 Updated Avenue')).toBeTruthy();
+    expect(container.querySelector<HTMLImageElement>('.banner-panel img')?.src)
+      .toContain('/api/church-information/banner?v=2');
   });
 
   afterEach(() => {
