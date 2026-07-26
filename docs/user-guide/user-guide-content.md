@@ -323,10 +323,16 @@ Administrators can change the church identity and branding without editing serve
 1. Select **System Administration**, then **Church Settings**.
 2. Enter the church name and address. These two fields are required.
 3. Enter the contact information, treasurer name, charity registration number, receipt issue location, and church website as applicable.
-4. To replace the church logo or dashboard banner, select a PNG or JPEG image no larger than 5 MB. The preview shows the current image until a replacement is selected.
-5. Select **Save church settings**.
+4. Under **Operational Settings**, select the church time zone and the month when the fiscal year starts.
+5. Set **List page size** from 5 through 100 and select how long a prepared data operation remains available.
+6. To replace the church logo or dashboard banner, select a PNG or JPEG image no larger than 5 MB. The preview shows the current image until a replacement is selected.
+7. Select **Save church settings**.
 
-Saved changes appear immediately without signing in again. The church name and logo update in the left menu, and the banner and contact information update on the dashboard. New official tax receipt PDFs and quarterly and yearly financial workbooks use the saved church information and logo. Previously downloaded files and closed year-end report snapshots remain unchanged.
+[[FIGURE:13-church-settings.png|Church information, operational settings, and branding]]
+
+Saved changes appear immediately without signing in again or restarting the server. The church name and logo update in the left menu, and the banner and contact information update on the dashboard. Open lists return to page 1 and use the new page size. Dashboard totals, live reports, archive periods, and year-end closing eligibility use the selected time zone and fiscal-year start month.
+
+New official tax receipt PDFs and quarterly and yearly financial workbooks use the saved church information and logo. Previously downloaded files, issued tax receipts, closed year-end report snapshots, and existing fiscal archives remain unchanged. A restore operation that was already prepared keeps its original expiry time; the new duration applies to the next prepared operation.
 
 Uploaded branding and church settings are stored in the database and included in a full backup. The application version appears below **Church Operations** in the left menu and is supplied by the deployed application build; it cannot be edited on this page.
 
@@ -334,7 +340,7 @@ Uploaded branding and church settings are stored in the database and included in
 
 1. Select **Reset church settings**.
 2. Review the warning and select **Confirm reset church settings**.
-3. The database settings and uploaded branding are removed. The application immediately returns to the church information and bundled images configured by the server.
+3. The database settings and uploaded branding are removed. The application immediately returns to the church information, operational values, and bundled images configured by the server.
 
 ### Email Settings
 
