@@ -4,6 +4,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.time.Duration;
 
 @Document("church_settings")
 public class ChurchSettings {
@@ -22,6 +23,10 @@ public class ChurchSettings {
     private String logoContentType;
     private String bannerGridFsId;
     private String bannerContentType;
+    private String timeZone;
+    private Integer fiscalYearStartMonth;
+    private Integer listPageSize;
+    private Duration dataOperationExpiry;
     private Instant createdAt;
     private Instant updatedAt;
     private String createdByMemberId;
@@ -51,6 +56,14 @@ public class ChurchSettings {
     public void setBannerGridFsId(String bannerGridFsId) { this.bannerGridFsId = bannerGridFsId; }
     public String getBannerContentType() { return bannerContentType; }
     public void setBannerContentType(String bannerContentType) { this.bannerContentType = bannerContentType; }
+    public String getTimeZone() { return timeZone; }
+    public void setTimeZone(String timeZone) { this.timeZone = timeZone; }
+    public Integer getFiscalYearStartMonth() { return fiscalYearStartMonth; }
+    public void setFiscalYearStartMonth(Integer fiscalYearStartMonth) { this.fiscalYearStartMonth = fiscalYearStartMonth; }
+    public Integer getListPageSize() { return listPageSize; }
+    public void setListPageSize(Integer listPageSize) { this.listPageSize = listPageSize; }
+    public Duration getDataOperationExpiry() { return dataOperationExpiry; }
+    public void setDataOperationExpiry(Duration dataOperationExpiry) { this.dataOperationExpiry = dataOperationExpiry; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

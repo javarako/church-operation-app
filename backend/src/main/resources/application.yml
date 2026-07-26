@@ -30,6 +30,7 @@ management:
 
 church:
   application-version: ${CHURCH_APPLICATION_VERSION:1.0.0-SNAPSHOT}
+  time-zone: ${CHURCH_TIME_ZONE:America/Toronto}
   runtime-email:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}

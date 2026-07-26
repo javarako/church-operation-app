@@ -1,6 +1,7 @@
 package com.church.operation;
 
 import com.church.operation.config.ChurchInformationProperties;
+import com.church.operation.config.ChurchTimeZoneProperties;
 import com.church.operation.config.DataManagementProperties;
 import com.church.operation.config.FiscalYearProperties;
 import com.church.operation.config.PasswordResetProperties;
@@ -13,6 +14,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @SpringBootApplication
 @EnableConfigurationProperties({
     ChurchInformationProperties.class,
+    ChurchTimeZoneProperties.class,
     DataManagementProperties.class,
     FiscalYearProperties.class,
     PasswordResetProperties.class,
