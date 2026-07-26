@@ -1,11 +1,11 @@
 package com.church.operation.rest;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.entity.ChurchSettings;
 import com.church.operation.service.ApplicationVersionProvider;
 import com.church.operation.service.ChurchBrandingService;
 import com.church.operation.service.ChurchInformationResolver;
 import com.church.operation.service.EffectiveChurchInformation;
+import com.church.operation.service.RuntimeOperationalSettings;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,23 +21,24 @@ public class ChurchInformationController {
     private final ChurchInformationResolver resolver;
     private final ChurchBrandingService branding;
     private final ApplicationVersionProvider versionProvider;
-    private final ChurchInformationProperties properties;
+    private final RuntimeOperationalSettings operationalSettings;
 
     public ChurchInformationController(
         ChurchInformationResolver resolver,
         ChurchBrandingService branding,
         ApplicationVersionProvider versionProvider,
-        ChurchInformationProperties properties
+        RuntimeOperationalSettings operationalSettings
     ) {
         this.resolver = resolver;
         this.branding = branding;
         this.versionProvider = versionProvider;
-        this.properties = properties;
+        this.operationalSettings = operationalSettings;
     }
 
     @GetMapping
     ChurchInformationResponse getChurchInformation() {
         EffectiveChurchInformation effective = resolver.resolve();
+        RuntimeOperationalSettings.EffectiveSettings operations = operationalSettings.resolve();
         return new ChurchInformationResponse(
             effective.name(),
             effective.address(),
@@ -48,7 +49,9 @@ public class ChurchInformationController {
             effective.website(),
             effective.bannerUrl(),
             effective.logoUrl(),
-            properties.ui().listPageSize(),
+            operations.timeZone().getId(),
+            operations.fiscalYearStartMonth(),
+            operations.listPageSize(),
             versionProvider.version()
         );
     }
@@ -82,6 +85,8 @@ public class ChurchInformationController {
         String website,
         String bannerPath,
         String logPath,
+        String timeZone,
+        int fiscalYearStartMonth,
         int listPageSize,
         String applicationVersion
     ) {

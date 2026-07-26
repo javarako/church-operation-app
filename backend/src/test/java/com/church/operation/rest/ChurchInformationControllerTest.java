@@ -1,17 +1,19 @@
 package com.church.operation.rest;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.entity.ChurchSettings;
 import com.church.operation.service.ApplicationVersionProvider;
 import com.church.operation.service.ChurchBrandingService;
 import com.church.operation.service.ChurchInformationResolver;
 import com.church.operation.service.EffectiveChurchInformation;
+import com.church.operation.service.RuntimeOperationalSettings;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.time.Duration;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.hamcrest.Matchers.allOf;
@@ -29,17 +31,13 @@ class ChurchInformationControllerTest {
     private final ChurchInformationResolver resolver = mock(ChurchInformationResolver.class);
     private final ChurchBrandingService branding = mock(ChurchBrandingService.class);
     private final ApplicationVersionProvider versionProvider = mock(ApplicationVersionProvider.class);
+    private final RuntimeOperationalSettings operationalSettings = mock(RuntimeOperationalSettings.class);
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        ChurchInformationProperties properties = new ChurchInformationProperties(
-            new ChurchInformationProperties.Information("", "", "", "", "", "", ""),
-            new ChurchInformationProperties.Branding("/banner.png", "/logo.png"),
-            new ChurchInformationProperties.Ui(20)
-        );
         mockMvc = standaloneSetup(new ChurchInformationController(
-            resolver, branding, versionProvider, properties
+            resolver, branding, versionProvider, operationalSettings
         )).build();
     }
 
@@ -47,6 +45,9 @@ class ChurchInformationControllerTest {
     void returnsEffectiveChurchInformationAndApplicationVersion() throws Exception {
         when(resolver.resolve()).thenReturn(effective());
         when(versionProvider.version()).thenReturn("1.0.0-SNAPSHOT");
+        when(operationalSettings.resolve()).thenReturn(new RuntimeOperationalSettings.EffectiveSettings(
+            ZoneId.of("America/Vancouver"), 4, 50, Duration.ofMinutes(60)
+        ));
 
         mockMvc.perform(get("/api/church-information"))
             .andExpect(status().isOk())
@@ -59,7 +60,9 @@ class ChurchInformationControllerTest {
             .andExpect(jsonPath("$.website").value("https://church.example.org"))
             .andExpect(jsonPath("$.bannerPath").value("/api/church-information/banner?v=1"))
             .andExpect(jsonPath("$.logPath").value("/api/church-information/logo?v=1"))
-            .andExpect(jsonPath("$.listPageSize").value(20))
+            .andExpect(jsonPath("$.timeZone").value("America/Vancouver"))
+            .andExpect(jsonPath("$.fiscalYearStartMonth").value(4))
+            .andExpect(jsonPath("$.listPageSize").value(50))
             .andExpect(jsonPath("$.applicationVersion").value("1.0.0-SNAPSHOT"));
     }
 
