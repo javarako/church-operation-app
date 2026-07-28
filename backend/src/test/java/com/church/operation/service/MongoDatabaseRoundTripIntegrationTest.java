@@ -55,7 +55,7 @@ class MongoDatabaseRoundTripIntegrationTest {
 
     @Container
     private static final MongoDBContainer MONGODB = new MongoDBContainer(
-        DockerImageName.parse("mongo:7.0.17")
+        DockerImageName.parse("mongo:8.0.28")
     );
 
     @TempDir

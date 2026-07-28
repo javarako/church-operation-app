@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = "church.fiscal-year.start-month=4")
 class FiscalArchiveRoundTripIntegrationTest {
     @Container
-    static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:7.0.17"));
+    static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:8.0.28"));
 
     @DynamicPropertySource
     static void mongo(DynamicPropertyRegistry registry) {
