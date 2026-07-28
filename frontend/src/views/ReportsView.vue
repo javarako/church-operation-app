@@ -550,6 +550,7 @@ import {
 import { listReferenceData, type ReferenceDataOption } from '../api/referenceData';
 import { authState, type Role } from '../auth/authStore';
 import { usePagination } from '../composables/usePagination';
+import { createCsvBlob } from '../util/csv';
 
 interface ReportTab {
   id: 'weekly-offerings' | 'member-offerings' | 'tax-return' | 'financial-budget' | 'quarterly-financial' | 'yearly-financial';
@@ -1287,9 +1288,7 @@ function budgetActualPercentage(budget: number, actual: number) {
 }
 
 function exportCsv(filename: string, headers: string[], rows: Array<Array<string | number | undefined>>) {
-  const escape = (value: string | number | undefined) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-  const csv = [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = createCsvBlob(headers, rows);
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
   link.href = url;
