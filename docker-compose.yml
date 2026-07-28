@@ -1,6 +1,7 @@
 services:
   mongo:
     image: ${MONGO_IMAGE:-mongo:8.0.28}
+    restart: unless-stopped
     ports:
       - "27017:27017"
     volumes:
@@ -9,6 +10,7 @@ services:
   backend:
     build:
       context: ./backend
+    restart: unless-stopped
     environment:
       SPRING_MONGODB_URI: mongodb://mongo:27017/church_operations
       TZ: ${CHURCH_TIME_ZONE:-America/Toronto}
@@ -41,6 +43,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    restart: unless-stopped
     ports:
       - "5173:5173"
     depends_on:
