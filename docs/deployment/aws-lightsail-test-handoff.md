@@ -32,7 +32,11 @@
 
 ## Running Services
 
-- `mongo`: MongoDB 6 with persistent volume `church-operation-app_mongo-data`
+- `mongo`: The recorded deployment uses MongoDB 6 with persistent volume
+  `church-operation-app_mongo-data`. Before deploying the current MongoDB 8.0.28
+  default, upgrade that existing volume through MongoDB 7.0.39 by following
+  [`mongodb-8-upgrade.md`](mongodb-8-upgrade.md). Never start the MongoDB 8
+  image directly against the recorded MongoDB 6 volume.
 - `backend`: Spring Boot on host port `8080`
 - `frontend`: Vue/Vite on host port `5173`
 
@@ -118,6 +122,10 @@ git pull --ff-only origin main
 docker compose build
 docker compose up -d
 ```
+
+For a fresh installation, Compose pins MongoDB 8.0.28. For this existing
+Lightsail volume, complete the staged MongoDB upgrade runbook before the normal
+update commands above. `MONGO_IMAGE` is only a temporary migration override.
 
 Do not run `docker compose down -v`; the `-v` option deletes the MongoDB volume.
 

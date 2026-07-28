@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:6
+    image: ${MONGO_IMAGE:-mongo:8.0.28}
     ports:
       - "27017:27017"
     volumes:
