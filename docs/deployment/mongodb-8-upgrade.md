@@ -41,12 +41,9 @@ version (FCV) 7.0. Keep FCV 7.0 during the initial MongoDB 8 burn-in period.
    shasum -a 256 church-before-mongo8.archive
    ```
 
-6. Verify that the dump can be read without restoring it into the live database:
-
-   ```bash
-   docker run --rm -v "$PWD:/backup:ro" mongo:8.0.28 \
-     mongorestore --archive=/backup/church-before-mongo8.archive --gzip --dryRun
-   ```
+6. Verify the dump by restoring it into a disposable rehearsal database before
+   changing the primary volume. `mongorestore --dryRun` still requires a target
+   database connection and is not a standalone archive-integrity check.
 
 Record the application backup name, dump size and checksum, binary version,
 FCV, free disk space, Compose status, and provider snapshot identifier.
@@ -134,9 +131,26 @@ FCV, free disk space, Compose status, and provider snapshot identifier.
 
 | Date | Environment | Binary | FCV | Backend tests | Backup/restore | Result |
 | --- | --- | --- | --- | --- | --- | --- |
-| Pending | Fresh local | 8.0.28 | 8.0 | Pending | Pending | Pending |
-| Pending | Copied local data | 8.0.28 | 8.0 | Pending | Pending | Pending |
-| Pending | Primary local | 8.0.28 | 7.0 | Pending | Pending | Pending |
+| 2026-07-28 | Fresh local | 8.0.28 | 8.0 | 362 passed | Full backup and restore passed | Passed |
+| 2026-07-28 | Copied local data | 8.0.28 | 7.0 and 8.0 | 362 passed | Full backup and restore passed | Passed |
+| 2026-07-28 | Primary local | 8.0.28 | 7.0 | 362 passed | Post-upgrade full backup validated | Burn-in |
+
+The copied-data rehearsal restored 304 documents with zero failures and
+preserved all collection, index, and GridFS counts through MongoDB 6.0.28,
+7.0.39, and 8.0.28. Login, dashboard totals, member images, tax PDF, yearly
+Excel, and encrypted backup/restore were verified at both FCV 7.0 and FCV 8.0.
+
+The primary migration retained FCV 7.0 for burn-in. Its pre-upgrade and
+post-upgrade backups, password file, checksums, versions, counts, PDF, Excel,
+and validation evidence are stored in
+`~/Desktop/church-operation-backups/mongodb8-2026-07-28/`.
+
+The aggregate actuator health endpoint reports `DOWN` when the static SMTP
+configuration has no password because Spring's mail health contributor cannot
+authenticate. During this migration the frontend, authenticated APIs, reports,
+backup validation, and MongoDB all passed; MongoDB logs contained no critical
+storage or startup errors. Configure valid SMTP credentials or assess the mail
+health contributor separately from the database migration.
 
 Official references:
 
