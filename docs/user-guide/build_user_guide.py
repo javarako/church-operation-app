@@ -257,7 +257,7 @@ def add_contents(doc: Document) -> None:
         "About This Guide", "Roles and Access", "Getting Started", "Dashboard",
         "Member Information", "Offering Management", "Financial Management",
         "Budget Management", "Reference Data", "Reports", "My Profile",
-        "Logout", "Troubleshooting and Security Notes",
+        "System Administration", "Logout", "Troubleshooting and Security Notes",
     ]
     for chapter in chapters:
         p = doc.add_paragraph(style="List Bullet")
@@ -387,9 +387,9 @@ def parse_content(doc: Document) -> None:
             continue
 
         if line.startswith("## "):
+            heading = doc.add_heading(line[3:], level=1)
             if major_section_index >= 2:
-                doc.add_page_break()
-            doc.add_heading(line[3:], level=1)
+                heading.paragraph_format.page_break_before = True
             major_section_index += 1
             index += 1
             continue

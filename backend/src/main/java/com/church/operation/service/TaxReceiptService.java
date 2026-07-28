@@ -1,6 +1,6 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
+import com.church.operation.config.ChurchTimeZoneProperties;
 import com.church.operation.dto.TaxReceiptSummaryRow;
 import com.church.operation.dto.TaxReceiptValidationError;
 import com.church.operation.entity.Address;
@@ -42,9 +42,10 @@ public class TaxReceiptService {
     private final MemberRepository memberRepository;
     private final TaxReceiptRepository receiptRepository;
     private final TaxReceiptCounterService counterService;
-    private final ChurchInformationProperties churchProperties;
+    private final ChurchInformationResolver churchInformationResolver;
     private final SystemAuditService audit;
     private final Clock clock;
+    private final ChurchTimeZoneProperties timeZoneProperties;
 
     @Autowired
     public TaxReceiptService(
@@ -52,11 +53,12 @@ public class TaxReceiptService {
         MemberRepository memberRepository,
         TaxReceiptRepository receiptRepository,
         TaxReceiptCounterService counterService,
-        ChurchInformationProperties churchProperties,
-        SystemAuditService audit
+        ChurchInformationResolver churchInformationResolver,
+        SystemAuditService audit,
+        ChurchTimeZoneProperties timeZoneProperties
     ) {
-        this(offeringRepository, memberRepository, receiptRepository, counterService, churchProperties, audit,
-            Clock.systemDefaultZone());
+        this(offeringRepository, memberRepository, receiptRepository, counterService, churchInformationResolver, audit,
+            timeZoneProperties, Clock.systemUTC());
     }
 
     TaxReceiptService(
@@ -64,17 +66,32 @@ public class TaxReceiptService {
         MemberRepository memberRepository,
         TaxReceiptRepository receiptRepository,
         TaxReceiptCounterService counterService,
-        ChurchInformationProperties churchProperties,
+        ChurchInformationResolver churchInformationResolver,
         SystemAuditService audit,
+        Clock clock
+    ) {
+        this(offeringRepository, memberRepository, receiptRepository, counterService, churchInformationResolver,
+            audit, new ChurchTimeZoneProperties(clock.getZone().getId()), clock);
+    }
+
+    private TaxReceiptService(
+        OfferingRepository offeringRepository,
+        MemberRepository memberRepository,
+        TaxReceiptRepository receiptRepository,
+        TaxReceiptCounterService counterService,
+        ChurchInformationResolver churchInformationResolver,
+        SystemAuditService audit,
+        ChurchTimeZoneProperties timeZoneProperties,
         Clock clock
     ) {
         this.offeringRepository = offeringRepository;
         this.memberRepository = memberRepository;
         this.receiptRepository = receiptRepository;
         this.counterService = counterService;
-        this.churchProperties = churchProperties;
+        this.churchInformationResolver = churchInformationResolver;
         this.audit = audit;
         this.clock = clock;
+        this.timeZoneProperties = timeZoneProperties;
     }
 
     public List<TaxReceiptSummaryRow> summary(Member actor, int taxYear, String offeringNumber) {
@@ -263,14 +280,14 @@ public class TaxReceiptService {
         String replacesReceiptId
     ) {
         Instant now = Instant.now(clock);
-        ChurchInformationProperties.Information church = churchProperties.information();
+        EffectiveChurchInformation church = churchInformationResolver.resolve();
         List<Offering> sorted = offerings.stream().sorted(Comparator.comparing(Offering::getId)).toList();
         BigDecimal total = total(sorted);
         TaxReceipt receipt = new TaxReceipt();
         receipt.setReceiptNumber(counterService.nextReceiptNumber(taxYear));
         receipt.setStatus(TaxReceiptStatus.ISSUED);
         receipt.setTaxYear(taxYear);
-        receipt.setIssueDate(LocalDate.now(clock));
+        receipt.setIssueDate(LocalDate.now(clock.withZone(timeZoneProperties.zoneId())));
         receipt.setIssuedByMemberId(actor.getId());
         receipt.setMemberId(member.getId());
         receipt.setOfferingNumber(member.getOfferingNumber());
@@ -321,7 +338,7 @@ public class TaxReceiptService {
         }
         if (offerings == null || offerings.isEmpty()) errors.add("eligible offerings are required");
         if (note != null && note.length() > 500) errors.add("thank-you note must be 500 characters or fewer");
-        ChurchInformationProperties.Information church = churchProperties.information();
+        EffectiveChurchInformation church = churchInformationResolver.resolve();
         if (Stream.of(church.name(), church.address(), church.charityRegistrationNumber(), church.website(),
             church.receiptIssueLocation(), church.treasurerName()).anyMatch(this::isBlank)) {
             errors.add("church receipt configuration is incomplete");

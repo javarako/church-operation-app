@@ -1,6 +1,6 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
+import com.church.operation.entity.ChurchSettings;
 import com.church.operation.entity.TaxReceipt;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -10,7 +10,6 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -36,10 +35,15 @@ public class TaxReceiptPdfService {
     private static final PDFont REGULAR = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
     private static final PDFont BOLD = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
-    private final ChurchInformationProperties properties;
+    private final ChurchBrandingService branding;
+    private final ChurchInformationResolver churchInformationResolver;
 
-    public TaxReceiptPdfService(ChurchInformationProperties properties) {
-        this.properties = properties;
+    public TaxReceiptPdfService(
+        ChurchBrandingService branding,
+        ChurchInformationResolver churchInformationResolver
+    ) {
+        this.branding = branding;
+        this.churchInformationResolver = churchInformationResolver;
     }
 
     public byte[] render(TaxReceipt receipt) {
@@ -108,20 +112,14 @@ public class TaxReceiptPdfService {
     }
 
     private PDImageXObject loadLogo(PDDocument document) {
-        String path = properties.branding().logPath();
-        if (path == null || path.isBlank()) return null;
-        String normalized = path.replaceFirst("^/", "");
-        for (String candidate : List.of(normalized, "static/" + normalized)) {
-            try {
-                ClassPathResource resource = new ClassPathResource(candidate);
-                if (resource.exists()) {
-                    return PDImageXObject.createFromByteArray(document, resource.getContentAsByteArray(), "church-logo");
-                }
-            } catch (IOException | IllegalArgumentException ignored) {
-                // Try the next classpath form before falling back to text-only output.
-            }
+        ChurchSettings settings = churchInformationResolver.savedSettings().orElse(null);
+        try {
+            return PDImageXObject.createFromByteArray(
+                document, branding.effectiveLogoBytes(settings), "church-logo"
+            );
+        } catch (IOException | IllegalArgumentException ignored) {
+            return null;
         }
-        return null;
     }
 
     private void writeCentered(PDPageContentStream stream, String text, float y, PDFont font, float size)

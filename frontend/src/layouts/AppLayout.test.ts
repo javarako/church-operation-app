@@ -5,6 +5,7 @@ import AppLayout from './AppLayout.vue';
 import { authState } from '../auth/authStore';
 import { getChurchInformation } from '../api/churchInformation';
 import { postEmpty } from '../api/http';
+import { applyChurchInformation, resetChurchInformationStore } from '../stores/churchInformationStore';
 
 vi.mock('../api/churchInformation', () => ({
   getChurchInformation: vi.fn().mockResolvedValue({
@@ -12,9 +13,15 @@ vi.mock('../api/churchInformation', () => ({
     address: '123 Church Street',
     contactInfo: '416-555-0100',
     treasurerName: 'Daniel Kim',
-    bannerPath: '/branding/church-banner.png',
-    logPath: '/branding/church_logo.png',
+    charityRegistrationNumber: '',
+    receiptIssueLocation: '',
+    website: '',
+    bannerPath: '/branding/church_banner_sample.png',
+    logPath: '/branding/church_logo_sample.png',
+    timeZone: 'America/Toronto',
+    fiscalYearStartMonth: 1,
     listPageSize: 20,
+    applicationVersion: '1.0.0',
   }),
 }));
 
@@ -60,14 +67,21 @@ async function renderLayout() {
 
 describe('AppLayout', () => {
   beforeEach(() => {
+    resetChurchInformationStore();
     churchInformationMock.mockResolvedValue({
       name: 'Grace Community Church',
       address: '123 Church Street',
       contactInfo: '416-555-0100',
       treasurerName: 'Daniel Kim',
-      bannerPath: '/branding/church-banner.png',
-      logPath: '/branding/church_logo.png',
+      charityRegistrationNumber: '',
+      receiptIssueLocation: '',
+      website: '',
+      bannerPath: '/branding/church_banner_sample.png',
+      logPath: '/branding/church_logo_sample.png',
+      timeZone: 'America/Toronto',
+      fiscalYearStartMonth: 1,
       listPageSize: 20,
+      applicationVersion: '1.0.0',
     });
     authState.currentUser = {
       primaryEmail: 'admin@example.com',
@@ -89,9 +103,26 @@ describe('AppLayout', () => {
 
     const logo = await screen.findByAltText('Grace Community Church logo');
 
-    expect(logo.getAttribute('src')).toBe('/branding/church_logo.png');
+    expect(logo.getAttribute('src')).toBe('/branding/church_logo_sample.png');
     expect(screen.getByText('Church Operations')).toBeTruthy();
+    expect(screen.getByText('v1.0.0')).toBeTruthy();
     expect(screen.getByText('Page Content')).toBeTruthy();
+  });
+
+  it('reacts immediately when saved church information is applied', async () => {
+    await renderLayout();
+    await screen.findByAltText('Grace Community Church logo');
+
+    applyChurchInformation({
+      ...(await churchInformationMock.mock.results[0].value),
+      name: 'Updated Church',
+      logPath: '/api/church-information/logo?v=2',
+      applicationVersion: '1.0.1',
+    });
+
+    expect((await screen.findByAltText('Updated Church logo')).getAttribute('src'))
+      .toBe('/api/church-information/logo?v=2');
+    expect(screen.getByText('v1.0.1')).toBeTruthy();
   });
 
   it('keeps role-aware menu links for admin', async () => {

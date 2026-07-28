@@ -1,4 +1,4 @@
-import { getBlob, getJson, postBlob, postJson } from './http';
+import { getBlob, getBlobResponse, getJson, postBlob, postJson } from './http';
 
 export type GivingType = 'MEMBER' | 'ANONYMOUS' | 'GROUP';
 export type BudgetType = 'CARRY_OVER' | 'OFFERING_INCOME' | 'EXPENSE';
@@ -30,7 +30,7 @@ export type TaxReceiptStatus = 'ISSUED' | 'VOID';
 
 export interface TaxReceiptSummaryRow {
   memberId: string;
-  offeringNumber: string;
+  offeringNumber: string | null;
   donorName: string;
   donorAddress?: string;
   taxYear: number;
@@ -98,6 +98,38 @@ export interface QuarterlyFinancialReportFilters {
   quarter: 1 | 2 | 3 | 4;
 }
 
+export interface YearlyFinancialReportFilters {
+  fiscalYear: number;
+}
+
+export type YearEndReportType = 'OFFERING' | 'EXPENDITURE';
+export type YearEndClosingStatus = 'NOT_CLOSED' | 'CLOSED' | 'REOPENED';
+
+export interface YearEndClosingReportStatus {
+  reportType: YearEndReportType;
+  status: YearEndClosingStatus;
+  version?: number;
+  eventAt?: string;
+}
+
+export interface YearEndClosingStatusResponse {
+  fiscalYear: number;
+  fiscalEndDate: string;
+  closeEligible: boolean;
+  offering: YearEndClosingReportStatus;
+  expenditure: YearEndClosingReportStatus;
+}
+
+export interface YearEndClosingRequest {
+  fiscalYear: number;
+  currentPassword: string;
+}
+
+export interface YearlyWorkbookDownload {
+  blob: Blob;
+  filename: string;
+}
+
 function buildQuery(params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams();
 
@@ -159,4 +191,54 @@ export function downloadQuarterlyOfferingReport(filters: QuarterlyFinancialRepor
 
 export function downloadQuarterlyExpenditureReport(filters: QuarterlyFinancialReportFilters) {
   return getBlob(withQuery('/api/reports/quarterly-expenditures.xlsx', { ...filters }));
+}
+
+export function getYearEndClosingStatus(filters: YearlyFinancialReportFilters) {
+  return getJson<YearEndClosingStatusResponse>(withQuery('/api/reports/yearly-closing-status', { ...filters }));
+}
+
+export function closeYearEndReport(reportType: YearEndReportType, request: YearEndClosingRequest) {
+  return postJson<YearEndClosingRequest, YearEndClosingReportStatus>(
+    `/api/reports/yearly-closing/${reportType}/close`,
+    request,
+  );
+}
+
+export function reopenYearEndReport(reportType: YearEndReportType, request: YearEndClosingRequest) {
+  return postJson<YearEndClosingRequest, YearEndClosingReportStatus>(
+    `/api/reports/yearly-closing/${reportType}/reopen`,
+    request,
+  );
+}
+
+export async function downloadYearlyOfferingReport(
+  filters: YearlyFinancialReportFilters,
+): Promise<YearlyWorkbookDownload> {
+  const response = await getBlobResponse(withQuery('/api/reports/yearly-offerings.xlsx', { ...filters }));
+  return downloadFromResponse(response, `yearly-offerings-${filters.fiscalYear}.xlsx`);
+}
+
+export async function downloadYearlyExpenditureReport(
+  filters: YearlyFinancialReportFilters,
+): Promise<YearlyWorkbookDownload> {
+  const response = await getBlobResponse(withQuery('/api/reports/yearly-expenditures.xlsx', { ...filters }));
+  return downloadFromResponse(response, `yearly-expenditures-${filters.fiscalYear}.xlsx`);
+}
+
+async function downloadFromResponse(response: Response, fallbackFilename: string): Promise<YearlyWorkbookDownload> {
+  return {
+    blob: await response.blob(),
+    filename: attachmentFilename(response.headers.get('Content-Disposition')) ?? fallbackFilename,
+  };
+}
+
+function attachmentFilename(contentDisposition: string | null) {
+  if (!contentDisposition) {
+    return undefined;
+  }
+  const encoded = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    return decodeURIComponent(encoded.trim());
+  }
+  return contentDisposition.match(/filename="?([^";]+)"?/i)?.[1]?.trim();
 }

@@ -1,6 +1,7 @@
 package com.church.operation.service;
 
 import com.church.operation.config.FiscalYearProperties;
+import com.church.operation.config.ChurchTimeZoneProperties;
 import com.church.operation.dto.DashboardResponse;
 import com.church.operation.dto.DashboardTrendPoint;
 import com.church.operation.entity.Budget;
@@ -16,12 +17,12 @@ import com.church.operation.util.FinancialTransactionType;
 import com.church.operation.util.Role;
 import org.bson.types.ObjectId;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.EnumSet;
 import java.util.List;
@@ -42,19 +43,34 @@ public class DashboardService {
     private final FinancialTransactionRepository transactionRepository;
     private final BudgetRepository budgetRepository;
     private final FiscalYearProperties fiscalYearProperties;
+    private final ChurchTimeZoneProperties timeZoneProperties;
 
+    @Autowired
     public DashboardService(
         MemberRepository memberRepository,
         OfferingRepository offeringRepository,
         FinancialTransactionRepository transactionRepository,
         BudgetRepository budgetRepository,
-        FiscalYearProperties fiscalYearProperties
+        FiscalYearProperties fiscalYearProperties,
+        ChurchTimeZoneProperties timeZoneProperties
     ) {
         this.memberRepository = memberRepository;
         this.offeringRepository = offeringRepository;
         this.transactionRepository = transactionRepository;
         this.budgetRepository = budgetRepository;
         this.fiscalYearProperties = fiscalYearProperties;
+        this.timeZoneProperties = timeZoneProperties;
+    }
+
+    DashboardService(
+        MemberRepository memberRepository,
+        OfferingRepository offeringRepository,
+        FinancialTransactionRepository transactionRepository,
+        BudgetRepository budgetRepository,
+        FiscalYearProperties fiscalYearProperties
+    ) {
+        this(memberRepository, offeringRepository, transactionRepository, budgetRepository,
+            fiscalYearProperties, new ChurchTimeZoneProperties("UTC"));
     }
 
     public DashboardResponse getDashboard(Member actor, LocalDate today) {
@@ -189,11 +205,11 @@ public class DashboardService {
 
     private LocalDate registrationDate(Member member) {
         if (member.getCreatedAt() != null) {
-            return member.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate();
+            return member.getCreatedAt().atZone(timeZoneProperties.zoneId()).toLocalDate();
         }
         if (member.getId() != null && ObjectId.isValid(member.getId())) {
             return new ObjectId(member.getId()).getDate().toInstant()
-                .atZone(ZoneId.systemDefault())
+                .atZone(timeZoneProperties.zoneId())
                 .toLocalDate();
         }
         return null;

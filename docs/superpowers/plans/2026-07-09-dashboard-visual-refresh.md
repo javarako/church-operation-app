@@ -133,8 +133,8 @@ vi.mock('../api/churchInformation', () => ({
     address: '123 Church Street',
     contactInfo: '416-555-0100',
     treasurerName: 'Daniel Kim',
-    bannerPath: '/branding/church-banner.png',
-    logPath: '/branding/church_logo.png',
+    bannerPath: '/branding/church_banner_sample.png',
+    logPath: '/branding/church_logo_sample.png',
   }),
 }));
 
@@ -177,8 +177,8 @@ describe('AppLayout', () => {
       address: '123 Church Street',
       contactInfo: '416-555-0100',
       treasurerName: 'Daniel Kim',
-      bannerPath: '/branding/church-banner.png',
-      logPath: '/branding/church_logo.png',
+      bannerPath: '/branding/church_banner_sample.png',
+      logPath: '/branding/church_logo_sample.png',
     });
     authState.currentUser = {
       primaryEmail: 'admin@example.com',
@@ -200,7 +200,7 @@ describe('AppLayout', () => {
 
     const logo = await screen.findByAltText('Grace Community Church logo');
 
-    expect(logo.getAttribute('src')).toBe('/branding/church_logo.png');
+    expect(logo.getAttribute('src')).toBe('/branding/church_logo_sample.png');
     expect(screen.getByText('Church Operations')).toBeTruthy();
     expect(screen.getByText('Page Content')).toBeTruthy();
   });
@@ -416,8 +416,8 @@ vi.mock('../api/churchInformation', () => ({
     address: '123 Church Street, Toronto, ON M1A 1A1',
     contactInfo: '416-555-0100',
     treasurerName: 'Daniel Kim',
-    bannerPath: '/branding/church-banner.png',
-    logPath: '/branding/church_logo.png',
+    bannerPath: '/branding/church_banner_sample.png',
+    logPath: '/branding/church_logo_sample.png',
   }),
 }));
 ```
@@ -436,8 +436,8 @@ Add this default setup inside `beforeEach`:
       address: '123 Church Street, Toronto, ON M1A 1A1',
       contactInfo: '416-555-0100',
       treasurerName: 'Daniel Kim',
-      bannerPath: '/branding/church-banner.png',
-      logPath: '/branding/church_logo.png',
+      bannerPath: '/branding/church_banner_sample.png',
+      logPath: '/branding/church_logo_sample.png',
     });
 ```
 

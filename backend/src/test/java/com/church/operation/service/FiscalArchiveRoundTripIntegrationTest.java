@@ -16,10 +16,15 @@ import com.church.operation.util.FinancialTransactionType;
 import com.church.operation.util.GivingType;
 import com.church.operation.util.ReferenceDataType;
 import com.church.operation.util.Role;
+import com.mongodb.client.gridfs.GridFSBucket;
+import com.mongodb.client.gridfs.GridFSBuckets;
+import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -28,6 +33,8 @@ import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -39,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = "church.fiscal-year.start-month=4")
 class FiscalArchiveRoundTripIntegrationTest {
     @Container
-    static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:7.0.17"));
+    static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:8.0.28"));
 
     @DynamicPropertySource
     static void mongo(DynamicPropertyRegistry registry) {
@@ -52,6 +59,7 @@ class FiscalArchiveRoundTripIntegrationTest {
     @Autowired BudgetRepository budgets;
     @Autowired MemberRepository members;
     @Autowired ReferenceDataRepository references;
+    @Autowired MongoTemplate mongoTemplate;
     @TempDir Path tempDirectory;
 
     @Test
@@ -80,6 +88,17 @@ class FiscalArchiveRoundTripIntegrationTest {
         Budget outsideBudget = budget("roundtrip-outside-budget", 2027);
         budgets.saveAll(java.util.List.of(budget, outsideBudget));
 
+        byte[] logoBytes = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47, 1, 2, 3};
+        byte[] bannerBytes = new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 4, 5, 6};
+        GridFSBucket bucket = GridFSBuckets.create(mongoTemplate.getDb());
+        ObjectId logoId = bucket.uploadFromStream("church-logo.png", new ByteArrayInputStream(logoBytes));
+        ObjectId bannerId = bucket.uploadFromStream("church-banner.jpg", new ByteArrayInputStream(bannerBytes));
+        Document churchSettings = new Document("_id", "church-settings")
+            .append("name", "Fiscal Runtime Church")
+            .append("logoGridFsId", logoId.toHexString())
+            .append("bannerGridFsId", bannerId.toHexString());
+        mongoTemplate.getDb().getCollection("church_settings").insertOne(churchSettings);
+
         char[] password = "fiscal round trip password".toCharArray();
         FiscalArchiveService.DownloadArtifact download = service.createArchive(admin, 2026, password);
         Path archive = tempDirectory.resolve("fiscal-2026.zip");
@@ -96,6 +115,7 @@ class FiscalArchiveRoundTripIntegrationTest {
         assertThat(transactions.existsById(expense.getId())).isFalse();
         assertThat(budgets.existsById(outsideBudget.getId())).isTrue();
         assertThat(budgets.existsById(budget.getId())).isFalse();
+        assertChurchBrandingPreserved(churchSettings, logoId, logoBytes, bannerId, bannerBytes);
 
         FiscalArchiveService.RestorePreview restore = service.validateRestore(
             admin, archive, "fiscal round trip password".toCharArray()
@@ -107,6 +127,28 @@ class FiscalArchiveRoundTripIntegrationTest {
         assertThat(transactions.findAll()).extracting(FinancialTransaction::getId)
             .contains(income.getId(), deletedIncome.getId(), expense.getId(), outsideExpense.getId());
         assertThat(budgets.findAll()).extracting(Budget::getId).contains(budget.getId(), outsideBudget.getId());
+        assertChurchBrandingPreserved(churchSettings, logoId, logoBytes, bannerId, bannerBytes);
+    }
+
+    private void assertChurchBrandingPreserved(
+        Document expectedSettings,
+        ObjectId logoId,
+        byte[] logoBytes,
+        ObjectId bannerId,
+        byte[] bannerBytes
+    ) {
+        Document actual = mongoTemplate.getDb().getCollection("church_settings")
+            .find(new Document("_id", "church-settings"))
+            .first();
+        assertThat(actual).isEqualTo(expectedSettings);
+        assertThat(download(logoId)).isEqualTo(logoBytes);
+        assertThat(download(bannerId)).isEqualTo(bannerBytes);
+    }
+
+    private byte[] download(ObjectId id) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        GridFSBuckets.create(mongoTemplate.getDb()).downloadToStream(id, output);
+        return output.toByteArray();
     }
 
     private Member member(String id, String email, Set<Role> roles) {

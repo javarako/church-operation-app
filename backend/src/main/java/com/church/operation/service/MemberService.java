@@ -132,7 +132,6 @@ public class MemberService {
         member.setMembershipStatus(trimToNull(request.membershipStatus()));
         member.setCommitteeCodes(normalizeCommitteeCodes(request.committeeCodes(), member.getCommitteeCodes()));
         member.setOfferingNumber(trimToNull(request.offeringNumber()));
-        member.setFaceImageAttachmentId(trimToNull(request.faceImageAttachmentId()));
         member.setHouseholdName(trimToNull(request.householdName()));
         member.setNotes(trimToNull(request.notes()));
         member.setRoles(normalizeRoles(request.roles()));
@@ -149,7 +148,6 @@ public class MemberService {
         member.setDisplayName(trimToNull(request.displayName()));
         member.setNickname(trimToNull(request.nickname()));
         member.setBirthDate(request.birthDate());
-        member.setFaceImageAttachmentId(trimToNull(request.faceImageAttachmentId()));
         member.setHouseholdName(trimToNull(request.householdName()));
         member.setNotes(trimToNull(request.notes()));
     }

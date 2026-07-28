@@ -55,7 +55,7 @@ class MongoDatabaseRoundTripIntegrationTest {
 
     @Container
     private static final MongoDBContainer MONGODB = new MongoDBContainer(
-        DockerImageName.parse("mongo:7.0.17")
+        DockerImageName.parse("mongo:8.0.28")
     );
 
     @TempDir
@@ -109,6 +109,25 @@ class MongoDatabaseRoundTripIntegrationTest {
                 .extracting(entry -> entry.documentCount())
                 .isEqualTo(0L);
             assertThat(snapshot(database)).usingRecursiveComparison().isEqualTo(expected);
+            assertThat(database.getCollection("email_settings")
+                .find(new Document("_id", "runtime-email"))
+                .first())
+                .isNotNull()
+                .extracting(document -> document.get("passwordCiphertext"))
+                .isEqualTo("encrypted-value");
+            Document churchSettings = database.getCollection("church_settings")
+                .find(new Document("_id", "church-settings"))
+                .first();
+            assertThat(churchSettings).isNotNull();
+            assertThat(churchSettings.getString("name")).isEqualTo("Runtime Church");
+            assertThat(churchSettings.getString("timeZone")).isEqualTo("America/Vancouver");
+            assertThat(churchSettings.getInteger("fiscalYearStartMonth")).isEqualTo(4);
+            assertThat(churchSettings.getInteger("listPageSize")).isEqualTo(50);
+            assertThat(churchSettings.getString("dataOperationExpiry")).isEqualTo("PT1H");
+            assertThat(downloadGridFs(database, new ObjectId(churchSettings.getString("logoGridFsId"))))
+                .isEqualTo(churchLogoBytes());
+            assertThat(downloadGridFs(database, new ObjectId(churchSettings.getString("bannerGridFsId"))))
+                .isEqualTo(churchBannerBytes());
             assertThat(downloadGridFs(database, expected.gridFsId())).isEqualTo(expected.gridFsBytes());
             assertThat(commandListener.createIndexesCommands()).isNotEmpty();
             assertThat(commandListener.createIndexesCommands())
@@ -429,6 +448,29 @@ class MongoDatabaseRoundTripIntegrationTest {
         database.getCollection("audit_events").insertOne(new Document("event", "member-created")
             .append("payload", new Document("memberId", new ObjectId("65a000000000000000000001"))));
 
+        database.getCollection("email_settings").insertOne(new Document("_id", "runtime-email")
+            .append("host", "smtp.example.org")
+            .append("passwordCiphertext", "encrypted-value")
+            .append("passwordNonce", "nonce"));
+
+        GridFSBucket brandingBucket = GridFSBuckets.create(database);
+        ObjectId logoId = brandingBucket.uploadFromStream(
+            "church-logo.png", new ByteArrayInputStream(churchLogoBytes())
+        );
+        ObjectId bannerId = brandingBucket.uploadFromStream(
+            "church-banner.png", new ByteArrayInputStream(churchBannerBytes())
+        );
+        database.getCollection("church_settings").insertOne(new Document("_id", "church-settings")
+            .append("name", "Runtime Church")
+            .append("timeZone", "America/Vancouver")
+            .append("fiscalYearStartMonth", 4)
+            .append("listPageSize", 50)
+            .append("dataOperationExpiry", "PT1H")
+            .append("logoGridFsId", logoId.toHexString())
+            .append("logoContentType", "image/png")
+            .append("bannerGridFsId", bannerId.toHexString())
+            .append("bannerContentType", "image/jpeg"));
+
         database.runCommand(new Document("create", "attendance_series")
             .append("timeseries", new Document("timeField", "recordedAt")
                 .append("metaField", "ministry")
@@ -575,6 +617,14 @@ class MongoDatabaseRoundTripIntegrationTest {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         bucket.downloadToStream(id, output);
         return output.toByteArray();
+    }
+
+    private byte[] churchLogoBytes() {
+        return new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4};
+    }
+
+    private byte[] churchBannerBytes() {
+        return new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 5, 6, 7, 8};
     }
 
     private DataManagementProperties properties(String directory) {

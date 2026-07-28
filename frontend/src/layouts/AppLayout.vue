@@ -4,7 +4,10 @@
       <div class="sidebar-brand">
         <img v-if="churchInfo?.logPath" :src="churchInfo.logPath" :alt="`${churchInfo.name} logo`" />
         <div v-else class="sidebar-logo-fallback">CO</div>
-        <h1>Church Operations</h1>
+        <div class="sidebar-title">
+          <h1>Church Operations</h1>
+          <small v-if="churchInfo?.applicationVersion" class="app-version">v{{ churchInfo.applicationVersion }}</small>
+        </div>
       </div>
 
       <nav class="sidebar-nav" aria-label="Main menu">
@@ -28,21 +31,25 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { BookOpen, ChartColumn, ChartPie, HandHeart, House, Landmark, LogOut, Settings, UserRound, Users } from '@lucide/vue';
-import { getChurchInformation, type ChurchInformation } from '../api/churchInformation';
 import { postEmpty } from '../api/http';
 import { authState, setCurrentUser, type Role } from '../auth/authStore';
+import {
+  churchInformationState,
+  loadChurchInformation,
+  resetChurchInformationStore,
+} from '../stores/churchInformationStore';
 
-const churchInfo = ref<ChurchInformation | null>(null);
+const churchInfo = computed(() => churchInformationState.value);
 const router = useRouter();
 
 onMounted(async () => {
   try {
-    churchInfo.value = await getChurchInformation();
+    await loadChurchInformation();
   } catch {
-    churchInfo.value = null;
+    // Text branding remains available when runtime information cannot load.
   }
 });
 
@@ -55,6 +62,7 @@ async function logout() {
     await postEmpty('/api/auth/logout', {});
   } finally {
     setCurrentUser(null);
+    resetChurchInformationStore();
     await router.push('/login');
   }
 }

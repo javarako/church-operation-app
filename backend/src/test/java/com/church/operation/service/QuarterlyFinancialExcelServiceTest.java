@@ -1,9 +1,9 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.QuarterlyFinancialGroup;
 import com.church.operation.dto.QuarterlyFinancialReport;
 import com.church.operation.dto.QuarterlyFinancialRow;
+import com.church.operation.entity.ChurchSettings;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Font;
@@ -23,13 +23,16 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class QuarterlyFinancialExcelServiceTest {
     @Test
     void rendersSampleStructureFormulasAndTotals() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(report());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(report());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Offering income");
@@ -79,7 +82,7 @@ class QuarterlyFinancialExcelServiceTest {
 
     @Test
     void embedsConfiguredLogoAndAppliesPrintLayout() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(report());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(report());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Offering income");
@@ -121,7 +124,7 @@ class QuarterlyFinancialExcelServiceTest {
 
     @Test
     void leavesZeroAmountsBlankAndShowsDashOnlyForZeroBudgetPercentage() throws Exception {
-        byte[] bytes = service("/branding/church_logo.png").render(report());
+        byte[] bytes = service("/branding/church_logo_sample.png").render(report());
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Offering income");
@@ -156,7 +159,7 @@ class QuarterlyFinancialExcelServiceTest {
             "CONTINGENCY"
         );
 
-        byte[] bytes = service("/branding/church_logo.png").render(expenditure);
+        byte[] bytes = service("/branding/church_logo_sample.png").render(expenditure);
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("Expenditure");
@@ -177,10 +180,10 @@ class QuarterlyFinancialExcelServiceTest {
         Path expenditureOutput = Path.of("target", "quarterly-expenditures-preview.xlsx");
 
         Files.createDirectories(offeringOutput.getParent());
-        Files.write(offeringOutput, service("/branding/church_logo.png").render(report()));
+        Files.write(offeringOutput, service("/branding/church_logo_sample.png").render(report()));
         Files.write(
             expenditureOutput,
-            service("/branding/church_logo.png").render(report("Expenditure", "지출", "CONTINGENCY"))
+            service("/branding/church_logo_sample.png").render(report("Expenditure", "지출", "CONTINGENCY"))
         );
 
         assertThat(offeringOutput).exists();
@@ -190,20 +193,24 @@ class QuarterlyFinancialExcelServiceTest {
     }
 
     private QuarterlyFinancialExcelService service(String logoPath) {
-        ChurchInformationProperties properties = new ChurchInformationProperties(
-            new ChurchInformationProperties.Information(
-                "Capstone Presbyterian Church",
-                "111 Cactus Ave",
-                "contact@example.com",
-                "Treasurer",
-                "1234567890",
-                "Toronto, ON",
-                "https://example.com"
-            ),
-            new ChurchInformationProperties.Branding("/branding/banner.png", logoPath),
-            new ChurchInformationProperties.Ui(20)
-        );
-        return new QuarterlyFinancialExcelService(properties);
+        ChurchBrandingService branding = mock(ChurchBrandingService.class);
+        ChurchInformationResolver resolver = mock(ChurchInformationResolver.class);
+        ChurchSettings settings = new ChurchSettings();
+        when(resolver.savedSettings()).thenReturn(Optional.of(settings));
+        when(branding.effectiveLogoBytes(settings)).thenReturn(logoBytes(logoPath));
+        return new QuarterlyFinancialExcelService(branding, resolver);
+    }
+
+    private byte[] logoBytes(String logoPath) {
+        if (!"/branding/church_logo_sample.png".equals(logoPath)) {
+            return new byte[0];
+        }
+        try {
+            return new org.springframework.core.io.ClassPathResource("static/branding/church_logo_sample.png")
+                .getContentAsByteArray();
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private void assertAdjustTo100Percent(XSSFSheet sheet) {

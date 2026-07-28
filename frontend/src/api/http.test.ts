@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authState } from '../auth/authStore';
-import { deleteEmpty, getBlob, postBlob, postJson, putFile } from './http';
+import { deleteEmpty, getBlob, getBlobResponse, postBlob, postJson, putFile } from './http';
+import {
+  closeYearEndReport,
+  downloadYearlyOfferingReport,
+  getYearEndClosingStatus,
+  reopenYearEndReport,
+} from './reports';
 
 describe('HTTP file helpers', () => {
   beforeEach(() => {
@@ -54,6 +60,67 @@ describe('HTTP file helpers', () => {
     const headers = new Headers(fetchMock.mock.calls[0][1].headers);
     expect(headers.get('Authorization')).toBe('Bearer issued-token');
     expect(result).toBeInstanceOf(Blob);
+  });
+
+  it('returns headers for filename-aware downloads', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('xlsx', {
+      status: 200,
+      headers: {
+        'Content-Disposition': 'attachment; filename=yearly-offerings-2025-closed-v1.xlsx',
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await getBlobResponse('/api/reports/yearly-offerings.xlsx?fiscalYear=2025');
+
+    expect(response.headers.get('Content-Disposition')).toContain('closed-v1.xlsx');
+    const headers = new Headers(fetchMock.mock.calls[0][1].headers);
+    expect(headers.get('Authorization')).toBe('Bearer issued-token');
+  });
+
+  it('uses the server filename for yearly workbook downloads', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('xlsx', {
+      status: 200,
+      headers: {
+        'Content-Disposition': 'attachment; filename="yearly-offerings-2025-closed-v2.xlsx"',
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const download = await downloadYearlyOfferingReport({ fiscalYear: 2025 });
+
+    expect(download.blob).toBeInstanceOf(Blob);
+    expect(download.filename).toBe('yearly-offerings-2025-closed-v2.xlsx');
+  });
+
+  it('loads status and posts password-confirmed closing actions', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        fiscalYear: 2025,
+        fiscalEndDate: '2025-12-31',
+        closeEligible: true,
+        offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+        expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        reportType: 'OFFERING', status: 'CLOSED', version: 1,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        reportType: 'OFFERING', status: 'REOPENED', version: 1,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getYearEndClosingStatus({ fiscalYear: 2025 });
+    await closeYearEndReport('OFFERING', { fiscalYear: 2025, currentPassword: 'secret' });
+    await reopenYearEndReport('OFFERING', { fiscalYear: 2025, currentPassword: 'secret' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/reports/yearly-closing-status?fiscalYear=2025');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/reports/yearly-closing/OFFERING/close');
+    expect(fetchMock.mock.calls[1][1].body).toBe(JSON.stringify({
+      fiscalYear: 2025,
+      currentPassword: 'secret',
+    }));
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/reports/yearly-closing/OFFERING/reopen');
   });
 
   it('posts JSON and returns a Blob download', async () => {

@@ -4,9 +4,13 @@ import ReportsView from './ReportsView.vue';
 import { authState } from '../auth/authStore';
 import {
   DEFAULT_THANK_YOU_NOTE,
+  closeYearEndReport,
   downloadQuarterlyExpenditureReport,
   downloadQuarterlyOfferingReport,
   downloadTaxReceiptPdf,
+  downloadYearlyExpenditureReport,
+  downloadYearlyOfferingReport,
+  getYearEndClosingStatus,
   issueBatchTaxReceipts,
   issueTaxReceipt,
   listFinancialBudgetReport,
@@ -14,6 +18,7 @@ import {
   listTaxReceiptSummary,
   listWeeklyOfferingReport,
   replaceTaxReceipt,
+  reopenYearEndReport,
   voidTaxReceipt,
 } from '../api/reports';
 import { listReferenceData } from '../api/referenceData';
@@ -32,6 +37,11 @@ vi.mock('../api/reports', async (importOriginal) => {
     listFinancialBudgetReport: vi.fn().mockResolvedValue([]),
     downloadQuarterlyExpenditureReport: vi.fn(),
     downloadQuarterlyOfferingReport: vi.fn(),
+    downloadYearlyExpenditureReport: vi.fn(),
+    downloadYearlyOfferingReport: vi.fn(),
+    getYearEndClosingStatus: vi.fn(),
+    closeYearEndReport: vi.fn(),
+    reopenYearEndReport: vi.fn(),
     issueTaxReceipt: vi.fn(),
     issueBatchTaxReceipts: vi.fn(),
     downloadTaxReceiptPdf: vi.fn(),
@@ -48,6 +58,11 @@ const taxSummaryMock = vi.mocked(listTaxReceiptSummary);
 const financialMock = vi.mocked(listFinancialBudgetReport);
 const quarterlyExpenditureMock = vi.mocked(downloadQuarterlyExpenditureReport);
 const quarterlyMock = vi.mocked(downloadQuarterlyOfferingReport);
+const yearlyExpenditureMock = vi.mocked(downloadYearlyExpenditureReport);
+const yearlyOfferingMock = vi.mocked(downloadYearlyOfferingReport);
+const yearEndStatusMock = vi.mocked(getYearEndClosingStatus);
+const closeYearEndMock = vi.mocked(closeYearEndReport);
+const reopenYearEndMock = vi.mocked(reopenYearEndReport);
 const issueMock = vi.mocked(issueTaxReceipt);
 const batchMock = vi.mocked(issueBatchTaxReceipts);
 const pdfMock = vi.mocked(downloadTaxReceiptPdf);
@@ -85,6 +100,31 @@ describe('ReportsView', () => {
     quarterlyExpenditureMock.mockResolvedValue(new Blob(['xlsx'], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }));
+    yearlyOfferingMock.mockResolvedValue({
+      blob: new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      filename: 'yearly-offerings-2026-draft.xlsx',
+    });
+    yearlyExpenditureMock.mockResolvedValue({
+      blob: new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      filename: 'yearly-expenditures-2026-draft.xlsx',
+    });
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2026,
+      fiscalEndDate: '2026-12-31',
+      closeEligible: false,
+      offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+      expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+    });
+    closeYearEndMock.mockResolvedValue({
+      reportType: 'OFFERING', status: 'CLOSED', version: 1, eventAt: '2027-01-02T15:00:00Z',
+    });
+    reopenYearEndMock.mockResolvedValue({
+      reportType: 'OFFERING', status: 'REOPENED', version: 1, eventAt: '2027-01-03T15:00:00Z',
+    });
     batchMock.mockResolvedValue(new Blob(['zip'], { type: 'application/zip' }));
     pdfMock.mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
     referenceMock.mockImplementation((type) => {
@@ -201,6 +241,245 @@ describe('ReportsView', () => {
     expect(await screen.findByText('Expenditure workbook could not be generated.')).toBeTruthy();
   });
 
+  it('downloads offering and expenditure workbooks for the selected fiscal year', async () => {
+    signIn('VIEWER');
+    URL.createObjectURL = vi.fn(() => 'blob:yearly');
+    URL.revokeObjectURL = vi.fn();
+    let downloadedFilename = '';
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload(
+      this: HTMLAnchorElement,
+    ) {
+      downloadedFilename = this.download;
+    });
+
+    render(ReportsView);
+    const tab = screen.getByRole('tab', { name: /yearly financial report/i });
+    await fireEvent.click(tab);
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(tab.classList.contains('active-report-tab')).toBe(true);
+
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2026');
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly offering excel/i }));
+    expect(yearlyOfferingMock).toHaveBeenCalledWith({ fiscalYear: 2026 });
+    expect(downloadedFilename).toBe('yearly-offerings-2026-draft.xlsx');
+
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly expenditure excel/i }));
+    expect(yearlyExpenditureMock).toHaveBeenCalledWith({ fiscalYear: 2026 });
+    expect(downloadedFilename).toBe('yearly-expenditures-2026-draft.xlsx');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:yearly');
+  });
+
+  it('keeps yearly downloads independent and shows generation failures', async () => {
+    signIn('VIEWER');
+    let resolveOffering = (_download: { blob: Blob; filename: string }) => {};
+    yearlyOfferingMock.mockReturnValue(new Promise((resolve) => {
+      resolveOffering = resolve;
+    }));
+    yearlyExpenditureMock.mockRejectedValue(new Error('Yearly expenditure could not be generated.'));
+    URL.createObjectURL = vi.fn(() => 'blob:yearly');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    const offeringButton = screen.getByRole('button', { name: /download yearly offering excel/i });
+    const expenditureButton = screen.getByRole('button', { name: /download yearly expenditure excel/i });
+
+    await fireEvent.click(offeringButton);
+    expect((offeringButton as HTMLButtonElement).disabled).toBe(true);
+    expect((expenditureButton as HTMLButtonElement).disabled).toBe(false);
+
+    await fireEvent.click(expenditureButton);
+    expect(await screen.findByText('Yearly expenditure could not be generated.')).toBeTruthy();
+
+    resolveOffering({ blob: new Blob(['xlsx']), filename: 'yearly-offerings-2026-draft.xlsx' });
+    await vi.waitFor(() => expect((offeringButton as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it('shows independent closing status and role-gated lifecycle actions', async () => {
+    signIn('ADMIN');
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2025,
+      fiscalEndDate: '2025-12-31',
+      closeEligible: true,
+      offering: {
+        reportType: 'OFFERING', status: 'CLOSED', version: 2, eventAt: '2026-01-02T15:00:00Z',
+      },
+      expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+    });
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+
+    expect(await screen.findByText(/Closed .*2026/)).toBeTruthy();
+    expect(screen.getByText('Not closed')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /reopen offering closing/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /year-end close expenditure/i })).toBeTruthy();
+
+    signIn('VIEWER');
+    cleanup();
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+    expect(await screen.findByText(/Closed .*2026/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /closing/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /download yearly offering excel/i })).toBeTruthy();
+  });
+
+  it('disables premature closing and explains the fiscal-end rule', async () => {
+    signIn('TREASURER');
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+
+    const closeButton = await screen.findByRole('button', { name: /year-end close offering/i });
+    expect((closeButton as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Closing is available after December 31, 2026.')).toBeTruthy();
+  });
+
+  it('confirms close and reopen actions with the current password in a dialog', async () => {
+    signIn('ADMIN');
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2025,
+      fiscalEndDate: '2025-12-31',
+      closeEligible: true,
+      offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+      expenditure: {
+        reportType: 'EXPENDITURE', status: 'CLOSED', version: 1, eventAt: '2026-01-02T15:00:00Z',
+      },
+    });
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+    await screen.findAllByText('Not closed');
+
+    await fireEvent.click(screen.getByRole('button', { name: /year-end close offering/i }));
+    const dialog = screen.getByRole('dialog', { name: /confirm year-end closing/i });
+    expect(within(dialog).getByText(/Offering report for fiscal year 2025/)).toBeTruthy();
+    await fireEvent.update(within(dialog).getByLabelText('Current password'), 'secret');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    expect(closeYearEndMock).toHaveBeenCalledWith('OFFERING', {
+      fiscalYear: 2025,
+      currentPassword: 'secret',
+    });
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await fireEvent.click(screen.getByRole('button', { name: /reopen expenditure closing/i }));
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(reopenYearEndMock).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole('button', { name: /reopen expenditure closing/i }));
+    const reopenDialog = screen.getByRole('dialog', { name: /confirm reopening/i });
+    await fireEvent.update(within(reopenDialog).getByLabelText('Current password'), 'secret-again');
+    await fireEvent.click(within(reopenDialog).getByRole('button', { name: 'Confirm' }));
+    expect(reopenYearEndMock).toHaveBeenCalledWith('EXPENDITURE', {
+      fiscalYear: 2025,
+      currentPassword: 'secret-again',
+    });
+  });
+
+  it('keeps the dialog open and clears the password after a closing failure', async () => {
+    signIn('ADMIN');
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2025,
+      fiscalEndDate: '2025-12-31',
+      closeEligible: true,
+      offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+      expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+    });
+    closeYearEndMock.mockRejectedValue(new Error('Current password is incorrect.'));
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+    await screen.findAllByText('Not closed');
+    await fireEvent.click(screen.getByRole('button', { name: /year-end close offering/i }));
+    const password = screen.getByLabelText('Current password') as HTMLInputElement;
+    await fireEvent.update(password, 'wrong');
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText('Current password is incorrect.')).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(password.value).toBe('');
+    expect(screen.getByRole('alert').textContent).toContain('Current password is incorrect.');
+  });
+
+  it('moves focus into the dialog, traps it, and restores focus after Escape', async () => {
+    signIn('ADMIN');
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2025,
+      fiscalEndDate: '2025-12-31',
+      closeEligible: true,
+      offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+      expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+    });
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+    await screen.findAllByText('Not closed');
+    const trigger = screen.getByRole('button', { name: /year-end close offering/i });
+    await fireEvent.click(trigger);
+
+    const dialog = screen.getByRole('dialog');
+    const password = within(dialog).getByLabelText('Current password');
+    await vi.waitFor(() => expect(document.activeElement).toBe(password));
+    const confirm = within(dialog).getByRole('button', { name: 'Confirm' });
+    await fireEvent.update(password, 'secret');
+    confirm.focus();
+    await fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(document.activeElement).toBe(password);
+
+    await fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it('disables lifecycle changes only for the report currently downloading', async () => {
+    signIn('ADMIN');
+    yearEndStatusMock.mockResolvedValue({
+      fiscalYear: 2025,
+      fiscalEndDate: '2025-12-31',
+      closeEligible: true,
+      offering: { reportType: 'OFFERING', status: 'NOT_CLOSED' },
+      expenditure: { reportType: 'EXPENDITURE', status: 'NOT_CLOSED' },
+    });
+    let resolveOffering = (_download: { blob: Blob; filename: string }) => {};
+    yearlyOfferingMock.mockReturnValue(new Promise((resolve) => {
+      resolveOffering = resolve;
+    }));
+    URL.createObjectURL = vi.fn(() => 'blob:yearly');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '2025');
+    await screen.findAllByText('Not closed');
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly offering excel/i }));
+
+    expect((screen.getByRole('button', { name: /year-end close offering/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /year-end close expenditure/i }) as HTMLButtonElement).disabled).toBe(false);
+    resolveOffering({ blob: new Blob(['xlsx']), filename: 'yearly-offerings-2025-draft.xlsx' });
+  });
+
+  it('validates the yearly fiscal year and hides non-workbook controls', async () => {
+    signIn('VIEWER');
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /yearly financial report/i }));
+
+    expect(screen.queryByRole('button', { name: /export csv/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /run report/i })).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+
+    yearlyOfferingMock.mockClear();
+    await fireEvent.update(screen.getByLabelText('Fiscal year'), '1999');
+    await fireEvent.click(screen.getByRole('button', { name: /download yearly offering excel/i }));
+    expect(screen.getByText('A valid fiscal year is required.')).toBeTruthy();
+    expect(yearlyOfferingMock).not.toHaveBeenCalled();
+  });
+
   it('uses reference dropdowns and validates report date ranges', async () => {
     signIn('VIEWER');
     render(ReportsView);
@@ -231,6 +510,28 @@ describe('ReportsView', () => {
     const rows = screen.getAllByRole('row');
     expect(rows[1].textContent).toContain('Two');
     expect(rows[2].textContent).toContain('Ten');
+  });
+
+  it('sorts missing offering numbers last without crashing and prevents issuance', async () => {
+    signIn('TREASURER');
+    taxSummaryMock.mockResolvedValue([
+      {
+        ...receiptRow, memberId: 'numbered', offeringNumber: '102', donorName: 'Numbered Member',
+        receiptId: undefined, receiptNumber: undefined, receiptStatus: undefined,
+      },
+      {
+        ...receiptRow, memberId: 'missing', offeringNumber: null, donorName: 'Missing Number',
+        receiptId: undefined, receiptNumber: undefined, receiptStatus: undefined,
+      },
+    ]);
+    render(ReportsView);
+    await fireEvent.click(screen.getByRole('tab', { name: /official tax/i }));
+
+    const rows = await screen.findAllByRole('row');
+    expect(rows[1].textContent).toContain('Numbered Member');
+    expect(rows[2].textContent).toContain('Missing Number');
+    expect(within(rows[2]).getByText('Missing')).toBeTruthy();
+    expect((within(rows[2]).getByRole('button', { name: 'Issue receipt' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('issues and downloads an individual receipt', async () => {

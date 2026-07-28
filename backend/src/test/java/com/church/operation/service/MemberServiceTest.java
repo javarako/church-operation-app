@@ -277,6 +277,40 @@ class MemberServiceTest {
     }
 
     @Test
+    void managedMemberUpdatePreservesImageStoredThroughImageEndpoint() {
+        Member actor = member("admin-id", "admin", Role.ADMIN);
+        Member stored = member("member-id", "member@example.com", Role.MEMBER);
+        stored.setFaceImageAttachmentId("64b000000000000000000001");
+        MemberRequest request = minimalRequest("member@example.com");
+
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(stored));
+        when(memberRepository.findByPrimaryEmail("member@example.com")).thenReturn(Optional.of(stored));
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Member updated = new MemberService(memberRepository, referenceDataRepository)
+            .updateMember(actor, "member-id", request);
+
+        assertThat(updated.getFaceImageAttachmentId()).isEqualTo("64b000000000000000000001");
+    }
+
+    @Test
+    void selfProfileUpdatePreservesImageStoredThroughImageEndpoint() {
+        Member actor = member("member-id", "member@example.com", Role.MEMBER);
+        Member stored = member("member-id", "member@example.com", Role.MEMBER);
+        stored.setFaceImageAttachmentId("64b000000000000000000001");
+        MemberRequest request = minimalRequest("member@example.com");
+
+        when(memberRepository.findById("member-id")).thenReturn(Optional.of(stored));
+        when(memberRepository.findByPrimaryEmail("member@example.com")).thenReturn(Optional.of(stored));
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Member updated = new MemberService(memberRepository, referenceDataRepository)
+            .updateSelf(actor, request);
+
+        assertThat(updated.getFaceImageAttachmentId()).isEqualTo("64b000000000000000000001");
+    }
+
+    @Test
     void listMembersFiltersBySearchForMembershipManager() {
         Member actor = member("manager-id", "manager@example.com", Role.MEMBERSHIP);
         Member match = member("match-id", "sarah@example.com", Role.MEMBER);

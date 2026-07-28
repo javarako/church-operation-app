@@ -5,9 +5,15 @@ export interface ChurchInformation {
   address: string;
   contactInfo: string;
   treasurerName: string;
+  charityRegistrationNumber: string;
+  receiptIssueLocation: string;
+  website: string;
   bannerPath: string;
   logPath: string;
+  timeZone: string;
+  fiscalYearStartMonth: number;
   listPageSize: number;
+  applicationVersion: string;
 }
 
 export function getChurchInformation() {

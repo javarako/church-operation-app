@@ -8,6 +8,10 @@ import com.church.operation.dto.TaxReceiptNoteRequest;
 import com.church.operation.dto.TaxReceiptSummaryRow;
 import com.church.operation.dto.VoidTaxReceiptRequest;
 import com.church.operation.dto.WeeklyOfferingReportRow;
+import com.church.operation.dto.YearEndClosingReportStatus;
+import com.church.operation.dto.YearEndClosingRequest;
+import com.church.operation.dto.YearEndClosingStatusResponse;
+import com.church.operation.dto.YearlyWorkbookDownload;
 import com.church.operation.entity.Member;
 import com.church.operation.entity.TaxReceipt;
 import com.church.operation.service.ReportService;
@@ -16,6 +20,8 @@ import com.church.operation.service.QuarterlyExpenditureReportService;
 import com.church.operation.service.QuarterlyOfferingReportService;
 import com.church.operation.service.TaxReceiptPdfService;
 import com.church.operation.service.TaxReceiptService;
+import com.church.operation.service.YearEndClosingService;
+import com.church.operation.util.YearEndReportType;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -46,6 +52,7 @@ public class ReportController {
     private final QuarterlyOfferingReportService quarterlyOfferingReportService;
     private final QuarterlyExpenditureReportService quarterlyExpenditureReportService;
     private final QuarterlyFinancialExcelService quarterlyFinancialExcelService;
+    private final YearEndClosingService yearEndClosingService;
 
     public ReportController(
         ReportService reportService,
@@ -53,7 +60,8 @@ public class ReportController {
         TaxReceiptPdfService taxReceiptPdfService,
         QuarterlyOfferingReportService quarterlyOfferingReportService,
         QuarterlyExpenditureReportService quarterlyExpenditureReportService,
-        QuarterlyFinancialExcelService quarterlyFinancialExcelService
+        QuarterlyFinancialExcelService quarterlyFinancialExcelService,
+        YearEndClosingService yearEndClosingService
     ) {
         this.reportService = reportService;
         this.taxReceiptService = taxReceiptService;
@@ -61,6 +69,7 @@ public class ReportController {
         this.quarterlyOfferingReportService = quarterlyOfferingReportService;
         this.quarterlyExpenditureReportService = quarterlyExpenditureReportService;
         this.quarterlyFinancialExcelService = quarterlyFinancialExcelService;
+        this.yearEndClosingService = yearEndClosingService;
     }
 
     @GetMapping("/weekly-offerings")
@@ -196,6 +205,67 @@ public class ReportController {
                 HttpHeaders.CONTENT_DISPOSITION,
                 "attachment; filename=quarterly-expenditures-" + year + "-q" + quarter + ".xlsx"
             )
+            .body(workbook);
+    }
+
+    @GetMapping("/yearly-offerings.xlsx")
+    ResponseEntity<byte[]> downloadYearlyOfferings(
+        Authentication authentication,
+        @RequestParam("fiscalYear") int fiscalYear
+    ) {
+        YearlyWorkbookDownload download = yearEndClosingService.download(
+            actor(authentication),
+            YearEndReportType.OFFERING,
+            fiscalYear
+        );
+        return excelAttachment(download.content(), download.filename());
+    }
+
+    @GetMapping("/yearly-expenditures.xlsx")
+    ResponseEntity<byte[]> downloadYearlyExpenditures(
+        Authentication authentication,
+        @RequestParam("fiscalYear") int fiscalYear
+    ) {
+        YearlyWorkbookDownload download = yearEndClosingService.download(
+            actor(authentication),
+            YearEndReportType.EXPENDITURE,
+            fiscalYear
+        );
+        return excelAttachment(download.content(), download.filename());
+    }
+
+    @GetMapping("/yearly-closing-status")
+    YearEndClosingStatusResponse yearlyClosingStatus(
+        Authentication authentication,
+        @RequestParam("fiscalYear") int fiscalYear
+    ) {
+        return yearEndClosingService.status(actor(authentication), fiscalYear);
+    }
+
+    @PostMapping("/yearly-closing/{reportType}/close")
+    YearEndClosingReportStatus closeYearlyReport(
+        Authentication authentication,
+        @PathVariable("reportType") YearEndReportType reportType,
+        @Valid @RequestBody YearEndClosingRequest request
+    ) {
+        return yearEndClosingService.close(actor(authentication), reportType, request);
+    }
+
+    @PostMapping("/yearly-closing/{reportType}/reopen")
+    YearEndClosingReportStatus reopenYearlyReport(
+        Authentication authentication,
+        @PathVariable("reportType") YearEndReportType reportType,
+        @Valid @RequestBody YearEndClosingRequest request
+    ) {
+        return yearEndClosingService.reopen(actor(authentication), reportType, request);
+    }
+
+    private ResponseEntity<byte[]> excelAttachment(byte[] workbook, String filename) {
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ))
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
             .body(workbook);
     }
 

@@ -29,6 +29,7 @@ public class SecurityConfig {
                     "/api/auth/forgot-password",
                     "/api/auth/reset-password",
                     "/api/church-information",
+                    "/api/church-information/**",
                     "/actuator/health",
                     "/branding/**"
                 ).permitAll()

@@ -1,6 +1,5 @@
 package com.church.operation.service;
 
-import com.church.operation.config.ChurchInformationProperties;
 import com.church.operation.dto.QuarterlyFinancialGroup;
 import com.church.operation.dto.QuarterlyFinancialReport;
 import com.church.operation.dto.QuarterlyFinancialRow;
@@ -11,26 +10,15 @@ import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
-import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.util.Units;
-import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
-import org.apache.poi.xssf.usermodel.XSSFDrawing;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,10 +33,15 @@ public class QuarterlyFinancialExcelService {
         "구 분", "항 목", "예산", "%d월", "%d월", "%d월", "분기 합계", "누적", "예산대비", "비고"
     };
 
-    private final ChurchInformationProperties properties;
+    private final ChurchBrandingService branding;
+    private final ChurchInformationResolver churchInformationResolver;
 
-    public QuarterlyFinancialExcelService(ChurchInformationProperties properties) {
-        this.properties = properties;
+    public QuarterlyFinancialExcelService(
+        ChurchBrandingService branding,
+        ChurchInformationResolver churchInformationResolver
+    ) {
+        this.branding = branding;
+        this.churchInformationResolver = churchInformationResolver;
     }
 
     public byte[] render(QuarterlyFinancialReport report) {
@@ -59,8 +52,9 @@ public class QuarterlyFinancialExcelService {
             configureColumns(sheet);
             createTopRows(sheet, report, styles);
             int finalRow = createReportRows(sheet, report, styles);
-            addLogo(workbook, sheet);
-            configurePrint(workbook, sheet, finalRow);
+            byte[] logo = branding.effectiveLogoBytes(churchInformationResolver.savedSettings().orElse(null));
+            FinancialExcelLayoutSupport.addLogo(workbook, sheet, logo, 7, 10);
+            FinancialExcelLayoutSupport.configurePrint(workbook, sheet, 9, finalRow);
             workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
             workbook.write(output);
             return output.toByteArray();
@@ -210,89 +204,6 @@ public class QuarterlyFinancialExcelService {
         total.getCell(8).setCellFormula(percentageFormula(finalRow));
         total.getCell(8).setCellStyle(styles.totalPercentage());
         return finalRow;
-    }
-
-    private void addLogo(XSSFWorkbook workbook, XSSFSheet sheet) {
-        byte[] imageBytes = loadLogo();
-        if (imageBytes == null) {
-            return;
-        }
-
-        try {
-            BufferedImage image = ImageIO.read(new ByteArrayInputStream(imageBytes));
-            if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
-                return;
-            }
-            int pictureType = isJpeg(imageBytes) ? Workbook.PICTURE_TYPE_JPEG : Workbook.PICTURE_TYPE_PNG;
-            int pictureIndex = workbook.addPicture(imageBytes, pictureType);
-            XSSFDrawing drawing = sheet.createDrawingPatriarch();
-            double targetWidth = columnPixels(sheet, 7) + columnPixels(sheet, 8) + columnPixels(sheet, 9);
-            double targetHeight = sheet.getRow(0).getHeightInPoints() * 96d / 72d;
-            double scale = Math.min(targetWidth / image.getWidth(), targetHeight / image.getHeight());
-            double renderedWidth = image.getWidth() * scale;
-            double renderedHeight = image.getHeight() * scale;
-            XSSFClientAnchor anchor = new XSSFClientAnchor();
-            anchor.setCol1(7);
-            anchor.setRow1(0);
-            anchor.setDx1(Units.pixelToEMU((int) Math.round(targetWidth - renderedWidth)));
-            anchor.setDy1(Units.pixelToEMU((int) Math.round(targetHeight - renderedHeight)));
-            anchor.setCol2(10);
-            anchor.setRow2(1);
-            drawing.createPicture(anchor, pictureIndex);
-        } catch (IOException | RuntimeException ignored) {
-            // Branding is optional; preserve a usable workbook when an image cannot be decoded.
-        }
-    }
-
-    private byte[] loadLogo() {
-        String path = properties.branding() == null ? null : properties.branding().logPath();
-        if (path == null || path.isBlank()) {
-            return null;
-        }
-        String normalized = path.replaceFirst("^/", "");
-        for (String candidate : List.of(normalized, "static/" + normalized)) {
-            try {
-                ClassPathResource resource = new ClassPathResource(candidate);
-                if (resource.exists()) {
-                    return resource.getContentAsByteArray();
-                }
-            } catch (IOException | IllegalArgumentException ignored) {
-                // Try the alternate classpath form.
-            }
-        }
-        return null;
-    }
-
-    private boolean isJpeg(byte[] bytes) {
-        return bytes.length > 2
-            && (bytes[0] & 0xff) == 0xff
-            && (bytes[1] & 0xff) == 0xd8;
-    }
-
-    private double columnPixels(XSSFSheet sheet, int column) {
-        return (sheet.getColumnWidth(column) / 256d) * 7d + 5d;
-    }
-
-    private void configurePrint(XSSFWorkbook workbook, XSSFSheet sheet, int finalRow) {
-        sheet.getPrintSetup().setLandscape(true);
-        sheet.getPrintSetup().setPaperSize(PrintSetup.LETTER_PAPERSIZE);
-        sheet.getPrintSetup().setScale((short) 100);
-        sheet.setFitToPage(false);
-        sheet.setAutobreaks(false);
-        if (sheet.getCTWorksheet().getPageSetup().isSetFitToWidth()) {
-            sheet.getCTWorksheet().getPageSetup().unsetFitToWidth();
-        }
-        if (sheet.getCTWorksheet().getPageSetup().isSetFitToHeight()) {
-            sheet.getCTWorksheet().getPageSetup().unsetFitToHeight();
-        }
-        sheet.setHorizontallyCenter(true);
-        sheet.setMargin(Sheet.TopMargin, 0.5);
-        sheet.setMargin(Sheet.BottomMargin, 0.5);
-        sheet.setMargin(Sheet.LeftMargin, 0.25);
-        sheet.setMargin(Sheet.RightMargin, 0.25);
-        sheet.getFooter().setCenter("Page &P");
-        workbook.setPrintArea(0, 0, 9, 0, finalRow);
-        sheet.setRepeatingRows(CellRangeAddress.valueOf("1:4"));
     }
 
     private void createCells(Row row, CellStyle style) {

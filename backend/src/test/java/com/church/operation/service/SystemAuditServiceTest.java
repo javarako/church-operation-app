@@ -51,6 +51,65 @@ class SystemAuditServiceTest {
     }
 
     @Test
+    void allowsNonSensitiveYearEndClosingMetadata() {
+        service.recordSuccess(admin(), SystemAuditOperation.YEAR_END_CLOSE, Map.of(
+            "fiscalYear", 2025,
+            "reportType", "OFFERING",
+            "version", 2,
+            "closingId", "closing-2",
+            "gridFsFileId", "grid-2",
+            "checksum", "abc123",
+            "fileSize", 4096
+        ));
+
+        ArgumentCaptor<SystemAuditEvent> event = ArgumentCaptor.forClass(SystemAuditEvent.class);
+        verify(repository).save(event.capture());
+        assertThat(event.getValue().getMetadata()).containsEntry("reportType", "OFFERING");
+        assertThat(event.getValue().getMetadata()).containsEntry("version", "2");
+        assertThat(event.getValue().getMetadata()).containsEntry("checksum", "abc123");
+    }
+
+    @Test
+    void allowsOnlySafeEmailConfigurationMetadata() {
+        service.recordSuccess(admin(), SystemAuditOperation.EMAIL_SETTINGS_UPDATE, Map.of(
+            "configurationSource", "DATABASE",
+            "configurationVersion", 1
+        ));
+
+        ArgumentCaptor<SystemAuditEvent> event = ArgumentCaptor.forClass(SystemAuditEvent.class);
+        verify(repository).save(event.capture());
+        assertThat(event.getValue().getMetadata()).containsExactlyInAnyOrderEntriesOf(Map.of(
+            "configurationSource", "DATABASE",
+            "configurationVersion", "1"
+        ));
+    }
+
+    @Test
+    void allowsOnlySafeChurchSettingsChangeMetadata() {
+        service.recordSuccess(admin(), SystemAuditOperation.CHURCH_SETTINGS_UPDATE, Map.of(
+            "configurationSource", "DATABASE",
+            "logoChanged", true,
+            "bannerChanged", false,
+            "timeZoneChanged", true,
+            "fiscalYearStartMonthChanged", true,
+            "listPageSizeChanged", true,
+            "dataOperationExpiryChanged", true
+        ));
+
+        ArgumentCaptor<SystemAuditEvent> event = ArgumentCaptor.forClass(SystemAuditEvent.class);
+        verify(repository).save(event.capture());
+        assertThat(event.getValue().getMetadata()).containsExactlyInAnyOrderEntriesOf(Map.of(
+            "configurationSource", "DATABASE",
+            "logoChanged", "true",
+            "bannerChanged", "false",
+            "timeZoneChanged", "true",
+            "fiscalYearStartMonthChanged", "true",
+            "listPageSizeChanged", "true",
+            "dataOperationExpiryChanged", "true"
+        ));
+    }
+
+    @Test
     void recordsSanitizedAndTruncatedFailureSummary() {
         String longMessage = "Restore failed\npassword=secret " + "x".repeat(400);
 

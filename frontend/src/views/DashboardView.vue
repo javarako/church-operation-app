@@ -126,15 +126,15 @@ import { computed, onMounted, ref } from 'vue';
 import { Bar } from 'vue-chartjs';
 import { BarElement, CategoryScale, Chart as ChartJS, LinearScale, Tooltip, type ChartData, type ChartOptions } from 'chart.js';
 import { ChartNoAxesCombined, HandHeart, MapPin, Phone, ReceiptText, UserRoundCheck, Users } from '@lucide/vue';
-import { getChurchInformation, type ChurchInformation } from '../api/churchInformation';
 import { getDashboard, type DashboardResponse } from '../api/dashboard';
 import { authState } from '../auth/authStore';
+import { churchInformationState, loadChurchInformation } from '../stores/churchInformationStore';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 const dashboard = ref<DashboardResponse | null>(null);
 const dashboardError = ref('');
-const churchInfo = ref<ChurchInformation | null>(null);
+const churchInfo = computed(() => churchInformationState.value);
 
 const chartData = computed<ChartData<'bar'>>(() => ({
   labels: dashboard.value?.offeringTrend.map((point) => point.sunday) ?? [],
@@ -180,17 +180,9 @@ const userInitials = computed(() => {
 });
 
 onMounted(() => {
-  void loadChurchInformation();
+  void loadChurchInformation().catch(() => undefined);
   void loadDashboard();
 });
-
-async function loadChurchInformation() {
-  try {
-    churchInfo.value = await getChurchInformation();
-  } catch {
-    churchInfo.value = null;
-  }
-}
 
 async function loadDashboard() {
   dashboardError.value = '';

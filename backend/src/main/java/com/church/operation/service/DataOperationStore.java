@@ -12,24 +12,34 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class DataOperationStore {
     private final Map<String, Operation> operations = new ConcurrentHashMap<>();
-    private final DataManagementProperties properties;
+    private final Supplier<Duration> operationExpiry;
     private final Clock clock;
     private String activeMutationId;
 
     @Autowired
-    public DataOperationStore(DataManagementProperties properties) {
-        this(properties, Clock.systemUTC());
+    public DataOperationStore(RuntimeOperationalSettings settings) {
+        this(settings::dataOperationExpiry, Clock.systemUTC());
     }
 
     DataOperationStore(DataManagementProperties properties, Clock clock) {
-        this.properties = properties;
+        this(properties::operationExpiry, clock);
+    }
+
+    DataOperationStore(RuntimeOperationalSettings settings, Clock clock) {
+        this(settings::dataOperationExpiry, clock);
+    }
+
+    private DataOperationStore(Supplier<Duration> operationExpiry, Clock clock) {
+        this.operationExpiry = operationExpiry;
         this.clock = clock;
     }
 
@@ -51,7 +61,7 @@ public class DataOperationStore {
             actorId,
             uploadedArchive,
             validatedArchive,
-            clock.instant().plus(properties.operationExpiry()),
+            clock.instant().plus(operationExpiry.get()),
             collectionCount,
             documentCount,
             indexCount

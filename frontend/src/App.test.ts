@@ -5,6 +5,7 @@ import App from './App.vue';
 import { authState, type Role } from './auth/authStore';
 import { getChurchInformation } from './api/churchInformation';
 import { createAppRouter } from './router';
+import { resetChurchInformationStore } from './stores/churchInformationStore';
 
 vi.mock('./api/churchInformation', () => ({
   getChurchInformation: vi.fn().mockResolvedValue({
@@ -12,9 +13,15 @@ vi.mock('./api/churchInformation', () => ({
     address: '123 Church Street',
     contactInfo: '416-555-0100',
     treasurerName: 'Daniel Kim',
-    bannerPath: '/branding/church-banner.png',
-    logPath: '/branding/church_logo.png',
+    charityRegistrationNumber: '',
+    receiptIssueLocation: '',
+    website: '',
+    bannerPath: '/branding/church_banner_sample.png',
+    logPath: '/branding/church_logo_sample.png',
+    timeZone: 'America/Toronto',
+    fiscalYearStartMonth: 1,
     listPageSize: 20,
+    applicationVersion: '1.0.0',
   }),
 }));
 
@@ -59,14 +66,21 @@ async function navigateAs(role: Role, path: string) {
 
 describe('App', () => {
   beforeEach(() => {
+    resetChurchInformationStore();
     churchInformationMock.mockResolvedValue({
       name: 'Grace Community Church',
       address: '123 Church Street',
       contactInfo: '416-555-0100',
       treasurerName: 'Daniel Kim',
-      bannerPath: '/branding/church-banner.png',
-      logPath: '/branding/church_logo.png',
+      charityRegistrationNumber: '',
+      receiptIssueLocation: '',
+      website: '',
+      bannerPath: '/branding/church_banner_sample.png',
+      logPath: '/branding/church_logo_sample.png',
+      timeZone: 'America/Toronto',
+      fiscalYearStartMonth: 1,
       listPageSize: 20,
+      applicationVersion: '1.0.0',
     });
     authState.currentUser = {
       primaryEmail: 'admin@example.com',

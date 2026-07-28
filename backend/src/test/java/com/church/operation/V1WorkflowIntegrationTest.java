@@ -69,7 +69,7 @@ class V1WorkflowIntegrationTest {
     private static final String THANK_YOU = "Thank you for your faithful and generous support.";
 
     @Container
-    static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:7.0.17"));
+    static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:8.0.28"));
 
     @DynamicPropertySource
     static void mongo(DynamicPropertyRegistry registry) {

@@ -38,6 +38,26 @@
         <Archive :size="18" aria-hidden="true" />
         Fiscal Archive
       </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'church'"
+        :class="{ active: activeTab === 'church' }"
+        @click="openChurchSettings"
+      >
+        <Church :size="18" aria-hidden="true" />
+        Church Settings
+      </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'email'"
+        :class="{ active: activeTab === 'email' }"
+        @click="openEmailSettings"
+      >
+        <Mail :size="18" aria-hidden="true" />
+        Email Settings
+      </button>
     </div>
 
     <p v-if="error" class="error administration-message" role="alert">{{ error }}</p>
@@ -158,7 +178,7 @@
       </section>
     </section>
 
-    <section v-else class="panel administration-form fiscal-workflow">
+    <section v-else-if="activeTab === 'fiscal'" class="panel administration-form fiscal-workflow">
       <header class="administration-section-header">
         <div>
           <h3>Fiscal-year archive</h3>
@@ -253,22 +273,220 @@
         </section>
       </div>
     </section>
+
+    <form v-else-if="activeTab === 'church'" class="panel administration-form church-settings-form" @submit.prevent="saveChurchConfiguration">
+      <header class="administration-section-header">
+        <div>
+          <h3>Church settings</h3>
+          <p>Manage church information and branding used throughout the application and newly generated reports.</p>
+        </div>
+        <Church :size="26" aria-hidden="true" />
+      </header>
+
+      <div v-if="churchSettings" class="email-settings-status" aria-label="Church settings status">
+        <span class="settings-status source">
+          {{ churchSettings.source === 'DATABASE' ? 'Database settings' : 'Server defaults' }}
+        </span>
+        <small>Changes appear immediately. A relogin or server restart is not required.</small>
+      </div>
+
+      <div class="administration-fields church-settings-grid">
+        <label>Church name<input v-model.trim="churchForm.name" required maxlength="200" /></label>
+        <label>Church address<input v-model.trim="churchForm.address" required maxlength="500" /></label>
+        <label>Contact information<input v-model.trim="churchForm.contactInfo" maxlength="500" /></label>
+        <label>Treasurer name<input v-model.trim="churchForm.treasurerName" maxlength="200" /></label>
+        <label>Charity registration number<input v-model.trim="churchForm.charityRegistrationNumber" maxlength="200" /></label>
+        <label>Receipt issue location<input v-model.trim="churchForm.receiptIssueLocation" maxlength="200" /></label>
+        <label class="church-website-field">Church website<input v-model.trim="churchForm.website" type="url" maxlength="500" placeholder="https://" /></label>
+      </div>
+
+      <section class="church-operational-settings" aria-labelledby="operational-settings-title">
+        <h4 id="operational-settings-title">Operational Settings</h4>
+        <div class="administration-fields church-settings-grid">
+          <label>Church time zone
+            <select v-model="churchForm.timeZone" required>
+              <option v-for="zone in churchTimeZones" :key="zone" :value="zone">{{ zone }}</option>
+            </select>
+          </label>
+          <label>Fiscal year starts
+            <select v-model.number="churchForm.fiscalYearStartMonth" required>
+              <option v-for="month in fiscalMonths" :key="month.value" :value="month.value">{{ month.label }}</option>
+            </select>
+          </label>
+          <label>List page size
+            <input v-model.number="churchForm.listPageSize" type="number" min="5" max="100" required />
+          </label>
+          <label>Data operation expiry
+            <select v-model.number="churchForm.dataOperationExpiryMinutes" required>
+              <option v-for="minutes in operationExpiryOptions" :key="minutes" :value="minutes">
+                {{ minutes }} minutes
+              </option>
+            </select>
+          </label>
+        </div>
+        <p class="administration-note">Changes apply immediately. Prepared restore operations keep their existing expiry time.</p>
+      </section>
+
+      <div class="branding-upload-grid">
+        <section class="branding-upload">
+          <div class="branding-preview logo-preview">
+            <img v-if="effectiveLogoPreview" :src="effectiveLogoPreview" alt="Current church logo" />
+            <span v-else>No logo</span>
+          </div>
+          <label>Church logo
+            <input type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" @change="selectBrandingFile('logo', $event)" />
+          </label>
+          <small>PNG or JPEG, up to 5 MB.</small>
+        </section>
+        <section class="branding-upload">
+          <div class="branding-preview banner-preview">
+            <img v-if="effectiveBannerPreview" :src="effectiveBannerPreview" alt="Current church banner" />
+            <span v-else>No banner</span>
+          </div>
+          <label>Church banner
+            <input type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" @change="selectBrandingFile('banner', $event)" />
+          </label>
+          <small>PNG or JPEG, up to 5 MB.</small>
+        </section>
+      </div>
+
+      <p class="administration-note">Uploaded branding is stored in the database, included in full backups, and used by new tax receipts and financial workbooks.</p>
+
+      <div class="email-settings-actions">
+        <button type="submit" :disabled="busy">
+          <Save :size="18" aria-hidden="true" /> {{ busy ? 'Saving...' : 'Save church settings' }}
+        </button>
+        <button type="button" class="reset-command" :disabled="busy" @click="showChurchResetConfirmation = true">
+          <RotateCcw :size="18" aria-hidden="true" /> Reset church settings
+        </button>
+      </div>
+    </form>
+
+    <form v-else class="panel administration-form email-settings-form" @submit.prevent="saveTestedEmailSettings">
+      <header class="administration-section-header">
+        <div>
+          <h3>Email server settings</h3>
+          <p>Send a successful test email before saving changes used for password reset messages.</p>
+        </div>
+        <div class="email-settings-header-actions">
+          <button type="button" class="icon-command" aria-label="Email settings guide" title="Email settings guide" @click="showEmailGuide = true">
+            <Info :size="20" aria-hidden="true" />
+          </button>
+          <Mail :size="26" aria-hidden="true" />
+        </div>
+      </header>
+
+      <div v-if="emailSettings" class="email-settings-status" aria-label="Email settings status">
+        <span class="settings-status" :class="{ configured: emailSettings.passwordConfigured }">
+          {{ emailSettings.passwordConfigured ? 'Password configured' : 'Password not configured' }}
+        </span>
+        <span class="settings-status source">
+          {{ emailSettings.source === 'DATABASE' ? 'Database settings' : 'Server defaults' }}
+        </span>
+      </div>
+
+      <div class="administration-fields email-settings-grid">
+        <label>SMTP host<input v-model.trim="emailForm.host" required autocomplete="off" /></label>
+        <label>SMTP port<input v-model.number="emailForm.port" required type="number" min="1" max="65535" /></label>
+        <label>Username<input v-model.trim="emailForm.username" autocomplete="username" /></label>
+        <label>SMTP password
+          <input v-model="emailForm.password" type="password" autocomplete="new-password" placeholder="Leave blank to keep the configured password" />
+        </label>
+        <label>From address<input v-model.trim="emailForm.fromAddress" required type="email" autocomplete="email" /></label>
+        <label>Test recipient<input v-model.trim="testRecipient" required type="email" autocomplete="email" /></label>
+      </div>
+
+      <p v-if="verificationToken" class="completion-mark">
+        <CheckCircle2 :size="17" aria-hidden="true" /> Test passed. These exact settings can now be saved.
+      </p>
+
+      <div class="email-settings-actions">
+        <button type="button" class="secondary-command" :disabled="busy" @click="sendEmailTest">
+          <Send :size="18" aria-hidden="true" /> {{ busy ? 'Sending...' : 'Send test email' }}
+        </button>
+        <button type="submit" :disabled="busy || !verificationToken">
+          <Save :size="18" aria-hidden="true" /> Save settings
+        </button>
+        <button type="button" class="reset-command" :disabled="busy" @click="showResetConfirmation = true">
+          <RotateCcw :size="18" aria-hidden="true" /> Reset to server defaults
+        </button>
+      </div>
+    </form>
+
+    <div v-if="showChurchResetConfirmation" class="email-guide-backdrop" @click.self="showChurchResetConfirmation = false">
+      <section class="email-guide-dialog confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="church-reset-title">
+        <header>
+          <h3 id="church-reset-title">Reset church settings</h3>
+          <button type="button" class="icon-command" aria-label="Close church settings reset" @click="showChurchResetConfirmation = false">
+            <X :size="20" aria-hidden="true" />
+          </button>
+        </header>
+        <p>Database information and uploaded branding will be removed. The application will immediately use the server defaults.</p>
+        <div class="email-settings-actions">
+          <button type="button" class="secondary-command" @click="showChurchResetConfirmation = false">Cancel</button>
+          <button type="button" class="danger-command" :disabled="busy" @click="confirmChurchReset">
+            <RotateCcw :size="18" aria-hidden="true" /> Confirm reset church settings
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="showEmailGuide" class="email-guide-backdrop" @click.self="showEmailGuide = false">
+      <section class="email-guide-dialog" role="dialog" aria-modal="true" aria-labelledby="email-guide-title">
+        <header>
+          <h3 id="email-guide-title">Email settings guide</h3>
+          <button type="button" class="icon-command" aria-label="Close email settings guide" @click="showEmailGuide = false">
+            <X :size="20" aria-hidden="true" />
+          </button>
+        </header>
+        <p>Enter the provider's SMTP details, send a test message, and save only after the test succeeds.</p>
+        <p>The password is encrypted in the database using <code>CHURCH_SETTINGS_ENCRYPTION_KEY</code> from the server's <code>.env</code> file. Keep the same key after a restart or deployment.</p>
+        <p>SMTP authentication and STARTTLS are managed by the server administrator in <code>.env</code>. They are intentionally not shown on this page.</p>
+        <p>Resetting first tests the server defaults, then removes the database override. It does not remove values from <code>.env</code>.</p>
+        <button type="button" class="secondary-command" @click="showEmailGuide = false">Close</button>
+      </section>
+    </div>
+
+    <div v-if="showResetConfirmation" class="email-guide-backdrop" @click.self="showResetConfirmation = false">
+      <section class="email-guide-dialog confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="email-reset-title">
+        <header>
+          <h3 id="email-reset-title">Reset email settings</h3>
+          <button type="button" class="icon-command" aria-label="Close reset confirmation" @click="showResetConfirmation = false">
+            <X :size="20" aria-hidden="true" />
+          </button>
+        </header>
+        <p>The server defaults will be tested using the test recipient before database settings are removed.</p>
+        <div class="email-settings-actions">
+          <button type="button" class="secondary-command" @click="showResetConfirmation = false">Cancel</button>
+          <button type="button" class="danger-command" :disabled="busy" @click="confirmEmailReset">
+            <RotateCcw :size="18" aria-hidden="true" /> Reset settings
+          </button>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   Archive,
   ArchiveRestore,
   CheckCircle2,
+  Church,
   DatabaseBackup,
   DatabaseZap,
   Download,
   FileCheck2,
+  Info,
+  Mail,
+  RotateCcw,
+  Save,
+  Send,
   ShieldCheck,
   TriangleAlert,
+  X,
 } from '@lucide/vue';
 import { authState, setCurrentUser } from '../auth/authStore';
 import {
@@ -285,9 +503,27 @@ import {
   type FiscalArchivePreview,
   type FiscalRestorePreview,
 } from '../api/dataManagement';
+import {
+  getEmailSettings,
+  resetEmailSettings,
+  saveEmailSettings,
+  testEmailSettings,
+  type EmailSettingsResponse,
+} from '../api/emailSettings';
+import {
+  getChurchSettings,
+  resetChurchSettings,
+  saveChurchSettings,
+  type ChurchSettingsDraft,
+  type ChurchSettingsResponse,
+} from '../api/churchSettings';
+import {
+  applyChurchInformation,
+  churchInformationState,
+} from '../stores/churchInformationStore';
 
 const router = useRouter();
-const activeTab = ref<'backup' | 'restore' | 'fiscal'>('backup');
+const activeTab = ref<'backup' | 'restore' | 'fiscal' | 'church' | 'email'>('backup');
 const busy = ref(false);
 const error = ref('');
 const success = ref('');
@@ -315,6 +551,61 @@ const fiscalRestoreFile = ref<File | null>(null);
 const fiscalRestorePassword = ref('');
 const fiscalRestoreOperation = ref<FiscalRestorePreview | null>(null);
 const fiscalRestoreConfirmation = ref('');
+
+const emailSettings = ref<EmailSettingsResponse | null>(null);
+const emailForm = reactive({ host: '', port: 587, username: '', password: '', fromAddress: '' });
+const currentEmail = authState.currentUser?.primaryEmail ?? '';
+const testRecipient = ref(isEmail(currentEmail) ? currentEmail : '');
+const verificationToken = ref('');
+const applyingEmailSettings = ref(false);
+const showEmailGuide = ref(false);
+const showResetConfirmation = ref(false);
+
+const churchSettings = ref<ChurchSettingsResponse | null>(null);
+const churchForm = reactive<ChurchSettingsDraft>({
+  name: '',
+  address: '',
+  contactInfo: '',
+  treasurerName: '',
+  charityRegistrationNumber: '',
+  receiptIssueLocation: '',
+  website: '',
+  timeZone: 'America/Toronto',
+  fiscalYearStartMonth: 1,
+  listPageSize: 20,
+  dataOperationExpiryMinutes: 30,
+});
+const churchTimeZones = [
+  'America/Toronto',
+  'America/St_Johns',
+  'America/Halifax',
+  'America/Winnipeg',
+  'America/Edmonton',
+  'America/Vancouver',
+  'America/Whitehorse',
+  'UTC',
+];
+const fiscalMonths = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+].map((label, index) => ({ label, value: index + 1 }));
+const operationExpiryOptions = [10, 20, 30, 60, 120];
+const churchLogoFile = ref<File | null>(null);
+const churchBannerFile = ref<File | null>(null);
+const logoPreviewUrl = ref('');
+const bannerPreviewUrl = ref('');
+const showChurchResetConfirmation = ref(false);
+const effectiveLogoPreview = computed(() => logoPreviewUrl.value || churchSettings.value?.logoUrl || '');
+const effectiveBannerPreview = computed(() => bannerPreviewUrl.value || churchSettings.value?.bannerUrl || '');
+
+onBeforeUnmount(() => clearBrandingSelections());
+
+watch(
+  () => [emailForm.host, emailForm.port, emailForm.username, emailForm.password, emailForm.fromAddress],
+  () => {
+    if (!applyingEmailSettings.value) verificationToken.value = '';
+  },
+);
 
 const canExecuteRestore = computed(() =>
   safetyDownloaded.value && restoreConfirmation.value === 'RESTORE FULL DATABASE',
@@ -424,6 +715,245 @@ async function runRestore() {
 async function openFiscal() {
   activeTab.value = 'fiscal';
   await loadFiscalPreview();
+}
+
+async function openEmailSettings() {
+  activeTab.value = 'email';
+  clearMessages();
+  busy.value = true;
+  try {
+    await applyEmailSettings(await getEmailSettings());
+  } catch (reason) {
+    error.value = message(reason, 'Could not load email settings.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function openChurchSettings() {
+  activeTab.value = 'church';
+  clearMessages();
+  busy.value = true;
+  try {
+    applyChurchSettings(await getChurchSettings());
+  } catch (reason) {
+    error.value = message(reason, 'Could not load church settings.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+function applyChurchSettings(settings: ChurchSettingsResponse) {
+  churchSettings.value = settings;
+  churchForm.name = settings.name;
+  churchForm.address = settings.address;
+  churchForm.contactInfo = settings.contactInfo;
+  churchForm.treasurerName = settings.treasurerName;
+  churchForm.charityRegistrationNumber = settings.charityRegistrationNumber;
+  churchForm.receiptIssueLocation = settings.receiptIssueLocation;
+  churchForm.website = settings.website;
+  churchForm.timeZone = settings.timeZone;
+  churchForm.fiscalYearStartMonth = settings.fiscalYearStartMonth;
+  churchForm.listPageSize = settings.listPageSize;
+  churchForm.dataOperationExpiryMinutes = settings.dataOperationExpiryMinutes;
+  applyEffectiveChurchInformation(settings);
+}
+
+function applyEffectiveChurchInformation(settings: ChurchSettingsResponse) {
+  const current = churchInformationState.value;
+  applyChurchInformation({
+    name: settings.name,
+    address: settings.address,
+    contactInfo: settings.contactInfo,
+    treasurerName: settings.treasurerName,
+    charityRegistrationNumber: settings.charityRegistrationNumber,
+    receiptIssueLocation: settings.receiptIssueLocation,
+    website: settings.website,
+    logPath: settings.logoUrl,
+    bannerPath: settings.bannerUrl,
+    timeZone: settings.timeZone,
+    fiscalYearStartMonth: settings.fiscalYearStartMonth,
+    listPageSize: settings.listPageSize,
+    applicationVersion: current?.applicationVersion ?? '',
+  });
+}
+
+async function selectBrandingFile(kind: 'logo' | 'banner', event: Event) {
+  clearMessages();
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!['image/png', 'image/jpeg'].includes(file.type)) {
+    error.value = 'Choose a PNG or JPEG image.';
+    input.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    error.value = 'Church branding images must not exceed 5 MB.';
+    input.value = '';
+    return;
+  }
+  try {
+    const dimensions = await decodeImageDimensions(file);
+    if (dimensions.width <= 0 || dimensions.height <= 0
+      || dimensions.width > 8_000 || dimensions.height > 8_000
+      || dimensions.width * dimensions.height > 40_000_000) {
+      error.value = 'The image dimensions must not exceed 8,000 pixels or 40 megapixels.';
+      input.value = '';
+      return;
+    }
+  } catch {
+    error.value = 'The image must be a valid PNG or JPEG file.';
+    input.value = '';
+    return;
+  }
+
+  if (kind === 'logo') {
+    revokePreview(logoPreviewUrl.value);
+    churchLogoFile.value = file;
+    logoPreviewUrl.value = URL.createObjectURL(file);
+  } else {
+    revokePreview(bannerPreviewUrl.value);
+    churchBannerFile.value = file;
+    bannerPreviewUrl.value = URL.createObjectURL(file);
+  }
+}
+
+async function decodeImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    try {
+      return { width: bitmap.width, height: bitmap.height };
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  const source = URL.createObjectURL(file);
+  try {
+    return await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error('Invalid image'));
+      image.src = source;
+    });
+  } finally {
+    URL.revokeObjectURL(source);
+  }
+}
+
+async function saveChurchConfiguration() {
+  clearMessages();
+  busy.value = true;
+  try {
+    const saved = await saveChurchSettings(
+      { ...churchForm },
+      churchLogoFile.value ?? undefined,
+      churchBannerFile.value ?? undefined,
+    );
+    clearBrandingSelections();
+    applyChurchSettings(saved);
+    success.value = 'Church settings saved.';
+  } catch (reason) {
+    error.value = message(reason, 'Could not save church settings.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function confirmChurchReset() {
+  clearMessages();
+  busy.value = true;
+  try {
+    const defaults = await resetChurchSettings();
+    clearBrandingSelections();
+    applyChurchSettings(defaults);
+    showChurchResetConfirmation.value = false;
+    success.value = 'Church settings reset to server defaults.';
+  } catch (reason) {
+    error.value = message(reason, 'Could not reset church settings.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+function clearBrandingSelections() {
+  revokePreview(logoPreviewUrl.value);
+  revokePreview(bannerPreviewUrl.value);
+  churchLogoFile.value = null;
+  churchBannerFile.value = null;
+  logoPreviewUrl.value = '';
+  bannerPreviewUrl.value = '';
+}
+
+function revokePreview(value: string) {
+  if (value) URL.revokeObjectURL(value);
+}
+
+async function applyEmailSettings(settings: EmailSettingsResponse) {
+  applyingEmailSettings.value = true;
+  emailSettings.value = settings;
+  emailForm.host = settings.host;
+  emailForm.port = settings.port;
+  emailForm.username = settings.username;
+  emailForm.password = '';
+  emailForm.fromAddress = settings.fromAddress;
+  verificationToken.value = '';
+  await nextTick();
+  applyingEmailSettings.value = false;
+}
+
+async function sendEmailTest() {
+  clearMessages();
+  if (!isEmail(testRecipient.value)) {
+    error.value = 'Enter a valid test recipient email address.';
+    return;
+  }
+  busy.value = true;
+  try {
+    const result = await testEmailSettings({ ...emailForm, testRecipient: testRecipient.value });
+    verificationToken.value = result.verificationToken;
+    success.value = result.message;
+  } catch (reason) {
+    verificationToken.value = '';
+    error.value = message(reason, 'Could not send the test email.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function saveTestedEmailSettings() {
+  if (!verificationToken.value) return;
+  clearMessages();
+  busy.value = true;
+  try {
+    const settings = await saveEmailSettings({ ...emailForm, verificationToken: verificationToken.value });
+    await applyEmailSettings(settings);
+    success.value = 'Email settings saved.';
+  } catch (reason) {
+    error.value = message(reason, 'Could not save email settings.');
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function confirmEmailReset() {
+  clearMessages();
+  if (!isEmail(testRecipient.value)) {
+    error.value = 'Enter a valid test recipient email address.';
+    showResetConfirmation.value = false;
+    return;
+  }
+  busy.value = true;
+  try {
+    await applyEmailSettings(await resetEmailSettings(testRecipient.value));
+    showResetConfirmation.value = false;
+    success.value = 'Email settings reset to server defaults.';
+  } catch (reason) {
+    error.value = message(reason, 'Could not reset email settings.');
+  } finally {
+    busy.value = false;
+  }
 }
 
 async function loadFiscalPreview() {
@@ -536,5 +1066,9 @@ function message(reason: unknown, fallback: string) {
 
 function formatExpiry(value: string) {
   return new Date(value).toLocaleString();
+}
+
+function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 </script>
