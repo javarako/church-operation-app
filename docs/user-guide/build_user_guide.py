@@ -198,7 +198,7 @@ def configure_document(doc: Document) -> None:
     footer = section.footer
     p = footer.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    run = p.add_run("Capstone Presbyterian Church   |   ")
+    run = p.add_run("Church Operation   |   ")
     set_run_font(run, size=8, color=MID_GRAY)
     add_field(p, "PAGE")
 
@@ -209,13 +209,13 @@ def add_cover(doc: Document) -> None:
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = p.add_run()
         shape = run.add_picture(str(LOGO_PATH), width=Inches(2.15))
-        shape._inline.docPr.set("descr", "Capstone Presbyterian Church logo")
+        shape._inline.docPr.set("descr", "Church Operation logo")
         p.paragraph_format.space_after = Pt(22)
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_after = Pt(8)
-    run = p.add_run("CAPSTONE PRESBYTERIAN CHURCH")
+    run = p.add_run("CHURCH OPERATION")
     set_run_font(run, size=11, color=TEAL, bold=True)
 
     p = doc.add_paragraph()

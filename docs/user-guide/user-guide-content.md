@@ -4,7 +4,7 @@ Version 1.0 | July 2026
 
 ## About This Guide
 
-This guide explains the day-to-day tasks available in Church Operations. It is organized by function so users can go directly to the work they need to perform. The screens shown use the current Capstone Presbyterian Church branding and sample records.
+This guide explains the day-to-day tasks available in Church Operations. It is organized by function so users can go directly to the work they need to perform. The screens show configurable church branding and sample records from a demonstration installation.
 
 The menu changes according to the roles assigned to the signed-in member. A user with more than one role receives the combined access of those roles.
 

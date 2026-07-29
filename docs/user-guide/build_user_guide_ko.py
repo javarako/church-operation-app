@@ -70,7 +70,7 @@ def apply_korean_typography(doc: Document) -> None:
     footer = section.footer.paragraphs[0]
     footer.clear()
     footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    set_korean_run_font(footer.add_run("Capstone Presbyterian Church   |   "), size=8, color=base.MID_GRAY)
+    set_korean_run_font(footer.add_run("Church Operation   |   "), size=8, color=base.MID_GRAY)
     base.add_field(footer, "PAGE")
 
 
@@ -79,13 +79,13 @@ def add_cover(doc: Document) -> None:
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         shape = p.add_run().add_picture(str(base.LOGO_PATH), width=Inches(2.15))
-        shape._inline.docPr.set("descr", "Capstone Presbyterian Church 로고")
+        shape._inline.docPr.set("descr", "Church Operation 로고")
         p.paragraph_format.space_after = base.Pt(22)
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_after = base.Pt(8)
-    set_korean_run_font(p.add_run("CAPSTONE PRESBYTERIAN CHURCH"), size=11, color=base.TEAL, bold=True)
+    set_korean_run_font(p.add_run("CHURCH OPERATION"), size=11, color=base.TEAL, bold=True)
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER

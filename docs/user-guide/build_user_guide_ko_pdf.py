@@ -82,7 +82,7 @@ def page_decoration(canvas, doc) -> None:
     canvas.drawRightString(
         7.8 * inch,
         0.42 * inch,
-        f"Capstone Presbyterian Church   |   {doc.page}",
+        f"Church Operation   |   {doc.page}",
     )
     canvas.restoreState()
 
@@ -157,7 +157,7 @@ def add_cover(story, style_map) -> None:
         story.extend([logo_image, Spacer(1, 0.3 * inch)])
     story.append(
         Paragraph(
-            "CAPSTONE PRESBYTERIAN CHURCH",
+            "CHURCH OPERATION",
             ParagraphStyle(
                 "CoverChurch",
                 parent=style_map["body"],
