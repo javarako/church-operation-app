@@ -34,6 +34,12 @@ Church information is configured in `backend/src/main/resources/application.yml`
 
 Copy `.env.example` to `.env` for local Docker configuration. The example also documents the fiscal-year start month, list page size, member-image limit, and the maximum encrypted backup upload size. Do not commit `.env`, SMTP credentials, or backup/archive passwords.
 
+For a DNS-based deployment, set `CHURCH_APP_HOSTNAME` to the exact public
+hostname. Separate multiple exact hostnames with commas. Vite continues to
+accept localhost and IP-address requests automatically. Keep
+`PASSWORD_RESET_FRONTEND_BASE_URL` synchronized with the preferred public
+HTTPS URL.
+
 Full backup and restore operations use the `church-temp` Docker volume at `/var/lib/church-operation/temp`. It is temporary working space only, not a backup destination. Downloaded backup files must be retained separately by the church. Completed and expired operations clean their temporary files; the volume can also be removed when the application is fully stopped and no restore is pending.
 
 Branding assets are served from `backend/src/main/resources/static/branding`.

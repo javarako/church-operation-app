@@ -194,6 +194,7 @@ Configure these important values in `.env`:
 
 ```env
 CHURCH_TIME_ZONE=America/Toronto
+CHURCH_APP_HOSTNAME=
 PASSWORD_RESET_FRONTEND_BASE_URL=https://YOUR_STATIC_IP
 PASSWORD_RESET_FROM_ADDRESS=YOUR_VERIFIED_SENDER
 MAIL_HOST=smtp-relay.brevo.com
@@ -203,6 +204,16 @@ MAIL_PASSWORD=YOUR_BREVO_SMTP_KEY
 MAIL_SMTP_AUTH=true
 MAIL_SMTP_STARTTLS=true
 MONGO_IMAGE=
+```
+
+For an IP-only deployment, leave `CHURCH_APP_HOSTNAME` empty; Vite permits IP
+hosts by default. For a DNS deployment, set it to the exact public hostname
+and use the same hostname in `PASSWORD_RESET_FRONTEND_BASE_URL`, the Nginx
+`server_name`, and the HTTPS certificate. For example:
+
+```env
+CHURCH_APP_HOSTNAME=church.example.org
+PASSWORD_RESET_FRONTEND_BASE_URL=https://church.example.org
 ```
 
 Also update the church name, address, contact information, treasurer, charity
@@ -473,6 +484,30 @@ docker compose logs --since=10m --no-color
 ```
 
 ## 14. Troubleshooting
+
+### Vite Blocks A Custom DNS Hostname
+
+If the browser reports that the host is not allowed, set the exact hostname in
+the server's uncommitted `.env` file:
+
+```env
+CHURCH_APP_HOSTNAME=church.example.org
+PASSWORD_RESET_FRONTEND_BASE_URL=https://church.example.org
+```
+
+Recreate the affected services and verify the value received by Vite:
+
+```bash
+cd /opt/church-operation-app
+docker compose up -d --force-recreate frontend backend
+docker compose exec frontend printenv __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+CHURCH_HOST_TO_TEST=church.example.org
+curl --head --header "Host: $CHURCH_HOST_TO_TEST" http://127.0.0.1:5173
+```
+
+The printed value must exactly match the browser hostname, and the local
+request must return a successful HTTP status. Do not use `allowedHosts: true`
+or allow a shared parent domain such as `.mooo.com`.
 
 ### MongoDB Stops After A Reboot
 
