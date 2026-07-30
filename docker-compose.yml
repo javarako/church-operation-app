@@ -44,6 +44,8 @@ services:
     build:
       context: ./frontend
     restart: unless-stopped
+    environment:
+      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: ${CHURCH_APP_HOSTNAME:-}
     ports:
       - "5173:5173"
     depends_on:
